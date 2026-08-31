@@ -25,7 +25,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import es.opendash.R
 import es.opendash.Session
+import es.opendash.data.Catalogue
 import es.opendash.data.Monitor
+import es.opendash.data.PluginRepository
+import es.opendash.data.Settings
 import es.opendash.obd.Pid
 import es.opendash.obd.Pids
 import kotlin.concurrent.thread
@@ -43,9 +46,13 @@ import kotlin.concurrent.thread
  * something it will refuse.
  */
 @Composable
-fun LiveScreen(monitor: Monitor) {
+fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) {
     val selected = remember { mutableStateListOf<Int>() }
     var available by remember { mutableStateOf<List<Pid>>(emptyList()) }
+    // A catalogue renames and rescales the same standard PIDs. Only the
+    // entries we know how to ask for are offered; the rest are counted.
+    var catalogue by remember { mutableStateOf<Catalogue?>(null) }
+    var useCatalogue by remember { mutableStateOf(false) }
     var record by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
 
@@ -74,6 +81,36 @@ fun LiveScreen(monitor: Monitor) {
             )
         }
 
+        val installed = plugins.installed()
+        if (installed.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Switch(
+                    checked = useCatalogue,
+                    enabled = !monitor.isRunning,
+                    onCheckedChange = {
+                        useCatalogue = it
+                        catalogue = if (it) {
+                            plugins.load(installed.first(), settings.catalogueLanguage)
+                        } else {
+                            null
+                        }
+                    },
+                )
+                Text(stringResource(R.string.live_use_catalogue, installed.first()))
+            }
+            catalogue?.let { c ->
+                val can = monitor.requestable(c).size
+                Text(
+                    stringResource(R.string.live_catalogue_coverage, can, monitor.notRequestable(c)),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -92,7 +129,17 @@ fun LiveScreen(monitor: Monitor) {
                     onClick = {
                         monitor.reset()
                         val pids = available.filter { it.id in selected }
-                        monitor.start(monitor.targetsFor(pids), record, "live")
+                        val c = catalogue
+                        val targets = if (c == null) {
+                            monitor.targetsFor(pids)
+                        } else {
+                            // one catalogue entry per selected PID, when it has one
+                            val byPid = monitor.requestable(c).associateBy { it.pid }
+                            val named = pids.mapNotNull { byPid[it.id] }
+                            monitor.targetsForCatalogue(named) +
+                                monitor.targetsFor(pids.filter { byPid[it.id] == null })
+                        }
+                        monitor.start(targets, record, "live")
                     },
                 ) { Text(stringResource(R.string.live_start)) }
             }
@@ -108,9 +155,11 @@ fun LiveScreen(monitor: Monitor) {
         LazyColumn(modifier = Modifier.fillMaxWidth()) {
             // What is running goes on top, charted.
             items(available.filter { it.id in selected }, key = { "chart-" + it.id }) { pid ->
-                val s = monitor.series["obd:" + pid.id]
+                val byPid = catalogue?.let { c -> monitor.requestable(c).associateBy { it.pid } }
+                val entry = byPid?.get(pid.id)
+                val s = monitor.series[if (entry != null) "cat:" + entry.key else "obd:" + pid.id]
                 if (s != null && s.size > 1) {
-                    ParameterChart(pid.name, pid.unit, s)
+                    ParameterChart(entry?.name ?: pid.name, entry?.unit ?: pid.unit, s)
                 }
             }
 

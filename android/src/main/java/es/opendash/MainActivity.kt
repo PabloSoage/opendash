@@ -130,7 +130,7 @@ private fun App(
         Column(modifier = Modifier.fillMaxSize().padding(inner)) {
             when (tab) {
                 Tab.CONNECTION -> ConnectionScreen()
-                Tab.LIVE -> LiveScreen(monitor)
+                Tab.LIVE -> LiveScreen(monitor, plugins, settings)
                 Tab.READINESS -> ReadinessScreen()
                 Tab.RECORDINGS -> RecordingsScreen(settings)
                 Tab.PLUGINS -> PluginsScreen(plugins, settings)

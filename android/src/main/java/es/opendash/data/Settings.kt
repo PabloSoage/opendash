@@ -51,6 +51,15 @@ class Settings(private val context: Context) {
         get() = prefs.getInt(KEY_POLL, 0)
         set(value) = prefs.edit().putInt(KEY_POLL, value.coerceIn(0, 5000)).apply()
 
+    /**
+     * Compress recordings. On by default: measured over a 23-minute session,
+     * plain CSV is 3.63 MB, gzipped 0.60 MB, and Scanmatik own binary 0.98 MB.
+     * Smaller than the binary and still a spreadsheet away from readable.
+     */
+    var compressRecordings: Boolean
+        get() = prefs.getBoolean(KEY_GZIP, true)
+        set(value) = prefs.edit().putBoolean(KEY_GZIP, value).apply()
+
     fun recordingDirectory(): File = File(recordingPath).also { it.mkdirs() }
 
     private fun defaultRecordingDirectory(): File {
@@ -64,5 +73,6 @@ class Settings(private val context: Context) {
         const val KEY_PORT = "elm_port"
         const val KEY_CHARTS = "chart_count"
         const val KEY_POLL = "poll_interval"
+        const val KEY_GZIP = "compress_recordings"
     }
 }

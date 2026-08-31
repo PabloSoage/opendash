@@ -94,4 +94,13 @@
     <string name="bridge_stop">Stop</string>
     <string name="bridge_notification_channel">Bridge</string>
     <string name="bridge_notification_text">ELM327 on port %1$d · %2$s</string>
+    <string name="faults_title">Fault codes</string>
+    <string name="faults_none">No codes stored or pending</string>
+    <string name="faults_stored">stored</string>
+    <string name="faults_pending">pending</string>
+    <string name="faults_hint">Pending codes have been seen once but not often enough to light the lamp. Reading them changes nothing; this tool cannot clear them.</string>
+    <string name="live_use_catalogue">Name and scale from %1$s</string>
+    <string name="live_catalogue_coverage">%1$d of its parameters can be requested; %2$d use a service not worked out yet.</string>
+    <string name="settings_compress">Compress recordings</string>
+    <string name="settings_compress_hint">Measured over a 23-minute session: plain CSV 3.63 MB, gzipped 0.60 MB, Scanmatik own binary 0.98 MB. Smaller than the binary and still opens in a spreadsheet.</string>
 </resources>

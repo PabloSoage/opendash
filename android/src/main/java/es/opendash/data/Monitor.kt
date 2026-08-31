@@ -43,8 +43,34 @@ class Monitor(private val settings: Settings) {
     )
 
     fun targetsFor(pids: List<Pid>): List<Target> = pids.map { pid ->
-        Target("obd:${pid.id}", pid.name, pid.unit) {
+        Target("obd:" + pid.id, pid.name, pid.unit) {
             Session.diagnostics.mode01(pid.id)?.let { pid.value(it) }
+        }
+    }
+
+    /**
+     * The same standard PIDs, but named and scaled by an installed catalogue.
+     *
+     * Only the entries this tool knows how to ask for. A catalogue lists PIDs
+     * well beyond the mode 01 range — 4427, 54528 — which are read with a
+     * service we have not worked out yet, so offering them would be offering
+     * something that cannot be fetched. [requestable] is the filter, and
+     * [notRequestable] counts what it left out, because a catalogue that shows
+     * 21 000 parameters and delivers 25 should say so.
+     */
+    fun requestable(catalogue: Catalogue): List<Catalogue.Parameter> =
+        catalogue.parameters.filter { it.pid in 0..0xff && it.bytes in 1..4 }
+
+    fun notRequestable(catalogue: Catalogue): Int =
+        catalogue.parameters.size - requestable(catalogue).size
+
+    fun targetsForCatalogue(params: List<Catalogue.Parameter>): List<Target> = params.map { p ->
+        Target("cat:" + p.key, p.name, p.unit) {
+            val raw = Session.diagnostics.mode01(p.pid) ?: return@Target null
+            if (raw.size < p.bytes) return@Target null
+            var value = 0L
+            for (i in 0 until p.bytes) value = (value shl 8) or (raw[i].toLong() and 0xff)
+            p.scale(value)
         }
     }
 
@@ -53,7 +79,9 @@ class Monitor(private val settings: Settings) {
         running.value = true
 
         if (record) {
-            recorder = Recorder(Recorder.newFile(settings.recordingDirectory(), label)).also { it.open() }
+            val gz = settings.compressRecordings
+            val target = Recorder.newFile(settings.recordingDirectory(), label, gz)
+            recorder = Recorder(target, gz).also { it.open() }
         }
 
         worker = thread(name = "monitor", isDaemon = true) {

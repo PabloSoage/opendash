@@ -45,6 +45,7 @@ fun SettingsScreen(
     var language by remember { mutableStateOf(LocaleManager.current()) }
     var path by remember { mutableStateOf(settings.recordingPath) }
     var poll by remember { mutableStateOf(settings.pollIntervalMs.toFloat()) }
+    var compress by remember { mutableStateOf(settings.compressRecordings) }
 
     Column(
         modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -92,6 +93,24 @@ fun SettingsScreen(
             style = MaterialTheme.typography.bodySmall,
         )
 
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Switch(
+                checked = compress,
+                onCheckedChange = {
+                    compress = it
+                    settings.compressRecordings = it
+                },
+            )
+            Text(
+                stringResource(R.string.settings_compress),
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+        Text(
+            stringResource(R.string.settings_compress_hint),
+            style = MaterialTheme.typography.bodySmall,
+        )
+
         Text(stringResource(R.string.settings_polling), style = MaterialTheme.typography.titleLarge)
         Text(stringResource(R.string.settings_poll_interval, poll.toInt()))
         Slider(
@@ -99,6 +118,10 @@ fun SettingsScreen(
             onValueChange = { poll = it },
             onValueChangeFinished = { settings.pollIntervalMs = poll.toInt() },
             valueRange = 0f..2000f,
+        )
+        Text(
+            stringResource(R.string.settings_poll_hint),
+            style = MaterialTheme.typography.bodySmall,
         )
 
         Text(stringResource(R.string.settings_advanced), style = MaterialTheme.typography.titleLarge)

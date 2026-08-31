@@ -95,6 +95,30 @@ class Diagnostics(private val sm3: Sm3Client) {
 
     fun readiness(): Readiness? = mode01(0x01)?.let { Readiness(it) }
 
+    /**
+     * Stored fault codes, mode 03. Read only — clearing them is service 0x14,
+     * which this tool does not emit.
+     *
+     * Answered functionally, so every module that has something to say does,
+     * and the same code can arrive from more than one of them.
+     */
+    fun storedFaults(): List<Dtc> = faults(0x03, pending = false)
+
+    /**
+     * Pending codes, mode 07: seen once but not yet often enough to light the
+     * lamp. Worth reading precisely because they do not show anywhere else.
+     */
+    fun pendingFaults(): List<Dtc> = faults(0x07, pending = true)
+
+    private fun faults(mode: Int, pending: Boolean): List<Dtc> {
+        val r = request(FUNCTIONAL, byteArrayOf(mode.toByte()), rxId = ANY) ?: return emptyList()
+        // 43 <count> <pairs...> on a segmented answer, 43 <pairs...> on a short one.
+        if (r.isEmpty() || (r[0].toInt() and 0xff) != mode + 0x40) return emptyList()
+        val body = if (r.size > 1 && r.size % 2 == 0) r.copyOfRange(2, r.size)
+        else r.copyOfRange(1, r.size)
+        return decodeDtcs(body, pending)
+    }
+
     /** Mode 09 PID 02: the VIN, as the engine reports it. */
     fun vin(): String? {
         val r = request(FUNCTIONAL, byteArrayOf(0x09, 0x02), rxId = ANY) ?: return null

@@ -81,6 +81,40 @@ class Sm3Client(
         return n
     }
 
+    /**
+     * The device's own voltages, from opcode 0x20.
+     *
+     * No payload, always answered, and the answer is six bytes that appear
+     * nowhere else in the protocol. Read as three little-endian u16, the first
+     * is the battery in millivolts: over one recorded session it ran from 8765
+     * while cranking to 14 674 with the alternator charging, sitting at 12 348
+     * with the engine off. That is where ATRV comes from.
+     *
+     * A message with no data is the one case where h4 needs no table: it is
+     * simply seq, so this frame can be built rather than replayed.
+     */
+    fun voltages(): Voltages? {
+        val frame = ByteArray(Frame.HEADER)
+        Frame.putLe32(frame, 0, 0x0000ffff)          // seq 0xffff, token 0
+        Frame.putLe32(frame, 4, 0x0000ffff)          // len = 0, so h4 == seq
+        frame[12] = OP_VOLTAGES.toByte()
+        frame[15] = Frame.checksum(OP_VOLTAGES, 0).toByte()
+
+        val reply = exchange(frame) ?: return null
+        for (msg in Frame.split(reply)) {
+            if (msg.op != 0x00 || msg.data.size < 6) continue
+            return Voltages(
+                batteryMillivolts = Frame.le16(msg.data, 0),
+                second = Frame.le16(msg.data, 2),
+                flags = Frame.le16(msg.data, 4),
+            )
+        }
+        return null
+    }
+
+    /** The second field is unidentified; the flags take a handful of values. */
+    class Voltages(val batteryMillivolts: Int, val second: Int, val flags: Int)
+
     /** Put a request on the bus. The h4 is computed, not guessed. */
     fun send(canId: Int, payload: ByteArray) {
         val frame = H4.write(canId, payload)
@@ -156,5 +190,6 @@ class Sm3Client(
         const val DEFAULT_HOST = "192.168.81.1"
         const val DEFAULT_PORT = 777
         private const val OP_FRAMES = 0xfe
+        private const val OP_VOLTAGES = 0x20
     }
 }

@@ -21,6 +21,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import es.opendash.R
 import es.opendash.Session
+import es.opendash.obd.Dtc
 import es.opendash.obd.Readiness
 import kotlin.concurrent.thread
 
@@ -35,6 +36,9 @@ import kotlin.concurrent.thread
 @Composable
 fun ReadinessScreen() {
     var readiness by remember { mutableStateOf<Readiness?>(null) }
+    var stored by remember { mutableStateOf<List<Dtc>>(emptyList()) }
+    var pending by remember { mutableStateOf<List<Dtc>>(emptyList()) }
+    var read by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
 
     Column(
@@ -47,14 +51,32 @@ fun ReadinessScreen() {
                 busy = true
                 thread {
                     readiness = Session.diagnostics.readiness()
+                    stored = Session.diagnostics.storedFaults()
+                    pending = Session.diagnostics.pendingFaults()
+                    read = true
                     busy = false
                 }
             },
         ) { Text(stringResource(R.string.readiness_read)) }
 
+        // Fault codes first: it is the question anyone opens this screen with.
+        if (read) {
+            Text(stringResource(R.string.faults_title), style = MaterialTheme.typography.titleLarge)
+            if (stored.isEmpty() && pending.isEmpty()) {
+                Text(stringResource(R.string.faults_none))
+            } else {
+                stored.forEach { FaultRow(it.code, stringResource(R.string.faults_stored)) }
+                pending.forEach { FaultRow(it.code, stringResource(R.string.faults_pending)) }
+                Text(
+                    stringResource(R.string.faults_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+
         val r = readiness
         if (r == null) {
-            Text(stringResource(R.string.readiness_none))
+            if (!read) Text(stringResource(R.string.readiness_none))
             return@Column
         }
 
@@ -94,5 +116,13 @@ fun ReadinessScreen() {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun FaultRow(code: String, kind: String) {
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+        Text(code, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+        Text(kind, style = MaterialTheme.typography.labelMedium)
     }
 }

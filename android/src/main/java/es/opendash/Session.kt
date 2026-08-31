@@ -73,6 +73,26 @@ object Session {
         vehicle = null
     }
 
-    /** Battery volts, from opcode 0x20. Zero when the link is not up. */
-    fun batteryMillivolts(): Int = 0
+    /**
+     * Battery millivolts, cached.
+     *
+     * Read from the device rather than from the bus, so it works as soon as the
+     * socket is up and does not need a channel. Cached for a second because
+     * ATRV gets asked far more often than the voltage moves.
+     */
+    private var voltsAt = 0L
+    private var volts = 0
+
+    fun batteryMillivolts(): Int {
+        if (state == State.DISCONNECTED) return 0
+        val now = System.currentTimeMillis()
+        if (now - voltsAt < 1000) return volts
+        volts = try {
+            sm3.voltages()?.batteryMillivolts ?: volts
+        } catch (_: Exception) {
+            volts
+        }
+        voltsAt = now
+        return volts
+    }
 }
