@@ -12,7 +12,10 @@ pub enum Reply {
     /// Send verbatim, followed by the prompt.
     Text(String),
     /// Put this on the bus and answer with whatever comes back.
-    Request { header: u32, payload: Vec<u8> },
+    Request {
+        header: u32,
+        payload: Vec<u8>,
+    },
     Unsupported,
 }
 
@@ -59,9 +62,10 @@ impl Elm {
         }
         // Anything else is hex: an OBD request.
         match decode_hex(&upper) {
-            Some(payload) if !payload.is_empty() => {
-                Reply::Request { header: self.tx_header, payload }
-            }
+            Some(payload) if !payload.is_empty() => Reply::Request {
+                header: self.tx_header,
+                payload,
+            },
             _ => Reply::Unsupported,
         }
     }
@@ -74,14 +78,38 @@ impl Elm {
                 Reply::Text("ELM327 v1.5".into())
             }
             "I" => Reply::Text("ELM327 v1.5".into()),
-            "E0" => { self.echo = false; ok() }
-            "E1" => { self.echo = true; ok() }
-            "H0" => { self.headers = false; ok() }
-            "H1" => { self.headers = true; ok() }
-            "S0" => { self.spaces = false; ok() }
-            "S1" => { self.spaces = true; ok() }
-            "L0" => { self.linefeed = false; ok() }
-            "L1" => { self.linefeed = true; ok() }
+            "E0" => {
+                self.echo = false;
+                ok()
+            }
+            "E1" => {
+                self.echo = true;
+                ok()
+            }
+            "H0" => {
+                self.headers = false;
+                ok()
+            }
+            "H1" => {
+                self.headers = true;
+                ok()
+            }
+            "S0" => {
+                self.spaces = false;
+                ok()
+            }
+            "S1" => {
+                self.spaces = true;
+                ok()
+            }
+            "L0" => {
+                self.linefeed = false;
+                ok()
+            }
+            "L1" => {
+                self.linefeed = true;
+                ok()
+            }
             "RV" => Reply::Text(format!("{:.1}V", self.millivolts as f32 / 1000.0)),
             "DP" => Reply::Text(protocol_name(self.protocol).into()),
             "DPN" => Reply::Text(format!("{:X}", self.protocol)),
@@ -97,7 +125,10 @@ impl Elm {
                 }
                 if let Some(h) = rest.strip_prefix("SH") {
                     match u32::from_str_radix(h, 16) {
-                        Ok(v) => { self.tx_header = v; return ok(); }
+                        Ok(v) => {
+                            self.tx_header = v;
+                            return ok();
+                        }
                         Err(_) => return Reply::Unsupported,
                     }
                 }
@@ -134,7 +165,7 @@ fn protocol_name(p: u8) -> &'static str {
 }
 
 fn decode_hex(s: &str) -> Option<Vec<u8>> {
-    if s.len() % 2 != 0 || !s.chars().all(|c| c.is_ascii_hexdigit()) {
+    if !s.len().is_multiple_of(2) || !s.chars().all(|c| c.is_ascii_hexdigit()) {
         return None;
     }
     (0..s.len())

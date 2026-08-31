@@ -4,7 +4,10 @@
 use opendash_core::{elm327, frame, h4, isotp};
 
 fn hex(s: &str) -> Vec<u8> {
-    (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
+        .collect()
 }
 
 // ── framing ───────────────────────────────────────────────────────────────
@@ -50,7 +53,10 @@ fn a_write_round_trips_with_its_padding() {
     assert_eq!(m.data.len(), 19);
     assert_eq!(used, 36); // 16 + 19 = 35, padded to 36
     assert_eq!(&m.data[0..3], &[0x60, 0x80, 0x02]);
-    assert_eq!(u32::from_le_bytes([m.data[7], m.data[8], m.data[9], m.data[10]]), 0x7df);
+    assert_eq!(
+        u32::from_le_bytes([m.data[7], m.data[8], m.data[9], m.data[10]]),
+        0x7df
+    );
 }
 
 // ── h4 ────────────────────────────────────────────────────────────────────
@@ -68,7 +74,11 @@ fn h4_predicts_real_writes() {
     // in the CAN id and the payload.
     let raw = include_str!("fixtures/h4_pairs.json");
     let pairs: Vec<Pair> = serde_json::from_str(raw).expect("fixtures parse");
-    assert!(pairs.len() >= 100, "expected a decent sample, got {}", pairs.len());
+    assert!(
+        pairs.len() >= 100,
+        "expected a decent sample, got {}",
+        pairs.len()
+    );
 
     let mut checked = 0;
     for p in &pairs {
@@ -87,7 +97,10 @@ fn h4_reports_the_bits_it_cannot_vouch_for() {
     // Honest bookkeeping: the sweep did not exercise every bit, and the ones
     // it missed are stored as a zero contribution.
     let holes = h4::unverified_bits();
-    assert!(!holes.is_empty(), "if this is empty the table was regenerated");
+    assert!(
+        !holes.is_empty(),
+        "if this is empty the table was regenerated"
+    );
     // The subcommand and the record length never vary, so they are expected.
     assert!(holes.iter().any(|&(b, _)| b < 7));
 }
@@ -139,7 +152,10 @@ fn at_commands_answer_like_the_real_thing() {
     assert_eq!(e.command("ATSP0"), elm327::Reply::Text("OK".into()));
     // ATDPN answers the number, not the name; a leading A means automatic.
     assert_eq!(e.command("ATDPN"), elm327::Reply::Text("6".into()));
-    assert_eq!(e.command("ATDP"), elm327::Reply::Text("ISO 15765-4 CAN 11/500".into()));
+    assert_eq!(
+        e.command("ATDP"),
+        elm327::Reply::Text("ISO 15765-4 CAN 11/500".into())
+    );
 }
 
 #[test]

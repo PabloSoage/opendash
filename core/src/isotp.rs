@@ -52,7 +52,10 @@ impl Reassembler {
                 let expected = (((frame[0] & 0x0f) as usize) << 8) | frame[1] as usize;
                 self.open.insert(
                     id,
-                    Pending { expected, parts: frame[2..].to_vec() },
+                    Pending {
+                        expected,
+                        parts: frame[2..].to_vec(),
+                    },
                 );
                 None
             }
@@ -83,7 +86,10 @@ pub fn segment(payload: &[u8]) -> Vec<Vec<u8>> {
         return vec![f];
     }
     let mut out = Vec::new();
-    let mut first = vec![0x10 | ((payload.len() >> 8) as u8 & 0x0f), payload.len() as u8];
+    let mut first = vec![
+        0x10 | ((payload.len() >> 8) as u8 & 0x0f),
+        payload.len() as u8,
+    ];
     first.extend_from_slice(&payload[..6]);
     out.push(first);
     let mut n = 1u8;

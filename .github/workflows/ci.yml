@@ -23,10 +23,6 @@ jobs:
       # The one that must pass: does it build and do the captures replay?
       - run: cargo test --all-targets
 
-      # Advisory until someone has run `cargo fmt` and `cargo clippy --fix`
-      # once on a machine with the toolchain. The core was written on a host
-      # without Rust installed, so its formatting has never seen rustfmt.
+      # Strict formatting and linting
       - run: cargo fmt --check
-        continue-on-error: true
-      - run: cargo clippy --all-targets
-        continue-on-error: true
+      - run: cargo clippy --all-targets -- -D warnings
