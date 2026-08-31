@@ -18,14 +18,20 @@ The protocol was recovered by capture and measurement — see
 | `h4` fingerprint | done, 85 of 85 unseen random writes |
 | ISO-TP reassembly | done, 168 884 frames from a factory-tool session |
 | ELM327 command set | the part real apps use |
-| Android app | not started |
+| Android app | scaffold: socket, foreground service, Spanish and English |
 
 ## Layout
 
 ```
 core/     the protocol, in Rust: framing, h4, ISO-TP, ELM327
+android/  the app: ELM327 socket, foreground service, Compose UI
 docs/     what was established, and how
 ```
+
+The app ships in English and Spanish from the first commit, with a picker that
+uses the per-app language API so it can be set without changing the phone.
+Adding a language after the fact means auditing every string, and it never
+happens.
 
 `core` is a library with no I/O: bytes in, bytes out. That keeps it testable on
 a host without a device, which matters because the interesting parts were

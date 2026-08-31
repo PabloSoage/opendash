@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">opendash</string>
+
+    <string name="bridge_title">ELM327 bridge</string>
+    <string name="bridge_stopped">Stopped</string>
+    <string name="bridge_listening">Listening on %1$s:%2$d</string>
+    <string name="bridge_start">Start</string>
+    <string name="bridge_stop">Stop</string>
+    <string name="bridge_notification_channel">Bridge</string>
+    <string name="bridge_notification_text">Serving ELM327 on port %1$d</string>
+
+    <string name="device_title">Device</string>
+    <string name="device_address">Address</string>
+    <string name="device_disconnected">Not connected</string>
+    <string name="device_connected">Connected to %1$s</string>
+    <string name="device_battery">Battery %1$.1f V</string>
+
+    <string name="vehicle_title">Vehicle</string>
+    <string name="vehicle_unknown">Not identified yet</string>
+    <string name="vehicle_identify">Identify</string>
+    <string name="vehicle_vin">VIN</string>
+    <string name="vehicle_system">System</string>
+    <string name="vehicle_engine">Engine</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_language_system">System default</string>
+    <string name="settings_language_en">English</string>
+    <string name="settings_language_es">Español</string>
+
+    <string name="plugins_title">Plugins</string>
+    <string name="plugins_none">No catalogue installed</string>
+    <string name="plugins_installed">%1$d parameters from %2$s</string>
+</resources>
