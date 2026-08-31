@@ -85,7 +85,7 @@ object Sm2Reader {
                 continue
             }
             val text = String(b, o + 8, n * 2, Charsets.UTF_16LE).replace(Regex("[\r\n]+"), " ")
-            if (text.length >= 5 && !Regex("^\d+ of \d+").containsMatchIn(text)) names.add(text)
+            if (text.length >= 5 && !Regex("^\\d+ of \\d+").containsMatchIn(text)) names.add(text)
             o += 8 + n * 2
             end = o
         }
