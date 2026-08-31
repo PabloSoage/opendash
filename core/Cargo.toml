@@ -1,0 +1,18 @@
+[package]
+name = "opendash-core"
+version = "0.1.0"
+edition = "2021"
+description = "Scanmatik SM3 protocol and ELM327 bridge"
+license = "MIT"
+
+[lib]
+name = "opendash_core"
+# rlib so the tests and host tooling can link it; cdylib is what the NDK
+# packs into the APK once the Android side lands.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
