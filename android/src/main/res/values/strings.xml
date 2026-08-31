@@ -2,34 +2,95 @@
 <resources>
     <string name="app_name">opendash</string>
 
+    <string name="tab_connection">Link</string>
+    <string name="tab_live">Live</string>
+    <string name="tab_readiness">Readiness</string>
+    <string name="tab_recordings">Recordings</string>
+    <string name="tab_plugins">Plugins</string>
+    <string name="tab_settings">Settings</string>
+
+    <string name="device_title">Device</string>
+    <string name="device_disconnected">Not connected</string>
+    <string name="device_connecting">Connecting…</string>
+    <string name="device_connected">Connected to %1$s</string>
+    <string name="device_channel_open">Channel open, bus readable</string>
+    <string name="device_firmware">Firmware %1$s</string>
+    <string name="device_connect">Connect and open channel</string>
+    <string name="device_disconnect">Disconnect</string>
+
+    <string name="vehicle_title">Vehicle</string>
+    <string name="vehicle_unknown">Not identified yet</string>
+    <string name="vehicle_identify">Ask the car what it is</string>
+    <string name="vehicle_identify_hint">The engine answers with its VIN, system name and engine code, so there is no make and model to choose.</string>
+    <string name="vehicle_vin">VIN</string>
+    <string name="vehicle_system">System</string>
+    <string name="vehicle_engine">Engine</string>
+    <string name="vehicle_calibration">Calibration</string>
+
+    <string name="live_scan">Ask which parameters it answers</string>
+    <string name="live_selected">%1$d selected</string>
+    <string name="live_record">Record to a file</string>
+    <string name="live_start">Start</string>
+    <string name="live_stop">Stop</string>
+    <string name="live_recording_to">%1$d rows written to %2$s</string>
+    <string name="live_scan_first">Open the channel, then ask the car which parameters it answers. Only those are offered, so nothing here can be refused.</string>
+
+    <string name="readiness_read">Read monitors</string>
+    <string name="readiness_none">Nothing read yet</string>
+    <string name="readiness_mil_on">Check engine light on</string>
+    <string name="readiness_mil_off">Check engine light off</string>
+    <string name="readiness_faults">%1$d stored fault(s)</string>
+    <string name="readiness_diesel">Compression ignition</string>
+    <string name="readiness_petrol">Spark ignition</string>
+    <string name="readiness_all_complete">Every supported monitor has run</string>
+    <string name="readiness_pending">Some monitors have not finished since the codes were cleared</string>
+    <string name="readiness_complete">complete</string>
+    <string name="readiness_incomplete">not yet</string>
+
+    <string name="recordings_title">Recordings</string>
+    <string name="recordings_none">Nothing recorded yet</string>
+    <string name="recordings_refresh">Refresh</string>
+
+    <string name="sm2_title">Open a Scanmatik .sm2</string>
+    <string name="sm2_path">Full path to the file</string>
+    <string name="sm2_open">Open</string>
+    <string name="sm2_summary">%1$d parameters · %2$d readings · %3$d min %4$02d s</string>
+
+    <string name="plugins_title">Installed catalogues</string>
+    <string name="plugins_none">No catalogue installed. The standard OBD-II parameters work without one.</string>
+    <string name="plugins_installed">%1$d parameters — %2$s</string>
+    <string name="plugins_remove">Remove</string>
+    <string name="plugins_sources">Sources</string>
+    <string name="plugins_private">private</string>
+    <string name="plugins_add_source">Add a source</string>
+    <string name="plugins_source_name">Name</string>
+    <string name="plugins_source_repo">Repository (owner/name)</string>
+    <string name="plugins_source_token">Access token, if it is private</string>
+    <string name="plugins_token_hint">A token scoped to read one repository. It can be revoked from the forge if the phone is lost, which an SSH key sitting in app storage cannot.</string>
+    <string name="plugins_save_source">Save source</string>
+    <string name="plugins_install">Install a catalogue</string>
+    <string name="plugins_brand">Brand directory</string>
+    <string name="plugins_download">Download</string>
+
+    <string name="settings_language">Language</string>
+    <string name="settings_language_system">System default</string>
+    <string name="settings_language_en">English</string>
+    <string name="settings_language_es">Español</string>
+    <string name="settings_recording">Recordings</string>
+    <string name="settings_recording_path">Where to save them</string>
+    <string name="settings_recording_hint">Somewhere shared rather than app-private storage, so a recording survives uninstalling and can be pulled off the phone.</string>
+    <string name="settings_polling">Polling</string>
+    <string name="settings_poll_interval">%1$d ms between requests</string>
+    <string name="settings_advanced">Actuation</string>
+    <string name="settings_advanced_toggle">Show parameters that can be commanded</string>
+    <string name="settings_advanced_prompt">Unlock the menu that can command modules</string>
+    <string name="settings_advanced_warning">The catalogue holds 2517 entries with Command in the name, 879 with Test and 782 with Learn. Reading them is harmless. Commanding them moves things on a car that may have someone in it, so this stays behind the device lock.</string>
+
     <string name="bridge_title">ELM327 bridge</string>
     <string name="bridge_stopped">Stopped</string>
     <string name="bridge_listening">Listening on %1$s:%2$d</string>
     <string name="bridge_start">Start</string>
     <string name="bridge_stop">Stop</string>
     <string name="bridge_notification_channel">Bridge</string>
-    <string name="bridge_notification_text">Serving ELM327 on port %1$d</string>
-
-    <string name="device_title">Device</string>
-    <string name="device_address">Address</string>
-    <string name="device_disconnected">Not connected</string>
-    <string name="device_connected">Connected to %1$s</string>
-    <string name="device_battery">Battery %1$.1f V</string>
-
-    <string name="vehicle_title">Vehicle</string>
-    <string name="vehicle_unknown">Not identified yet</string>
-    <string name="vehicle_identify">Identify</string>
-    <string name="vehicle_vin">VIN</string>
-    <string name="vehicle_system">System</string>
-    <string name="vehicle_engine">Engine</string>
-
-    <string name="settings_title">Settings</string>
-    <string name="settings_language">Language</string>
-    <string name="settings_language_system">System default</string>
-    <string name="settings_language_en">English</string>
-    <string name="settings_language_es">Español</string>
-
-    <string name="plugins_title">Plugins</string>
-    <string name="plugins_none">No catalogue installed</string>
-    <string name="plugins_installed">%1$d parameters from %2$s</string>
+    <string name="bridge_notification_text">ELM327 on port %1$d · %2$s</string>
 </resources>

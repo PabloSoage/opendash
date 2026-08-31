@@ -3,14 +3,15 @@ package es.opendash
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
-import androidx.compose.foundation.layout.Arrangement
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,68 +20,125 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
-import es.opendash.bridge.BridgeService
+import androidx.core.content.ContextCompat
+import es.opendash.data.Monitor
+import es.opendash.data.PluginRepository
+import es.opendash.data.Settings
+import es.opendash.ui.ConnectionScreen
+import es.opendash.ui.LiveScreen
+import es.opendash.ui.PluginsScreen
+import es.opendash.ui.ReadinessScreen
+import es.opendash.ui.RecordingsScreen
+import es.opendash.ui.SettingsScreen
 
 class MainActivity : AppCompatActivity() {
+
+    private lateinit var settings: Settings
+    private lateinit var plugins: PluginRepository
+    private lateinit var monitor: Monitor
 
     override fun onCreate(savedInstanceState: Bundle?) {
         LocaleManager.restore(this)
         super.onCreate(savedInstanceState)
+        settings = Settings(this)
+        plugins = PluginRepository(this)
+        monitor = Monitor(settings)
+
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    Home()
+                    App(settings, plugins, monitor, ::unlock)
                 }
             }
         }
     }
+
+    override fun onDestroy() {
+        monitor.stop()
+        super.onDestroy()
+    }
+
+    /**
+     * Ask for the device credential before letting the actuation menu appear.
+     *
+     * Whatever the phone is already set up with — fingerprint, face, PIN or
+     * pattern — rather than a password of our own. A password we invented would
+     * be one more thing to forget, and no safer.
+     */
+    private fun unlock(onResult: (Boolean) -> Unit) {
+        val allowed = BiometricManager.Authenticators.BIOMETRIC_WEAK or
+            BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        if (BiometricManager.from(this).canAuthenticate(allowed) != BiometricManager.BIOMETRIC_SUCCESS) {
+            // No screen lock at all: refuse rather than silently open it up.
+            onResult(false)
+            return
+        }
+        val prompt = BiometricPrompt(
+            this,
+            ContextCompat.getMainExecutor(this),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) =
+                    onResult(true)
+
+                override fun onAuthenticationError(code: Int, message: CharSequence) = onResult(false)
+            },
+        )
+        prompt.authenticate(
+            BiometricPrompt.PromptInfo.Builder()
+                .setTitle(getString(R.string.settings_advanced))
+                .setSubtitle(getString(R.string.settings_advanced_prompt))
+                .setAllowedAuthenticators(allowed)
+                .build()
+        )
+    }
+}
+
+private enum class Tab(val label: Int) {
+    CONNECTION(R.string.tab_connection),
+    LIVE(R.string.tab_live),
+    READINESS(R.string.tab_readiness),
+    RECORDINGS(R.string.tab_recordings),
+    PLUGINS(R.string.tab_plugins),
+    SETTINGS(R.string.tab_settings),
 }
 
 @Composable
-private fun Home() {
-    val context = LocalContext.current
-    var running by remember { mutableStateOf(false) }
-    var language by remember { mutableStateOf(LocaleManager.current()) }
+private fun App(
+    settings: Settings,
+    plugins: PluginRepository,
+    monitor: Monitor,
+    unlock: ((Boolean) -> Unit) -> Unit,
+) {
+    var tab by remember { mutableStateOf(Tab.CONNECTION) }
+    var advanced by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text(stringResource(R.string.bridge_title), style = MaterialTheme.typography.titleLarge)
-        Text(
-            if (running) stringResource(R.string.bridge_listening, "127.0.0.1", 35000)
-            else stringResource(R.string.bridge_stopped)
-        )
-        Button(onClick = {
-            if (running) BridgeService.stop(context) else BridgeService.start(context)
-            running = !running
-        }) {
-            Text(stringResource(if (running) R.string.bridge_stop else R.string.bridge_start))
-        }
-
-        Text(stringResource(R.string.settings_language), style = MaterialTheme.typography.titleLarge)
-        LocaleManager.supported.forEach { tag ->
-            Column(
-                modifier = Modifier.selectable(
-                    selected = language == tag,
-                    onClick = {
-                        LocaleManager.store(context, tag)
-                        language = tag
-                    },
-                )
-            ) {
-                RadioButton(selected = language == tag, onClick = null)
-                Text(
-                    stringResource(
-                        when (tag) {
-                            "en" -> R.string.settings_language_en
-                            "es" -> R.string.settings_language_es
-                            else -> R.string.settings_language_system
-                        }
+    Scaffold(
+        bottomBar = {
+            NavigationBar {
+                Tab.entries.forEach { t ->
+                    NavigationBarItem(
+                        selected = tab == t,
+                        onClick = { tab = t },
+                        icon = {},
+                        label = { Text(stringResource(t.label)) },
                     )
+                }
+            }
+        }
+    ) { inner ->
+        Column(modifier = Modifier.fillMaxSize().padding(inner)) {
+            when (tab) {
+                Tab.CONNECTION -> ConnectionScreen()
+                Tab.LIVE -> LiveScreen(monitor)
+                Tab.READINESS -> ReadinessScreen()
+                Tab.RECORDINGS -> RecordingsScreen(settings)
+                Tab.PLUGINS -> PluginsScreen(plugins, settings)
+                Tab.SETTINGS -> SettingsScreen(
+                    settings = settings,
+                    advancedEnabled = advanced,
+                    onUnlockAdvanced = unlock,
+                    onAdvancedChanged = { advanced = it },
                 )
             }
         }

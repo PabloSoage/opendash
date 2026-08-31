@@ -18,7 +18,7 @@ The protocol was recovered by capture and measurement — see
 | `h4` fingerprint | done, 85 of 85 unseen random writes |
 | ISO-TP reassembly | done, 168 884 frames from a factory-tool session |
 | ELM327 command set | the part real apps use |
-| Android app | scaffold: socket, foreground service, Spanish and English |
+| Android app | link, live charts, readiness, recordings, .sm2 reader, plugins |
 
 ## Layout
 
@@ -32,6 +32,23 @@ The app ships in English and Spanish from the first commit, with a picker that
 uses the per-app language API so it can be set without changing the phone.
 Adding a language after the fact means auditing every string, and it never
 happens.
+
+## Only reading
+
+The app never emits a write service. `0x2E` WriteDataByIdentifier, `0x2F`
+InputOutputControl, `0x31` RoutineControl, `0x14` ClearDiagnosticInformation
+and `0x27` SecurityAccess are absent from the allowed set, and a request
+carrying one is refused before it reaches the socket.
+
+This matters more than it sounds. The catalogue extracted from a factory tool
+lists 2517 parameters with "Command" in the name, 879 with "Test" and 782 with
+"Learn". In that tool they can be commanded as well as read, and the same
+identifier that reports a relay state can also close it. Reading them is
+harmless; writing them moves things on a car that may have someone in it.
+
+Actuation therefore lives behind a switch in settings that asks for the device
+lock — fingerprint, face, PIN, whatever the phone already uses — and is
+disabled by default.
 
 `core` is a library with no I/O: bytes in, bytes out. That keeps it testable on
 a host without a device, which matters because the interesting parts were

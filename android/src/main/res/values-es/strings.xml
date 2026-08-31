@@ -1,33 +1,94 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="tab_connection">Enlace</string>
+    <string name="tab_live">En vivo</string>
+    <string name="tab_readiness">Monitores</string>
+    <string name="tab_recordings">Grabaciones</string>
+    <string name="tab_plugins">Complementos</string>
+    <string name="tab_settings">Ajustes</string>
+
+    <string name="device_title">Aparato</string>
+    <string name="device_disconnected">Sin conexión</string>
+    <string name="device_connecting">Conectando…</string>
+    <string name="device_connected">Conectado a %1$s</string>
+    <string name="device_channel_open">Canal abierto, el bus se puede leer</string>
+    <string name="device_firmware">Firmware %1$s</string>
+    <string name="device_connect">Conectar y abrir canal</string>
+    <string name="device_disconnect">Desconectar</string>
+
+    <string name="vehicle_title">Vehículo</string>
+    <string name="vehicle_unknown">Sin identificar</string>
+    <string name="vehicle_identify">Preguntarle al coche qué es</string>
+    <string name="vehicle_identify_hint">La centralita responde con su VIN, el nombre del sistema y el código de motor, así que no hay que elegir marca ni modelo.</string>
+    <string name="vehicle_vin">VIN</string>
+    <string name="vehicle_system">Sistema</string>
+    <string name="vehicle_engine">Motor</string>
+    <string name="vehicle_calibration">Calibración</string>
+
+    <string name="live_scan">Preguntar qué parámetros responde</string>
+    <string name="live_selected">%1$d seleccionados</string>
+    <string name="live_record">Grabar a un fichero</string>
+    <string name="live_start">Empezar</string>
+    <string name="live_stop">Parar</string>
+    <string name="live_recording_to">%1$d filas escritas en %2$s</string>
+    <string name="live_scan_first">Abre el canal y pregúntale al coche qué parámetros responde. Solo se ofrecen esos, así que nada de lo que hay aquí puede ser rechazado.</string>
+
+    <string name="readiness_read">Leer monitores</string>
+    <string name="readiness_none">Todavía sin leer</string>
+    <string name="readiness_mil_on">Testigo de avería encendido</string>
+    <string name="readiness_mil_off">Testigo de avería apagado</string>
+    <string name="readiness_faults">%1$d avería(s) guardada(s)</string>
+    <string name="readiness_diesel">Encendido por compresión</string>
+    <string name="readiness_petrol">Encendido por chispa</string>
+    <string name="readiness_all_complete">Todos los monitores admitidos han pasado</string>
+    <string name="readiness_pending">Algunos monitores no han terminado desde el último borrado</string>
+    <string name="readiness_complete">completo</string>
+    <string name="readiness_incomplete">aún no</string>
+
+    <string name="recordings_title">Grabaciones</string>
+    <string name="recordings_none">Todavía no hay ninguna</string>
+    <string name="recordings_refresh">Actualizar</string>
+
+    <string name="sm2_title">Abrir un .sm2 de Scanmatik</string>
+    <string name="sm2_path">Ruta completa del fichero</string>
+    <string name="sm2_open">Abrir</string>
+    <string name="sm2_summary">%1$d parámetros · %2$d lecturas · %3$d min %4$02d s</string>
+
+    <string name="plugins_title">Catálogos instalados</string>
+    <string name="plugins_none">Sin catálogo instalado. Los parámetros OBD-II estándar funcionan sin ninguno.</string>
+    <string name="plugins_installed">%1$d parámetros — %2$s</string>
+    <string name="plugins_remove">Quitar</string>
+    <string name="plugins_sources">Fuentes</string>
+    <string name="plugins_private">privada</string>
+    <string name="plugins_add_source">Añadir una fuente</string>
+    <string name="plugins_source_name">Nombre</string>
+    <string name="plugins_source_repo">Repositorio (dueño/nombre)</string>
+    <string name="plugins_source_token">Token de acceso, si es privado</string>
+    <string name="plugins_token_hint">Un token con permiso para leer un solo repositorio. Se puede revocar desde la web si se pierde el móvil, cosa que una clave SSH guardada en la app no permite fácilmente.</string>
+    <string name="plugins_save_source">Guardar fuente</string>
+    <string name="plugins_install">Instalar un catálogo</string>
+    <string name="plugins_brand">Carpeta de la marca</string>
+    <string name="plugins_download">Descargar</string>
+
+    <string name="settings_language">Idioma</string>
+    <string name="settings_language_system">El del sistema</string>
+    <string name="settings_language_en">English</string>
+    <string name="settings_language_es">Español</string>
+    <string name="settings_recording">Grabaciones</string>
+    <string name="settings_recording_path">Dónde guardarlas</string>
+    <string name="settings_recording_hint">En un sitio compartido y no en el almacenamiento privado de la app, para que una grabación sobreviva a desinstalarla y se pueda sacar del móvil.</string>
+    <string name="settings_polling">Sondeo</string>
+    <string name="settings_poll_interval">%1$d ms entre peticiones</string>
+    <string name="settings_advanced">Actuación</string>
+    <string name="settings_advanced_toggle">Mostrar los parámetros que se pueden accionar</string>
+    <string name="settings_advanced_prompt">Desbloquear el menú que puede accionar módulos</string>
+    <string name="settings_advanced_warning">El catálogo tiene 2517 entradas con Command en el nombre, 879 con Test y 782 con Learn. Leerlas es inofensivo. Accionarlas mueve cosas en un coche que puede llevar gente dentro, así que esto queda detrás del bloqueo del dispositivo.</string>
+
     <string name="bridge_title">Puente ELM327</string>
     <string name="bridge_stopped">Parado</string>
     <string name="bridge_listening">Escuchando en %1$s:%2$d</string>
     <string name="bridge_start">Arrancar</string>
     <string name="bridge_stop">Parar</string>
     <string name="bridge_notification_channel">Puente</string>
-    <string name="bridge_notification_text">Sirviendo ELM327 en el puerto %1$d</string>
-
-    <string name="device_title">Aparato</string>
-    <string name="device_address">Dirección</string>
-    <string name="device_disconnected">Sin conexión</string>
-    <string name="device_connected">Conectado a %1$s</string>
-    <string name="device_battery">Batería %1$.1f V</string>
-
-    <string name="vehicle_title">Vehículo</string>
-    <string name="vehicle_unknown">Sin identificar</string>
-    <string name="vehicle_identify">Identificar</string>
-    <string name="vehicle_vin">VIN</string>
-    <string name="vehicle_system">Sistema</string>
-    <string name="vehicle_engine">Motor</string>
-
-    <string name="settings_title">Ajustes</string>
-    <string name="settings_language">Idioma</string>
-    <string name="settings_language_system">El del sistema</string>
-    <string name="settings_language_en">English</string>
-    <string name="settings_language_es">Español</string>
-
-    <string name="plugins_title">Complementos</string>
-    <string name="plugins_none">Sin catálogo instalado</string>
-    <string name="plugins_installed">%1$d parámetros de %2$s</string>
+    <string name="bridge_notification_text">ELM327 en el puerto %1$d · %2$s</string>
 </resources>
