@@ -13,6 +13,10 @@ import kotlin.concurrent.thread
  * Selecting twenty parameters therefore refreshes each of them twenty times
  * more slowly than selecting one — which is worth knowing before wondering why
  * a chart looks coarse.
+ *
+ * There is no fixed interval by default. The exchange is synchronous, so the
+ * device sets the pace; sleeping on top of that only makes it slower. The
+ * measured round trip is what the chart resolution is worth.
  */
 class Monitor(private val settings: Settings) {
 
@@ -66,7 +70,8 @@ class Monitor(private val settings: Settings) {
                         series.getOrPut(t.key) { Series() }.add(v)
                         recorder?.add(t.name, t.unit, v)
                     }
-                    Thread.sleep(settings.pollIntervalMs.toLong())
+                    val gap = settings.pollIntervalMs.toLong()
+                    if (gap > 0) Thread.sleep(gap)
                 }
             }
         }

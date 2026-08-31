@@ -98,7 +98,7 @@ fun SettingsScreen(
             value = poll,
             onValueChange = { poll = it },
             onValueChangeFinished = { settings.pollIntervalMs = poll.toInt() },
-            valueRange = 50f..2000f,
+            valueRange = 0f..2000f,
         )
 
         Text(stringResource(R.string.settings_advanced), style = MaterialTheme.typography.titleLarge)

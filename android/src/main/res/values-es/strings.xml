@@ -78,7 +78,8 @@
     <string name="settings_recording_path">Dónde guardarlas</string>
     <string name="settings_recording_hint">En un sitio compartido y no en el almacenamiento privado de la app, para que una grabación sobreviva a desinstalarla y se pueda sacar del móvil.</string>
     <string name="settings_polling">Sondeo</string>
-    <string name="settings_poll_interval">%1$d ms entre peticiones</string>
+    <string name="settings_poll_interval">%1$d ms extra entre peticiones</string>
+    <string name="settings_poll_hint">Cero significa tan rápido como conteste el aparato, que es lo que interesa. El ajuste está para ir suave con un módulo ocupado.</string>
     <string name="settings_advanced">Actuación</string>
     <string name="settings_advanced_toggle">Mostrar los parámetros que se pueden accionar</string>
     <string name="settings_advanced_prompt">Desbloquear el menú que puede accionar módulos</string>

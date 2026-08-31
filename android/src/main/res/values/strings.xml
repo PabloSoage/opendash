@@ -80,7 +80,8 @@
     <string name="settings_recording_path">Where to save them</string>
     <string name="settings_recording_hint">Somewhere shared rather than app-private storage, so a recording survives uninstalling and can be pulled off the phone.</string>
     <string name="settings_polling">Polling</string>
-    <string name="settings_poll_interval">%1$d ms between requests</string>
+    <string name="settings_poll_interval">%1$d ms extra between requests</string>
+    <string name="settings_poll_hint">Zero means as fast as the device answers, which is what you want. The setting is for being gentle with a module that is busy.</string>
     <string name="settings_advanced">Actuation</string>
     <string name="settings_advanced_toggle">Show parameters that can be commanded</string>
     <string name="settings_advanced_prompt">Unlock the menu that can command modules</string>

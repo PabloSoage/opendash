@@ -32,10 +32,24 @@ class Settings(private val context: Context) {
         get() = prefs.getInt(KEY_CHARTS, 4)
         set(value) = prefs.edit().putInt(KEY_CHARTS, value.coerceIn(1, 12)).apply()
 
-    /** Milliseconds between polls of the selected parameters. */
+    /**
+     * Extra delay between requests, on top of the round trip.
+     *
+     * Zero by default, and that is the right default: the exchange is
+     * synchronous — send, wait for the answer, send the next — so the device
+     * already sets the pace. A sleep on top only makes it slower.
+     *
+     * The floor measured over USB is about 35 ms per exchange, but that figure
+     * includes the tracing overhead of how it was measured, so the device is
+     * probably quicker. Over its own Wi-Fi the round trip is whatever the link
+     * gives. Either way, waiting for the reply is the honest throttle.
+     *
+     * The setting exists for the case where you want to be gentle with a
+     * module that is busy doing something else.
+     */
     var pollIntervalMs: Int
-        get() = prefs.getInt(KEY_POLL, 200)
-        set(value) = prefs.edit().putInt(KEY_POLL, value.coerceIn(50, 5000)).apply()
+        get() = prefs.getInt(KEY_POLL, 0)
+        set(value) = prefs.edit().putInt(KEY_POLL, value.coerceIn(0, 5000)).apply()
 
     fun recordingDirectory(): File = File(recordingPath).also { it.mkdirs() }
 
