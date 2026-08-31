@@ -15,7 +15,7 @@ The protocol was recovered by capture and measurement — see
 |---|---|
 | Framing, padding, checksum | done, 4066 messages |
 | Reading the bus without the vendor driver | done, 33 054 frames, 59 of 59 ids |
-| `h4` fingerprint | usable, 4000 of 4000 real writes — with a documented gap |
+| `h4` fingerprint | done, 85 of 85 unseen random writes |
 | ISO-TP reassembly | done, 168 884 frames from a factory-tool session |
 | ELM327 command set | the part real apps use |
 | Android app | not started |
@@ -53,10 +53,14 @@ proprietary data; if you have the software you can generate your own.
 
 ## Honesty about what is not proven
 
-`h4` is the one place where the code can be wrong in a way that matters, and it
-says so: the linear system that recovers it has rank 118 of 209, so a payload
-unlike anything observed may fall in a hole. `h4::unverified_bits` reports which
-bits, and `h4::is_verified` answers for a specific frame, so a caller can refuse
-to send rather than have the device silently drop it.
+`h4` was the one place the code could be wrong in a way that matters. It now
+computes the right fingerprint for writes it has never seen — 85 of 85 with a
+random id and a random payload — so the shape a bridge sends is covered.
 
-Everything else in `core` is exercised against real captures.
+The linear system still stops at rank 129 of 209, but what it misses are fields
+that never vary: the subcommand, the record length, the id bytes above eleven
+bits. `h4::unverified_bits` reports them and `h4::is_verified` answers for a
+specific frame, so a caller can still refuse rather than have the device
+silently drop a frame.
+
+Everything in `core` is exercised against real captures.

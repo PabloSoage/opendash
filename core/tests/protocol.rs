@@ -105,6 +105,26 @@ fn h4_reports_the_bits_it_cannot_vouch_for() {
     assert!(holes.iter().any(|&(b, _)| b < 7));
 }
 
+#[test]
+fn every_bit_a_bridge_varies_is_pinned_down() {
+    // What a bridge changes is the CAN id and the eight payload bytes. After
+    // the random sweep those are determined; the holes that remain are fields
+    // that never vary by construction.
+    let holes = h4::unverified_bits();
+    // payload bytes 0..7 live at offsets 11..18 of the write record
+    for byte in 11..19 {
+        let missing: Vec<_> = holes.iter().filter(|&&(b, _)| b == byte).collect();
+        assert!(
+            missing.len() <= 1,
+            "payload byte {} still has {} unpinned bits",
+            byte - 11,
+            missing.len()
+        );
+    }
+    // and the low byte of the id, which carries bits 0..7 of an 11-bit address
+    assert!(!holes.iter().any(|&(b, _)| b == 7));
+}
+
 // ── ISO-TP ────────────────────────────────────────────────────────────────
 
 #[test]

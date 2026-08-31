@@ -55,16 +55,25 @@ Being affine is enough to use it without naming it:
 h4(new) = h4(reference) XOR contributions(bits that changed)
 ```
 
-The contributions were recovered from a one-bit sweep — 228 writes whose
-content was chosen — plus 480 writes from real captures. Validated on **4000 of
-4000** pairs of real writes differing only in the CAN id and payload, and on a
-`0100` request assembled from scratch whose computed `h4` matched the recorded
-one exactly.
+The contributions came from three sources: a one-bit sweep of 228 chosen
+writes, 425 writes with a random id and a random payload, and 480 writes from
+real captures. What that buys:
 
-**Still open.** The system has rank 118 of 209, so bits that never varied have
-no determined contribution. `h4::unverified_bits` lists them. Closing the gap
-needs another sweep with random payloads; it needs the device powered but not a
-car.
+* **85 of 85** held-out writes with a random id and a random payload — messages
+  the model had never seen — get exactly the `h4` the device put on the wire;
+* **4000 of 4000** pairs of recorded writes differing only in id and payload;
+* a `0100` request assembled from scratch reproduces the recorded `h4`.
+
+The one-bit sweep alone was not enough, and it is worth saying why: changing a
+single bit per message leaves the `seq`, `h8` and padding varying alongside it,
+so the directions stay entangled and the rank stalls at 118. Random payloads
+separate them — each message added exactly one to the rank until it saturated.
+
+**What is still not determined.** Rank 129 of 209. The rest are fields that
+never vary by construction: the `60 80 02` subcommand, the record length, and
+the id bytes above eleven bits. A bridge does not vary them either.
+`h4::unverified_bits` still reports them and `h4::is_verified` answers for a
+given frame.
 
 ## Reading the bus
 
