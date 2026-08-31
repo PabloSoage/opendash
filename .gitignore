@@ -5,3 +5,15 @@ target/
 .idea/
 .DS_Store
 local.properties
+
+# Gradle
+.gradle
+/build
+*/build/
+
+# Native libs & baseline profiles
+*.so
+*.dm
+
+# APK builds
+*.apk
