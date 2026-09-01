@@ -96,8 +96,11 @@ class BridgeService : LifecycleService() {
         private const val EXTRA_PORT = "port"
         private const val NOTIFICATION_ID = 1
 
-        fun start(context: Context) {
-            context.startForegroundService(Intent(context, BridgeService::class.java))
+        /** [port] is where the phone app connects; the notification shows it back. */
+        fun start(context: Context, port: Int = 35000) {
+            context.startForegroundService(
+                Intent(context, BridgeService::class.java).putExtra(EXTRA_PORT, port)
+            )
         }
 
         fun stop(context: Context) {
