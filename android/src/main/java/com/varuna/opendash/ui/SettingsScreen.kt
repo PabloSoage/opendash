@@ -1,15 +1,22 @@
 package com.varuna.opendash.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
@@ -26,6 +33,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.varuna.opendash.LocaleManager
 import com.varuna.opendash.R
+import com.varuna.opendash.data.PluginRepository
+import com.varuna.opendash.data.RecordingStore
 import com.varuna.opendash.data.Settings
 
 /**
@@ -37,117 +46,223 @@ import com.varuna.opendash.data.Settings
 @Composable
 fun SettingsScreen(
     settings: Settings,
+    store: RecordingStore,
+    plugins: PluginRepository,
     advancedEnabled: Boolean,
     onUnlockAdvanced: (onResult: (Boolean) -> Unit) -> Unit,
     onAdvancedChanged: (Boolean) -> Unit,
+    onOpenCatalogues: () -> Unit,
 ) {
     val context = LocalContext.current
     var language by remember { mutableStateOf(LocaleManager.current()) }
-    var path by remember { mutableStateOf(settings.recordingPath) }
-    var poll by remember { mutableStateOf(settings.pollIntervalMs.toFloat()) }
-    var compress by remember { mutableStateOf(settings.compressRecordings) }
+    var folder by remember { mutableStateOf(store.label()) }
+    var noLock by remember { mutableStateOf(false) }
+
+    val folderPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        store.useTree(uri)
+        folder = store.label()
+    }
 
     Column(
-        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
-        Text(stringResource(R.string.settings_language), style = MaterialTheme.typography.titleLarge)
-        LocaleManager.supported.forEach { tag ->
-            Row(
-                modifier = Modifier.fillMaxWidth().selectable(
-                    selected = language == tag,
-                    onClick = {
-                        LocaleManager.store(context, tag)
-                        language = tag
-                    },
-                ).padding(vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                RadioButton(selected = language == tag, onClick = null)
-                Text(
-                    stringResource(
-                        when (tag) {
-                            "en" -> R.string.settings_language_en
-                            "es" -> R.string.settings_language_es
-                            else -> R.string.settings_language_system
+        Section(stringResource(R.string.settings_appearance), first = true)
+        Panel {
+            Text(
+                stringResource(R.string.settings_theme),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Settings.ThemeMode.entries.forEach { mode ->
+                Choice(
+                    label = stringResource(
+                        when (mode) {
+                            Settings.ThemeMode.SYSTEM -> R.string.settings_theme_system
+                            Settings.ThemeMode.LIGHT -> R.string.settings_theme_light
+                            Settings.ThemeMode.DARK -> R.string.settings_theme_dark
                         }
                     ),
-                    modifier = Modifier.padding(start = 8.dp),
+                    selected = settings.theme == mode,
+                    onSelect = { settings.theme = mode },
                 )
             }
         }
 
-        Text(stringResource(R.string.settings_recording), style = MaterialTheme.typography.titleLarge)
-        OutlinedTextField(
-            value = path,
-            onValueChange = {
-                path = it
-                settings.recordingPath = it
-            },
-            label = { Text(stringResource(R.string.settings_recording_path)) },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-        )
-        Text(
-            stringResource(R.string.settings_recording_hint),
-            style = MaterialTheme.typography.bodySmall,
-        )
-
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Switch(
-                checked = compress,
-                onCheckedChange = {
-                    compress = it
-                    settings.compressRecordings = it
-                },
-            )
+        Panel(modifier = Modifier.padding(top = 8.dp)) {
             Text(
-                stringResource(R.string.settings_compress),
-                modifier = Modifier.padding(start = 8.dp),
+                stringResource(R.string.settings_language),
+                style = MaterialTheme.typography.bodyMedium,
             )
+            LocaleManager.supported.forEach { tag ->
+                Choice(
+                    label = stringResource(
+                        when (tag) {
+                            "en" -> R.string.settings_language_en
+                            "es" -> R.string.settings_language_es
+                            "de" -> R.string.settings_language_de
+                            else -> R.string.settings_language_system
+                        }
+                    ),
+                    selected = language == tag,
+                    onSelect = {
+                        language = tag
+                        LocaleManager.store(context, tag)
+                    },
+                )
+            }
         }
-        Text(
-            stringResource(R.string.settings_compress_hint),
-            style = MaterialTheme.typography.bodySmall,
-        )
 
-        Text(stringResource(R.string.settings_polling), style = MaterialTheme.typography.titleLarge)
-        Text(stringResource(R.string.settings_poll_interval, poll.toInt()))
-        Slider(
-            value = poll,
-            onValueChange = { poll = it },
-            onValueChangeFinished = { settings.pollIntervalMs = poll.toInt() },
-            valueRange = 0f..2000f,
-        )
-        Text(
-            stringResource(R.string.settings_poll_hint),
-            style = MaterialTheme.typography.bodySmall,
-        )
+        Section(stringResource(R.string.settings_recording))
+        Panel {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.settings_folder),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        folder ?: stringResource(R.string.settings_folder_default),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                OutlinedButton(onClick = { folderPicker.launch(null) }) {
+                    Text(stringResource(R.string.action_choose))
+                }
+            }
+            Hint(stringResource(R.string.settings_folder_hint))
 
-        Text(stringResource(R.string.settings_advanced), style = MaterialTheme.typography.titleLarge)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Switch(
+            Toggle(
+                label = stringResource(R.string.settings_compress),
+                checked = settings.compressRecordings,
+                onChange = { settings.compressRecordings = it },
+            )
+            Hint(stringResource(R.string.settings_compress_hint))
+        }
+
+        Section(stringResource(R.string.settings_polling))
+        Panel {
+            Text(
+                if (settings.pollIntervalMs == 0) {
+                    stringResource(R.string.settings_poll_none)
+                } else {
+                    stringResource(R.string.settings_poll_interval, settings.pollIntervalMs)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Slider(
+                value = settings.pollIntervalMs.toFloat(),
+                onValueChange = { settings.pollIntervalMs = it.toInt() },
+                valueRange = 0f..1000f,
+            )
+            Hint(stringResource(R.string.settings_poll_hint))
+        }
+
+        Section(stringResource(R.string.catalogues))
+        Panel {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenCatalogues() },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.catalogues),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        stringResource(
+                            R.string.settings_catalogues_summary,
+                            plugins.installed().size,
+                            plugins.sources.size,
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        Section(stringResource(R.string.settings_advanced))
+        Panel {
+            Toggle(
+                label = stringResource(R.string.settings_advanced_toggle),
                 checked = advancedEnabled,
-                onCheckedChange = { wanted ->
+                onChange = { wanted ->
+                    noLock = false
                     if (!wanted) {
                         onAdvancedChanged(false)
                     } else {
-                        onUnlockAdvanced { granted -> onAdvancedChanged(granted) }
+                        onUnlockAdvanced { granted ->
+                            onAdvancedChanged(granted)
+                            noLock = !granted
+                        }
                     }
                 },
             )
+            if (noLock) ErrorLine(stringResource(R.string.settings_advanced_unavailable))
+            Hint(stringResource(R.string.settings_advanced_warning))
+        }
+
+        Section(stringResource(R.string.settings_about))
+        Panel {
             Text(
-                stringResource(R.string.settings_advanced_toggle),
-                modifier = Modifier.padding(start = 8.dp),
+                stringResource(
+                    R.string.settings_version,
+                    runCatching {
+                        context.packageManager
+                            .getPackageInfo(context.packageName, 0).versionName ?: "?"
+                    }.getOrDefault("?"),
+                ),
+                style = MaterialTheme.typography.bodyMedium,
             )
         }
+    }
+}
+
+@Composable
+private fun Choice(label: String, selected: Boolean, onSelect: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectable(selected = selected, onClick = onSelect)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = null)
         Text(
-            stringResource(R.string.settings_advanced_warning),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(start = 8.dp),
         )
+    }
+}
+
+@Composable
+private fun Toggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(checked = checked, onCheckedChange = onChange)
     }
 }

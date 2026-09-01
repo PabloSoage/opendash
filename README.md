@@ -24,10 +24,14 @@ what is still open.
 - Reads standard OBD-II live data. It first asks which PIDs the engine answers,
   so nothing offered can be refused. Values and charts, any number at once.
 - Reads readiness monitors and fault codes, stored and pending.
-- Records sessions to gzipped CSV, flushed row by row.
-- Opens `.sm2` recordings written by the Scanmatik Windows software.
+- Records sessions to gzipped CSV, flushed row by row, into a folder chosen from
+  the system picker.
+- Opens recordings back up: its own `.csv`/`.csv.gz`, and `.sm2` files written by
+  the Scanmatik Windows software.
 - Serves ELM327 on `127.0.0.1:35000` for other apps on the same phone.
-- Installs richer parameter catalogues as plugins, from several sources.
+- Installs richer parameter catalogues as plugins, from several sources, over
+  HTTPS with a token or over SFTP with an SSH key.
+- English, Spanish and German; light and dark.
 
 It never writes to a module. See [Only reading](#only-reading).
 
@@ -35,13 +39,17 @@ It never writes to a module. See [Only reading](#only-reading).
 
 - **Command anything.** The gate and the device-lock prompt exist; there is
   nothing behind them.
-- **Request a whole catalogue.** A brand catalogue lists PIDs well beyond the
-  mode 01 range — 4427, 54528 — read with a service that has not been worked
-  out. The app reports how many parameters it can actually fetch rather than
-  offering all of them and failing.
+- **Reach the whole catalogue with confidence.** A brand catalogue lists 4 993
+  distinct identifiers and 4 775 of them do not fit in a byte, so mode 01 cannot
+  ask for them. The request form is known — the factory capture contains one
+  `22 F8 02`, which the catalogue lists as the VIN — so the app asks with
+  service `0x22` and marks those parameters as unconfirmed, dropping any that
+  does not answer three times running. What is not known is how many of the
+  other 4 774 answer at all; that is a measurement to make on a car, not a claim
+  to put in a README.
 - **Stream.** GM service `0xAA` asks a module to push a packet of parameters
-  continuously; the app polls one at a time. The mechanism is understood and
-  documented, not implemented.
+  continuously, defined beforehand with `0x2C`; the app polls one at a time. The
+  mechanism is understood and documented, not implemented.
 - **Share one implementation.** `bridge/ElmSession.kt` mirrors
   `core/src/elm327.rs` in Kotlin so the socket could be exercised before a JNI
   bridge exists. Two implementations of one command set will drift. The Rust one
@@ -150,6 +158,13 @@ Rows are flushed as they happen, with sync flushing on the compressed stream. A
 recording ends when the car is switched off, not when someone presses stop, so
 an interrupted session should be short rather than corrupt.
 
+The folder comes from the system picker, not from a typed path. Android has not
+let an app write to an arbitrary path for several versions, so a text field
+asking for one would be a field that cannot work; what is stored is the tree URI
+the picker returns, with its permission persisted across reboots. With no folder
+chosen, recordings go to app storage, which is fine until the app is
+uninstalled.
+
 ### Reading .sm2
 
 The format the Windows software writes, worked out from the files:
@@ -180,10 +195,46 @@ units, ranges, module layouts and fault-code ownership, generated from a GDS2
 installation. They are **not** distributed here; the data belongs to GM. If you
 have the software you can generate your own.
 
-Sources are configured per repository with their own credential, over HTTPS with
-a token rather than SSH. A token can be scoped to one repository and revoked
-from a web page if the phone is lost, which a key sitting in app storage cannot.
-GitHub, GitLab and Gitea are handled.
+Sources are configured one per repository, each with its own credential, so a
+credential that reads one cannot reach another.
+
+Two kinds, because the two kinds of host want different things:
+
+- **A forge** — GitHub, GitLab, Gitea — over HTTPS with a token. Four small
+  requests fetch a catalogue, the token is scoped to one repository, and it is
+  revoked from a web page if the phone is lost.
+- **Any other SSH host** — a home server, a NAS, another machine, a directory
+  someone else exports for you — over SFTP with a key. The app generates an
+  RSA-3072 pair or imports one you already have; the public half is shown to
+  copy into `authorized_keys`, the private half stays in app-private storage.
+  Host keys are trust-on-first-use in a `known_hosts` file, and a changed key
+  fails the connection rather than asking, because the answer to that question
+  in a car park is always yes.
+
+SSH does not reach a GitHub repository, and that is deliberate rather than
+missing. A forge serves files over SSH only through the git wire protocol, which
+would mean a packfile reader on the phone and the whole history downloaded to
+end up with four text files. For a forge, use a token.
+
+---
+
+## Appearance
+
+Dark by default, with light and follow-the-system in settings, and an amber
+palette that reads like an instrument cluster rather than like a form. The
+window background is set in `themes.xml` for both, so launching does not flash
+white before Compose paints.
+
+Language is per-app — English, Spanish, German — set from within the app and, on
+Android 13 and later, visible in the system settings too. Changing it recreates
+the activity, which is how Android applies a configuration change; the
+navigation state is saved across that, so the screen comes back where it was
+instead of dropping you on the first tab.
+
+Five destinations, one short word each. A navigation bar splits its width evenly
+between items, so a long label does not shrink — it wraps, and "Recordings"
+arrives as "Recordin" over "gs". The Spanish and German strings are held to the
+same length for the same reason.
 
 ---
 
@@ -198,8 +249,9 @@ CI runs both. `cargo test` is the gate that matters: it replays 200 recorded
 writes and checks the computed fingerprint against what the device put on the
 wire.
 
-Minimum Android 8.0. English and Spanish, switchable inside the app without
-changing the phone language.
+Minimum Android 8.0, compiled against API 37 with AGP 9.3.2, Kotlin 2.2.10 and
+JDK 21 — the same toolchain as the other Android project on this machine, so a
+Gradle sync does not fail for reasons that have nothing to do with the app.
 
 ---
 
@@ -214,5 +266,11 @@ frame, so a caller can refuse rather than have the device drop a frame in
 silence.
 
 Everything in `core` is exercised against real captures. The Kotlin port of the
-same protocol is not: it has been read carefully and it compiles, but the only
-thing that proves a port is a car.
+same protocol is not: it has been read carefully, but the only thing that proves
+a port is a car.
+
+Service `0x22` is the other open edge. One request of that shape appears in the
+factory capture and was answered, which fixes the form; whether the other 4 774
+catalogue identifiers answer to it is unmeasured. The app asks, labels them
+unconfirmed, and drops the ones that stay silent — so using it is what produces
+the measurement.

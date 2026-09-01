@@ -81,6 +81,34 @@ class Diagnostics(private val sm3: Sm3Client) {
         return r.copyOfRange(2, r.size)
     }
 
+    /**
+     * Service 0x22, ReadDataByIdentifier: the two-byte identifiers.
+     *
+     * The catalogue extracted from GDS2 lists 4 993 distinct identifiers, and
+     * 4 775 of them do not fit in a byte, so mode 01 cannot reach them. The
+     * GDS2 capture contains exactly one 0x22 request — `22 F8 02`, which the
+     * catalogue lists as the VIN — and that is enough to fix the request form:
+     * the service byte, then the identifier big-endian.
+     *
+     * What that one example does not establish is coverage. GDS2 reads almost
+     * everything else by defining a dynamic packet with service 0x2C and
+     * streaming it, so most of these identifiers have never been seen answered
+     * one at a time. A module is free to refuse, and refusing costs a timeout
+     * and nothing else, so the honest thing is to ask and report the answer
+     * rather than to pretend the list is unreachable.
+     *
+     * The timeout is short on purpose: an identifier that is not supported
+     * should cost a fraction of a second, not a second and a half.
+     */
+    fun readDataByIdentifier(id: Int, txId: Int = ENGINE, timeoutMs: Long = 600): ByteArray? {
+        val payload = byteArrayOf(0x22, (id shr 8).toByte(), id.toByte())
+        val r = request(txId, payload, timeoutMs = timeoutMs) ?: return null
+        if (r.size < 3 || (r[0].toInt() and 0xff) != 0x62) return null
+        // The identifier is echoed before the data.
+        if (((r[1].toInt() and 0xff) shl 8 or (r[2].toInt() and 0xff)) != id) return null
+        return r.copyOfRange(3, r.size)
+    }
+
     /** The supported-PID bitmasks, four requests instead of ninety-six. */
     fun supportedPids(): Set<Int> {
         val masks = HashMap<Int, ByteArray>()

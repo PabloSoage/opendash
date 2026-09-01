@@ -35,6 +35,12 @@ object Session {
 
     enum class State { DISCONNECTED, CONNECTING, CONNECTED, CHANNEL_OPEN }
 
+    /** Point the client at whatever the settings say before opening a socket. */
+    fun configure(host: String, port: Int) {
+        sm3.host = host
+        sm3.port = port
+    }
+
     /** Greet the device. Cheap, and it proves the Wi-Fi is right. */
     fun connect(): Boolean {
         state = State.CONNECTING
@@ -81,18 +87,27 @@ object Session {
      * ATRV gets asked far more often than the voltage moves.
      */
     private var voltsAt = 0L
-    private var volts = 0
 
-    fun batteryMillivolts(): Int {
+    /**
+     * The last reading, for anything on the main thread to display. It is a
+     * Compose state so a screen showing it redraws when it moves, and reading
+     * it never touches the socket — which matters, because composition happens
+     * on the main thread and a socket read there is a crash.
+     */
+    var batteryMillivolts by mutableStateOf(0)
+        private set
+
+    /** Blocking. Call it from a worker thread; the bridge and the UI both do. */
+    fun refreshBattery(): Int {
         if (state == State.DISCONNECTED) return 0
         val now = System.currentTimeMillis()
-        if (now - voltsAt < 1000) return volts
-        volts = try {
-            sm3.voltages()?.batteryMillivolts ?: volts
+        if (now - voltsAt < 1000) return batteryMillivolts
+        batteryMillivolts = try {
+            sm3.voltages()?.batteryMillivolts ?: batteryMillivolts
         } catch (_: Exception) {
-            volts
+            batteryMillivolts
         }
         voltsAt = now
-        return volts
+        return batteryMillivolts
     }
 }

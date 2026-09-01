@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        The window background is painted before a single line of Compose runs.
+        Leaving it at the platform default is what produces the white flash on
+        launch, so it is set here to the same colour the Compose theme uses.
+    -->
+    <style name="Theme.OpenDash" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">#F6F7F9</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

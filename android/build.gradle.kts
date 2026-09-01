@@ -2,7 +2,6 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
-    
     alias(libs.plugins.kotlin.compose)
 }
 
@@ -17,9 +16,9 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
-        // Spanish and English from the first commit: adding a language later
-        // means auditing every string, and it is never done.
-        androidResources.localeFilters += setOf("en", "es")
+        // Three languages from the start. Adding one later means auditing every
+        // string, and it never gets done.
+        androidResources.localeFilters += setOf("en", "es", "de")
     }
 
     splits {
@@ -28,6 +27,33 @@ android {
             reset()
             include("arm64-v8a", "x86_64")
             isUniversalApk = false
+        }
+    }
+
+    // Per-app language needs every language in the installed APK; a language
+    // split would take away the ones the picker offers.
+    bundle {
+        language {
+            @Suppress("UnstableApiUsage")
+            enableSplit = false
+        }
+    }
+
+    lint {
+        disable += "MissingTranslation"
+        disable += "OldTargetApi"
+        abortOnError = false
+    }
+
+    packaging {
+        resources {
+            // sshj and Bouncy Castle each ship their own copies of these.
+            excludes += "META-INF/*.SF"
+            excludes += "META-INF/*.DSA"
+            excludes += "META-INF/*.RSA"
+            excludes += "META-INF/versions/**"
+            excludes += "META-INF/INDEX.LIST"
+            excludes += "META-INF/DEPENDENCIES"
         }
     }
 
@@ -48,6 +74,7 @@ android {
     }
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = false
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
@@ -68,16 +95,22 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.service)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.biometric)
+    implementation(libs.androidx.documentfile)
+    // Catalogue sources reached with an SSH key instead of a token.
+    implementation(libs.sshj)
+    implementation(libs.bouncycastle.prov)
+    implementation(libs.bouncycastle.pkix)
+    runtimeOnly(libs.slf4j.nop)
 }
-
-
-
 
 // --- RUST CORE INTEGRATION ---
 

@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">OpenDash</string>
+
+    <string name="tab_link">Link</string>
+    <string name="tab_live">Live</string>
+    <string name="tab_health">Status</string>
+    <string name="tab_files">Dateien</string>
+    <string name="tab_settings">Optionen</string>
+
+    <string name="action_connect">Verbinden</string>
+    <string name="action_disconnect">Trennen</string>
+    <string name="action_refresh">Aktualisieren</string>
+    <string name="action_start">Starten</string>
+    <string name="action_stop">Stoppen</string>
+    <string name="action_save">Speichern</string>
+    <string name="action_remove">Entfernen</string>
+    <string name="action_choose">Auswählen…</string>
+    <string name="action_copy">Kopieren</string>
+    <string name="action_back">Zurück</string>
+    <string name="state_working">Arbeitet…</string>
+
+    <string name="link_adapter">Adapter</string>
+    <string name="link_disconnected">Nicht verbunden</string>
+    <string name="link_connecting">Verbindet…</string>
+    <string name="link_connected">Verbunden</string>
+    <string name="link_channel_open">Kanal offen</string>
+    <string name="link_serial">Seriennummer</string>
+    <string name="link_firmware">Firmware</string>
+    <string name="link_voltage">Batterie</string>
+    <string name="link_host">Adresse</string>
+    <string name="link_port">Port</string>
+    <string name="link_psk">WLAN-Passwort</string>
+    <string name="link_psk_hint">Nur nötig, wenn das Adapter-Passwort in der Scanmatik-Software geändert wurde.</string>
+
+    <string name="vehicle">Fahrzeug</string>
+    <string name="vehicle_unknown">Nicht identifiziert</string>
+    <string name="vehicle_identify">Fahrzeug identifizieren</string>
+    <string name="vehicle_hint">Direkt aus dem Motorsteuergerät gelesen, damit ein getauschter oder neu programmierter Motor meldet, was er wirklich ist.</string>
+    <string name="vehicle_vin">FIN</string>
+    <string name="vehicle_system">System</string>
+    <string name="vehicle_engine">Motor</string>
+    <string name="vehicle_calibration">Kalibrierung</string>
+
+    <string name="bridge">ELM327-Brücke</string>
+    <string name="bridge_stopped">Gestoppt</string>
+    <string name="bridge_listening">Lauscht auf %1$s:%2$d</string>
+    <string name="bridge_hint">Richte eine OBD-App auf diese Adresse und diesen Port. Läuft als Vordergrunddienst, damit die Verbindung auch bei gesperrtem Bildschirm bestehen bleibt.</string>
+    <string name="bridge_notification_channel">Brücke</string>
+    <string name="bridge_notification_text">Port %1$d · %2$s</string>
+
+    <string name="live_scan">Unterstützte Parameter suchen</string>
+    <string name="live_rescan">Erneut suchen</string>
+    <string name="live_empty">Adapter verbinden, Kanal öffnen, dann suchen. Es werden nur Parameter angezeigt, die das Fahrzeug als unterstützt meldet.</string>
+    <string name="live_selected">%1$d von %2$d ausgewählt</string>
+    <string name="live_chart_limit">Diagramme gleichzeitig: %1$d</string>
+    <string name="live_rate">%1$d Messwerte/s</string>
+    <string name="live_record">Diese Sitzung aufzeichnen</string>
+    <string name="live_recording">%1$d Zeilen · %2$s</string>
+    <string name="live_catalogue_off">Standard-OBD-II-Namen</string>
+    <string name="live_coverage">%1$d Parameter sind abrufbar, %2$d noch nicht</string>
+    <string name="live_search">Filtern</string>
+    <string name="live_clear_selection">Auswahl aufheben</string>
+
+    <string name="health_read">Fahrzeugstatus lesen</string>
+    <string name="health_empty">Noch nichts gelesen.</string>
+    <string name="health_mil_on">Motorkontrollleuchte an</string>
+    <string name="health_mil_off">Motorkontrollleuchte aus</string>
+    <string name="health_fault_count">%1$d gespeicherte Fehlercodes</string>
+    <string name="health_diesel">Selbstzündung</string>
+    <string name="health_petrol">Fremdzündung</string>
+    <string name="faults">Fehlercodes</string>
+    <string name="faults_none">Keine gespeicherten oder anstehenden Codes.</string>
+    <string name="faults_stored">Gespeichert</string>
+    <string name="faults_pending">Anstehend</string>
+    <string name="faults_hint">Ein anstehender Code wurde einmal gesehen, aber nicht oft genug für die Kontrollleuchte. OpenDash liest Codes; es löscht sie nicht.</string>
+    <string name="monitors">Bereitschaftstests</string>
+    <string name="monitors_all_complete">Alle unterstützten Tests sind abgeschlossen</string>
+    <string name="monitors_pending">Einige Tests sind seit dem letzten Löschen nicht abgeschlossen</string>
+    <string name="monitors_complete">Abgeschlossen</string>
+    <string name="monitors_incomplete">Nicht abgeschlossen</string>
+
+    <string name="files_recordings">Aufzeichnungen</string>
+    <string name="files_none">Noch keine Aufzeichnungen.</string>
+    <string name="files_location">Gespeichert unter %1$s</string>
+    <string name="files_choose_folder">Ordner ändern</string>
+    <string name="files_open_sm2">Eine Scanmatik-.sm2-Datei öffnen</string>
+    <string name="files_summary">%1$d Parameter · %2$d Messwerte · %3$d:%4$02d</string>
+    <string name="files_unreadable">Datei konnte nicht gelesen werden: %1$s</string>
+
+    <string name="settings_appearance">Darstellung</string>
+    <string name="settings_theme">Design</string>
+    <string name="settings_theme_system">Dem System folgen</string>
+    <string name="settings_theme_light">Hell</string>
+    <string name="settings_theme_dark">Dunkel</string>
+    <string name="settings_language">Sprache</string>
+    <string name="settings_language_system">Dem System folgen</string>
+    <string name="settings_language_en">English</string>
+    <string name="settings_language_es">Español</string>
+    <string name="settings_language_de">Deutsch</string>
+
+    <string name="settings_recording">Aufzeichnung</string>
+    <string name="settings_folder">Ordner</string>
+    <string name="settings_folder_default">App-Speicher (intern)</string>
+    <string name="settings_folder_hint">Wähle einen Ordner außerhalb des App-Speichers, damit Aufzeichnungen eine Deinstallation überleben.</string>
+    <string name="settings_compress">Aufzeichnungen komprimieren</string>
+    <string name="settings_compress_hint">Gzip-komprimiertes CSV. Bei einer Sitzung von 23 Minuten: 3,63 MB unkomprimiert, 0,60 MB komprimiert. Lässt sich so oder so in einer Tabellenkalkulation öffnen.</string>
+
+    <string name="settings_polling">Abfrage</string>
+    <string name="settings_poll_interval">Zusätzliche Wartezeit: %1$d ms</string>
+    <string name="settings_poll_none">Keine zusätzliche Wartezeit</string>
+    <string name="settings_poll_hint">Die Anfragen sind synchron, das Tempo gibt also schon der Adapter vor. Wartezeit nur hinzufügen, um ein ausgelastetes Steuergerät zu schonen.</string>
+
+    <string name="settings_catalogues_summary">%1$d installiert, %2$d Quellen</string>
+
+    <string name="settings_advanced">Ansteuerung</string>
+    <string name="settings_advanced_toggle">Parameter anzeigen, die angesteuert werden können</string>
+    <string name="settings_advanced_prompt">Ansteuerung freischalten</string>
+    <string name="settings_advanced_warning">Ein Steuergerät anzusteuern bewegt Teile an einem Fahrzeug, in dem oder neben dem jemand stehen kann. Lesen ist immer erlaubt; dieser Schalter zeigt nur den Rest, hinter der Gerätesperre.</string>
+    <string name="settings_advanced_unavailable">Dieses Gerät hat keine Bildschirmsperre, daher lässt sich die Ansteuerung nicht freischalten.</string>
+
+    <string name="settings_about">Über</string>
+    <string name="settings_version">Version %1$s</string>
+
+    <string name="catalogues">Kataloge</string>
+    <string name="catalogues_installed">Installiert</string>
+    <string name="catalogues_none">Keiner installiert. Standard-OBD-II funktioniert ohne Katalog.</string>
+    <string name="catalogues_entry">%1$d Parameter</string>
+    <string name="catalogues_sources">Quellen</string>
+    <string name="catalogues_no_sources">Keine Quelle eingerichtet.</string>
+    <string name="catalogues_add_source">Quelle hinzufügen</string>
+    <string name="catalogues_install">Installieren</string>
+    <string name="catalogues_brand">Katalogname</string>
+    <string name="catalogues_installing">Lädt %1$s…</string>
+    <string name="catalogues_installed_ok">%1$d Parameter installiert</string>
+
+    <string name="source_name">Name</string>
+    <string name="source_kind_github">GitHub</string>
+    <string name="source_kind_gitlab">GitLab</string>
+    <string name="source_kind_gitea">Gitea / Forgejo</string>
+    <string name="source_kind_https">Einfaches HTTPS</string>
+    <string name="source_kind_ssh">SSH / SFTP</string>
+    <string name="source_repo">Repository (Eigentümer/Name)</string>
+    <string name="source_url">Basis-URL</string>
+    <string name="source_ssh_target">benutzer\@host:/pfad</string>
+    <string name="source_branch">Branch</string>
+    <string name="source_token">Zugriffstoken</string>
+    <string name="source_token_hint">Auf ein Repository beschränkt und in der Forge widerrufbar. Für ein öffentliches Repository leer lassen.</string>
+    <string name="source_ssh_hint">Für einen Host, den du mit einem SSH-Schlüssel erreichst: ein Heimserver, ein NAS, ein anderer Rechner. Die Dateien kommen über SFTP.</string>
+    <string name="source_private">privat</string>
+
+    <string name="ssh_keys">SSH-Schlüssel</string>
+    <string name="ssh_none">Noch kein Schlüssel.</string>
+    <string name="ssh_generate">Schlüssel erzeugen</string>
+    <string name="ssh_import">Privaten Schlüssel importieren</string>
+    <string name="ssh_fingerprint">Fingerabdruck</string>
+    <string name="ssh_delete">Schlüssel löschen</string>
+    <string name="ssh_hint">Trage den öffentlichen Schlüssel beim Host als autorisierten Schlüssel ein, oder in einer Forge als Deploy-Key. Der private Schlüssel bleibt auf diesem Gerät.</string>
+    <string name="ssh_copied">Öffentlicher Schlüssel kopiert</string>
+    <string name="ssh_imported">Schlüssel importiert</string>
+    <string name="ssh_import_failed">Dieser Schlüssel konnte nicht gelesen werden: %1$s</string>
+
+    <string name="error_no_channel">Zuerst einen Kanal öffnen</string>
+</resources>

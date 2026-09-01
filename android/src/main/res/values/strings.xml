@@ -1,106 +1,174 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">opendash</string>
+    <string name="app_name">OpenDash</string>
 
-    <string name="tab_connection">Link</string>
+    <!-- Bottom navigation. One short word each, so nothing wraps. -->
+    <string name="tab_link">Link</string>
     <string name="tab_live">Live</string>
-    <string name="tab_readiness">Readiness</string>
-    <string name="tab_recordings">Recordings</string>
-    <string name="tab_plugins">Plugins</string>
+    <string name="tab_health">Health</string>
+    <string name="tab_files">Files</string>
     <string name="tab_settings">Settings</string>
 
-    <string name="device_title">Device</string>
-    <string name="device_disconnected">Not connected</string>
-    <string name="device_connecting">Connecting…</string>
-    <string name="device_connected">Connected to %1$s</string>
-    <string name="device_channel_open">Channel open, bus readable</string>
-    <string name="device_firmware">Firmware %1$s</string>
-    <string name="device_connect">Connect and open channel</string>
-    <string name="device_disconnect">Disconnect</string>
+    <!-- Common -->
+    <string name="action_connect">Connect</string>
+    <string name="action_disconnect">Disconnect</string>
+    <string name="action_refresh">Refresh</string>
+    <string name="action_start">Start</string>
+    <string name="action_stop">Stop</string>
+    <string name="action_save">Save</string>
+    <string name="action_remove">Remove</string>
+    <string name="action_choose">Choose…</string>
+    <string name="action_copy">Copy</string>
+    <string name="action_back">Back</string>
+    <string name="state_working">Working…</string>
 
-    <string name="vehicle_title">Vehicle</string>
-    <string name="vehicle_unknown">Not identified yet</string>
-    <string name="vehicle_identify">Ask the car what it is</string>
-    <string name="vehicle_identify_hint">The engine answers with its VIN, system name and engine code, so there is no make and model to choose.</string>
+    <!-- Link -->
+    <string name="link_adapter">Adapter</string>
+    <string name="link_disconnected">Disconnected</string>
+    <string name="link_connecting">Connecting…</string>
+    <string name="link_connected">Connected</string>
+    <string name="link_channel_open">Channel open</string>
+    <string name="link_serial">Serial</string>
+    <string name="link_firmware">Firmware</string>
+    <string name="link_voltage">Battery</string>
+    <string name="link_host">Address</string>
+    <string name="link_port">Port</string>
+    <string name="link_psk">Wi-Fi password</string>
+    <string name="link_psk_hint">Only needed if the adapter password was changed from its default in the Scanmatik software.</string>
+
+    <string name="vehicle">Vehicle</string>
+    <string name="vehicle_unknown">Not identified</string>
+    <string name="vehicle_identify">Identify vehicle</string>
+    <string name="vehicle_hint">Read from the engine module itself, so a swapped or reflashed engine reports what it actually is.</string>
     <string name="vehicle_vin">VIN</string>
     <string name="vehicle_system">System</string>
     <string name="vehicle_engine">Engine</string>
     <string name="vehicle_calibration">Calibration</string>
 
-    <string name="live_scan">Ask which parameters it answers</string>
-    <string name="live_selected">%1$d selected</string>
-    <string name="live_record">Record to a file</string>
-    <string name="live_start">Start</string>
-    <string name="live_stop">Stop</string>
-    <string name="live_recording_to">%1$d rows written to %2$s</string>
-    <string name="live_scan_first">Open the channel, then ask the car which parameters it answers. Only those are offered, so nothing here can be refused.</string>
-
-    <string name="readiness_read">Read monitors</string>
-    <string name="readiness_none">Nothing read yet</string>
-    <string name="readiness_mil_on">Check engine light on</string>
-    <string name="readiness_mil_off">Check engine light off</string>
-    <string name="readiness_faults">%1$d stored fault(s)</string>
-    <string name="readiness_diesel">Compression ignition</string>
-    <string name="readiness_petrol">Spark ignition</string>
-    <string name="readiness_all_complete">Every supported monitor has run</string>
-    <string name="readiness_pending">Some monitors have not finished since the codes were cleared</string>
-    <string name="readiness_complete">complete</string>
-    <string name="readiness_incomplete">not yet</string>
-
-    <string name="recordings_title">Recordings</string>
-    <string name="recordings_none">Nothing recorded yet</string>
-    <string name="recordings_refresh">Refresh</string>
-
-    <string name="sm2_title">Open a Scanmatik .sm2</string>
-    <string name="sm2_path">Full path to the file</string>
-    <string name="sm2_open">Open</string>
-    <string name="sm2_summary">%1$d parameters · %2$d readings · %3$d min %4$02d s</string>
-
-    <string name="plugins_title">Installed catalogues</string>
-    <string name="plugins_none">No catalogue installed. The standard OBD-II parameters work without one.</string>
-    <string name="plugins_installed">%1$d parameters — %2$s</string>
-    <string name="plugins_remove">Remove</string>
-    <string name="plugins_sources">Sources</string>
-    <string name="plugins_private">private</string>
-    <string name="plugins_add_source">Add a source</string>
-    <string name="plugins_source_name">Name</string>
-    <string name="plugins_source_repo">Repository (owner/name)</string>
-    <string name="plugins_source_token">Access token, if it is private</string>
-    <string name="plugins_token_hint">A token scoped to read one repository. It can be revoked from the forge if the phone is lost, which an SSH key sitting in app storage cannot.</string>
-    <string name="plugins_save_source">Save source</string>
-    <string name="plugins_install">Install a catalogue</string>
-    <string name="plugins_brand">Brand directory</string>
-    <string name="plugins_download">Download</string>
-
-    <string name="settings_language">Language</string>
-    <string name="settings_language_system">System default</string>
-    <string name="settings_language_en">English</string>
-    <string name="settings_language_es">Español</string>
-    <string name="settings_recording">Recordings</string>
-    <string name="settings_recording_path">Where to save them</string>
-    <string name="settings_recording_hint">Somewhere shared rather than app-private storage, so a recording survives uninstalling and can be pulled off the phone.</string>
-    <string name="settings_polling">Polling</string>
-    <string name="settings_poll_interval">%1$d ms extra between requests</string>
-    <string name="settings_poll_hint">Zero means as fast as the device answers, which is what you want. The setting is for being gentle with a module that is busy.</string>
-    <string name="settings_advanced">Actuation</string>
-    <string name="settings_advanced_toggle">Show parameters that can be commanded</string>
-    <string name="settings_advanced_prompt">Unlock the menu that can command modules</string>
-    <string name="settings_advanced_warning">The catalogue holds 2517 entries with Command in the name, 879 with Test and 782 with Learn. Reading them is harmless. Commanding them moves things on a car that may have someone in it, so this stays behind the device lock.</string>
-
-    <string name="bridge_title">ELM327 bridge</string>
+    <string name="bridge">ELM327 bridge</string>
     <string name="bridge_stopped">Stopped</string>
     <string name="bridge_listening">Listening on %1$s:%2$d</string>
-    <string name="bridge_start">Start</string>
-    <string name="bridge_stop">Stop</string>
+    <string name="bridge_hint">Point an OBD app at this address and port. It runs as a foreground service, so the link survives a locked screen.</string>
     <string name="bridge_notification_channel">Bridge</string>
-    <string name="bridge_notification_text">ELM327 on port %1$d · %2$s</string>
-    <string name="faults_title">Fault codes</string>
-    <string name="faults_none">No codes stored or pending</string>
-    <string name="faults_stored">stored</string>
-    <string name="faults_pending">pending</string>
-    <string name="faults_hint">Pending codes have been seen once but not often enough to light the lamp. Reading them changes nothing; this tool cannot clear them.</string>
-    <string name="live_use_catalogue">Name and scale from %1$s</string>
-    <string name="live_catalogue_coverage">%1$d of its parameters can be requested; %2$d use a service not worked out yet.</string>
+    <string name="bridge_notification_text">Port %1$d · %2$s</string>
+
+    <!-- Live -->
+    <string name="live_scan">Scan supported parameters</string>
+    <string name="live_rescan">Scan again</string>
+    <string name="live_empty">Connect the adapter and open a channel, then scan. Only parameters the vehicle reports as supported are listed.</string>
+    <string name="live_selected">%1$d of %2$d selected</string>
+    <string name="live_chart_limit">Charts shown at once: %1$d</string>
+    <string name="live_rate">%1$d readings/s</string>
+    <string name="live_record">Record this session</string>
+    <string name="live_recording">%1$d rows · %2$s</string>
+    <string name="live_catalogue_off">Standard OBD-II names</string>
+    <string name="live_coverage">%1$d parameters can be requested, %2$d cannot yet</string>
+    <string name="live_search">Filter</string>
+    <string name="live_clear_selection">Clear selection</string>
+
+    <!-- Health -->
+    <string name="health_read">Read vehicle status</string>
+    <string name="health_empty">Nothing read yet.</string>
+    <string name="health_mil_on">Malfunction lamp on</string>
+    <string name="health_mil_off">Malfunction lamp off</string>
+    <string name="health_fault_count">%1$d stored fault codes</string>
+    <string name="health_diesel">Compression ignition</string>
+    <string name="health_petrol">Spark ignition</string>
+    <string name="faults">Fault codes</string>
+    <string name="faults_none">No stored or pending codes.</string>
+    <string name="faults_stored">Stored</string>
+    <string name="faults_pending">Pending</string>
+    <string name="faults_hint">A pending code has been seen once but not often enough to light the lamp. OpenDash reads codes; it does not clear them.</string>
+    <string name="monitors">Readiness monitors</string>
+    <string name="monitors_all_complete">All supported monitors have completed</string>
+    <string name="monitors_pending">Some monitors have not completed since the last reset</string>
+    <string name="monitors_complete">Complete</string>
+    <string name="monitors_incomplete">Not complete</string>
+
+    <!-- Files -->
+    <string name="files_recordings">Recordings</string>
+    <string name="files_none">No recordings yet.</string>
+    <string name="files_location">Saved to %1$s</string>
+    <string name="files_choose_folder">Change folder</string>
+    <string name="files_open_sm2">Open a Scanmatik .sm2 file</string>
+    <string name="files_summary">%1$d parameters · %2$d readings · %3$d:%4$02d</string>
+    <string name="files_unreadable">Could not read the file: %1$s</string>
+
+    <!-- Settings -->
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_system">Follow the system</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_language_system">Follow the system</string>
+    <string name="settings_language_en">English</string>
+    <string name="settings_language_es">Español</string>
+    <string name="settings_language_de">Deutsch</string>
+
+    <string name="settings_recording">Recording</string>
+    <string name="settings_folder">Folder</string>
+    <string name="settings_folder_default">App storage (internal)</string>
+    <string name="settings_folder_hint">Choose a folder outside app storage so recordings survive uninstalling the app.</string>
     <string name="settings_compress">Compress recordings</string>
-    <string name="settings_compress_hint">Measured over a 23-minute session: plain CSV 3.63 MB, gzipped 0.60 MB, Scanmatik own binary 0.98 MB. Smaller than the binary and still opens in a spreadsheet.</string>
+    <string name="settings_compress_hint">Gzipped CSV. Over a 23-minute session: 3.63 MB plain, 0.60 MB compressed. Opens in a spreadsheet either way.</string>
+
+    <string name="settings_polling">Polling</string>
+    <string name="settings_poll_interval">Extra delay: %1$d ms</string>
+    <string name="settings_poll_none">No extra delay</string>
+    <string name="settings_poll_hint">Requests are synchronous, so the adapter already sets the pace. Add a delay only to be gentle with a busy module.</string>
+
+    <string name="settings_catalogues_summary">%1$d installed, %2$d sources</string>
+
+    <string name="settings_advanced">Actuation</string>
+    <string name="settings_advanced_toggle">Show parameters that can be commanded</string>
+    <string name="settings_advanced_prompt">Unlock actuation</string>
+    <string name="settings_advanced_warning">Commanding a module moves parts on a vehicle that may have someone in or near it. Reading is always allowed; this switch only reveals the rest, behind the device lock.</string>
+    <string name="settings_advanced_unavailable">This device has no screen lock, so actuation cannot be unlocked.</string>
+
+    <string name="settings_about">About</string>
+    <string name="settings_version">Version %1$s</string>
+
+    <!-- Catalogues -->
+    <string name="catalogues">Catalogues</string>
+    <string name="catalogues_installed">Installed</string>
+    <string name="catalogues_none">None installed. Standard OBD-II works without one.</string>
+    <string name="catalogues_entry">%1$d parameters</string>
+    <string name="catalogues_sources">Sources</string>
+    <string name="catalogues_no_sources">No source configured.</string>
+    <string name="catalogues_add_source">Add a source</string>
+    <string name="catalogues_install">Install</string>
+    <string name="catalogues_brand">Catalogue name</string>
+    <string name="catalogues_installing">Fetching %1$s…</string>
+    <string name="catalogues_installed_ok">Installed %1$d parameters</string>
+
+    <string name="source_name">Name</string>
+    <string name="source_kind_github">GitHub</string>
+    <string name="source_kind_gitlab">GitLab</string>
+    <string name="source_kind_gitea">Gitea / Forgejo</string>
+    <string name="source_kind_https">Plain HTTPS</string>
+    <string name="source_kind_ssh">SSH / SFTP</string>
+    <string name="source_repo">Repository (owner/name)</string>
+    <string name="source_url">Base URL</string>
+    <string name="source_ssh_target">user\@host:/path</string>
+    <string name="source_branch">Branch</string>
+    <string name="source_token">Access token</string>
+    <string name="source_token_hint">Scoped to read one repository and revocable from the forge. Leave empty for a public repository.</string>
+    <string name="source_ssh_hint">For a host reached with an SSH key: a home server, a NAS, another machine. Files are fetched over SFTP.</string>
+    <string name="source_private">private</string>
+
+    <!-- SSH keys -->
+    <string name="ssh_keys">SSH keys</string>
+    <string name="ssh_none">No key yet.</string>
+    <string name="ssh_generate">Generate a key</string>
+    <string name="ssh_import">Import a private key</string>
+    <string name="ssh_fingerprint">Fingerprint</string>
+    <string name="ssh_delete">Delete key</string>
+    <string name="ssh_hint">Add the public key to the host as an authorised key, or to a forge as a deploy key. The private key stays on this device.</string>
+    <string name="ssh_copied">Public key copied</string>
+    <string name="ssh_imported">Key imported</string>
+    <string name="ssh_import_failed">Could not read that key: %1$s</string>
+
+    <!-- Errors -->
+    <string name="error_no_channel">Open a channel first</string>
 </resources>

@@ -18,8 +18,9 @@ import java.util.concurrent.ConcurrentLinkedQueue
  * answers with 0xfe blocks carrying whatever CAN frames arrived.
  */
 class Sm3Client(
-    private val host: String = DEFAULT_HOST,
-    private val port: Int = DEFAULT_PORT,
+    /** Where the adapter answers. Editable: the firmware lets both change. */
+    var host: String = DEFAULT_HOST,
+    var port: Int = DEFAULT_PORT,
 ) {
     private var socket: Socket? = null
     private var input: InputStream? = null

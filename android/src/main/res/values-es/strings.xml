@@ -1,104 +1,164 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="tab_connection">Enlace</string>
-    <string name="tab_live">En vivo</string>
-    <string name="tab_readiness">Monitores</string>
-    <string name="tab_recordings">Grabaciones</string>
-    <string name="tab_plugins">Complementos</string>
+    <string name="app_name">OpenDash</string>
+
+    <string name="tab_link">Enlace</string>
+    <string name="tab_live">Datos</string>
+    <string name="tab_health">Estado</string>
+    <string name="tab_files">Archivos</string>
     <string name="tab_settings">Ajustes</string>
 
-    <string name="device_title">Aparato</string>
-    <string name="device_disconnected">Sin conexión</string>
-    <string name="device_connecting">Conectando…</string>
-    <string name="device_connected">Conectado a %1$s</string>
-    <string name="device_channel_open">Canal abierto, el bus se puede leer</string>
-    <string name="device_firmware">Firmware %1$s</string>
-    <string name="device_connect">Conectar y abrir canal</string>
-    <string name="device_disconnect">Desconectar</string>
+    <string name="action_connect">Conectar</string>
+    <string name="action_disconnect">Desconectar</string>
+    <string name="action_refresh">Actualizar</string>
+    <string name="action_start">Iniciar</string>
+    <string name="action_stop">Parar</string>
+    <string name="action_save">Guardar</string>
+    <string name="action_remove">Quitar</string>
+    <string name="action_choose">Elegir…</string>
+    <string name="action_copy">Copiar</string>
+    <string name="action_back">Atrás</string>
+    <string name="state_working">Trabajando…</string>
 
-    <string name="vehicle_title">Vehículo</string>
+    <string name="link_adapter">Interfaz</string>
+    <string name="link_disconnected">Sin conexión</string>
+    <string name="link_connecting">Conectando…</string>
+    <string name="link_connected">Conectada</string>
+    <string name="link_channel_open">Canal abierto</string>
+    <string name="link_serial">Número de serie</string>
+    <string name="link_firmware">Firmware</string>
+    <string name="link_voltage">Batería</string>
+    <string name="link_host">Dirección</string>
+    <string name="link_port">Puerto</string>
+    <string name="link_psk">Contraseña Wi-Fi</string>
+    <string name="link_psk_hint">Solo hace falta si se cambió la contraseña de la interfaz desde el software de Scanmatik.</string>
+
+    <string name="vehicle">Vehículo</string>
     <string name="vehicle_unknown">Sin identificar</string>
-    <string name="vehicle_identify">Preguntarle al coche qué es</string>
-    <string name="vehicle_identify_hint">La centralita responde con su VIN, el nombre del sistema y el código de motor, así que no hay que elegir marca ni modelo.</string>
+    <string name="vehicle_identify">Identificar vehículo</string>
+    <string name="vehicle_hint">Se lee de la propia centralita del motor, así que un motor cambiado o reprogramado dice lo que realmente es.</string>
     <string name="vehicle_vin">VIN</string>
     <string name="vehicle_system">Sistema</string>
     <string name="vehicle_engine">Motor</string>
     <string name="vehicle_calibration">Calibración</string>
 
-    <string name="live_scan">Preguntar qué parámetros responde</string>
-    <string name="live_selected">%1$d seleccionados</string>
-    <string name="live_record">Grabar a un fichero</string>
-    <string name="live_start">Empezar</string>
-    <string name="live_stop">Parar</string>
-    <string name="live_recording_to">%1$d filas escritas en %2$s</string>
-    <string name="live_scan_first">Abre el canal y pregúntale al coche qué parámetros responde. Solo se ofrecen esos, así que nada de lo que hay aquí puede ser rechazado.</string>
-
-    <string name="readiness_read">Leer monitores</string>
-    <string name="readiness_none">Todavía sin leer</string>
-    <string name="readiness_mil_on">Testigo de avería encendido</string>
-    <string name="readiness_mil_off">Testigo de avería apagado</string>
-    <string name="readiness_faults">%1$d avería(s) guardada(s)</string>
-    <string name="readiness_diesel">Encendido por compresión</string>
-    <string name="readiness_petrol">Encendido por chispa</string>
-    <string name="readiness_all_complete">Todos los monitores admitidos han pasado</string>
-    <string name="readiness_pending">Algunos monitores no han terminado desde el último borrado</string>
-    <string name="readiness_complete">completo</string>
-    <string name="readiness_incomplete">aún no</string>
-
-    <string name="recordings_title">Grabaciones</string>
-    <string name="recordings_none">Todavía no hay ninguna</string>
-    <string name="recordings_refresh">Actualizar</string>
-
-    <string name="sm2_title">Abrir un .sm2 de Scanmatik</string>
-    <string name="sm2_path">Ruta completa del fichero</string>
-    <string name="sm2_open">Abrir</string>
-    <string name="sm2_summary">%1$d parámetros · %2$d lecturas · %3$d min %4$02d s</string>
-
-    <string name="plugins_title">Catálogos instalados</string>
-    <string name="plugins_none">Sin catálogo instalado. Los parámetros OBD-II estándar funcionan sin ninguno.</string>
-    <string name="plugins_installed">%1$d parámetros — %2$s</string>
-    <string name="plugins_remove">Quitar</string>
-    <string name="plugins_sources">Fuentes</string>
-    <string name="plugins_private">privada</string>
-    <string name="plugins_add_source">Añadir una fuente</string>
-    <string name="plugins_source_name">Nombre</string>
-    <string name="plugins_source_repo">Repositorio (dueño/nombre)</string>
-    <string name="plugins_source_token">Token de acceso, si es privado</string>
-    <string name="plugins_token_hint">Un token con permiso para leer un solo repositorio. Se puede revocar desde la web si se pierde el móvil, cosa que una clave SSH guardada en la app no permite fácilmente.</string>
-    <string name="plugins_save_source">Guardar fuente</string>
-    <string name="plugins_install">Instalar un catálogo</string>
-    <string name="plugins_brand">Carpeta de la marca</string>
-    <string name="plugins_download">Descargar</string>
-
-    <string name="settings_language">Idioma</string>
-    <string name="settings_language_system">El del sistema</string>
-    <string name="settings_language_en">English</string>
-    <string name="settings_language_es">Español</string>
-    <string name="settings_recording">Grabaciones</string>
-    <string name="settings_recording_path">Dónde guardarlas</string>
-    <string name="settings_recording_hint">En un sitio compartido y no en el almacenamiento privado de la app, para que una grabación sobreviva a desinstalarla y se pueda sacar del móvil.</string>
-    <string name="settings_polling">Sondeo</string>
-    <string name="settings_poll_interval">%1$d ms extra entre peticiones</string>
-    <string name="settings_poll_hint">Cero significa tan rápido como conteste el aparato, que es lo que interesa. El ajuste está para ir suave con un módulo ocupado.</string>
-    <string name="settings_advanced">Actuación</string>
-    <string name="settings_advanced_toggle">Mostrar los parámetros que se pueden accionar</string>
-    <string name="settings_advanced_prompt">Desbloquear el menú que puede accionar módulos</string>
-    <string name="settings_advanced_warning">El catálogo tiene 2517 entradas con Command en el nombre, 879 con Test y 782 con Learn. Leerlas es inofensivo. Accionarlas mueve cosas en un coche que puede llevar gente dentro, así que esto queda detrás del bloqueo del dispositivo.</string>
-
-    <string name="bridge_title">Puente ELM327</string>
+    <string name="bridge">Puente ELM327</string>
     <string name="bridge_stopped">Parado</string>
     <string name="bridge_listening">Escuchando en %1$s:%2$d</string>
-    <string name="bridge_start">Arrancar</string>
-    <string name="bridge_stop">Parar</string>
+    <string name="bridge_hint">Apunta una app OBD a esta dirección y puerto. Corre como servicio en primer plano, así que el enlace aguanta con la pantalla bloqueada.</string>
     <string name="bridge_notification_channel">Puente</string>
-    <string name="bridge_notification_text">ELM327 en el puerto %1$d · %2$s</string>
-    <string name="faults_title">Códigos de avería</string>
-    <string name="faults_none">Sin averías guardadas ni pendientes</string>
-    <string name="faults_stored">guardada</string>
-    <string name="faults_pending">pendiente</string>
-    <string name="faults_hint">Las pendientes se han visto una vez pero no las suficientes para encender el testigo. Leerlas no cambia nada; esta herramienta no puede borrarlas.</string>
-    <string name="live_use_catalogue">Nombres y escalas de %1$s</string>
-    <string name="live_catalogue_coverage">%1$d de sus parámetros se pueden pedir; %2$d usan un servicio que aún no está resuelto.</string>
-    <string name="settings_compress">Comprimir las grabaciones</string>
-    <string name="settings_compress_hint">Medido sobre una sesión de 23 minutos: CSV plano 3,63 MB, comprimido 0,60 MB, y el binario de Scanmatik 0,98 MB. Más pequeño que el binario y se sigue abriendo en una hoja de cálculo.</string>
+    <string name="bridge_notification_text">Puerto %1$d · %2$s</string>
+
+    <string name="live_scan">Buscar parámetros soportados</string>
+    <string name="live_rescan">Buscar de nuevo</string>
+    <string name="live_empty">Conecta la interfaz y abre un canal; después busca. Solo se listan los parámetros que el vehículo declara soportados.</string>
+    <string name="live_selected">%1$d de %2$d seleccionados</string>
+    <string name="live_chart_limit">Gráficas a la vez: %1$d</string>
+    <string name="live_rate">%1$d lecturas/s</string>
+    <string name="live_record">Grabar esta sesión</string>
+    <string name="live_recording">%1$d filas · %2$s</string>
+    <string name="live_catalogue_off">Nombres OBD-II estándar</string>
+    <string name="live_coverage">%1$d parámetros se pueden pedir, %2$d todavía no</string>
+    <string name="live_search">Filtrar</string>
+    <string name="live_clear_selection">Quitar selección</string>
+
+    <string name="health_read">Leer estado del vehículo</string>
+    <string name="health_empty">Todavía no se ha leído nada.</string>
+    <string name="health_mil_on">Testigo de avería encendido</string>
+    <string name="health_mil_off">Testigo de avería apagado</string>
+    <string name="health_fault_count">%1$d códigos de avería almacenados</string>
+    <string name="health_diesel">Encendido por compresión</string>
+    <string name="health_petrol">Encendido por chispa</string>
+    <string name="faults">Códigos de avería</string>
+    <string name="faults_none">Sin códigos almacenados ni pendientes.</string>
+    <string name="faults_stored">Almacenado</string>
+    <string name="faults_pending">Pendiente</string>
+    <string name="faults_hint">Un código pendiente se ha visto una vez, pero no las suficientes para encender el testigo. OpenDash lee códigos; no los borra.</string>
+    <string name="monitors">Monitores de disponibilidad</string>
+    <string name="monitors_all_complete">Todos los monitores soportados han terminado</string>
+    <string name="monitors_pending">Algunos monitores no han terminado desde el último borrado</string>
+    <string name="monitors_complete">Completo</string>
+    <string name="monitors_incomplete">Sin completar</string>
+
+    <string name="files_recordings">Grabaciones</string>
+    <string name="files_none">Todavía no hay grabaciones.</string>
+    <string name="files_location">Se guardan en %1$s</string>
+    <string name="files_choose_folder">Cambiar carpeta</string>
+    <string name="files_open_sm2">Abrir un archivo .sm2 de Scanmatik</string>
+    <string name="files_summary">%1$d parámetros · %2$d lecturas · %3$d:%4$02d</string>
+    <string name="files_unreadable">No se pudo leer el archivo: %1$s</string>
+
+    <string name="settings_appearance">Apariencia</string>
+    <string name="settings_theme">Tema</string>
+    <string name="settings_theme_system">Seguir al sistema</string>
+    <string name="settings_theme_light">Claro</string>
+    <string name="settings_theme_dark">Oscuro</string>
+    <string name="settings_language">Idioma</string>
+    <string name="settings_language_system">Seguir al sistema</string>
+    <string name="settings_language_en">English</string>
+    <string name="settings_language_es">Español</string>
+    <string name="settings_language_de">Deutsch</string>
+
+    <string name="settings_recording">Grabación</string>
+    <string name="settings_folder">Carpeta</string>
+    <string name="settings_folder_default">Almacenamiento de la app (interno)</string>
+    <string name="settings_folder_hint">Elige una carpeta fuera del almacenamiento de la app para que las grabaciones sobrevivan a desinstalarla.</string>
+    <string name="settings_compress">Comprimir grabaciones</string>
+    <string name="settings_compress_hint">CSV comprimido con gzip. En una sesión de 23 minutos: 3,63 MB en texto plano, 0,60 MB comprimido. Se abre en una hoja de cálculo de las dos formas.</string>
+
+    <string name="settings_polling">Sondeo</string>
+    <string name="settings_poll_interval">Espera añadida: %1$d ms</string>
+    <string name="settings_poll_none">Sin espera añadida</string>
+    <string name="settings_poll_hint">Las peticiones son síncronas, así que el ritmo ya lo marca la interfaz. Añade espera solo para no cargar una centralita ocupada.</string>
+
+    <string name="settings_catalogues_summary">%1$d instalados, %2$d fuentes</string>
+
+    <string name="settings_advanced">Actuación</string>
+    <string name="settings_advanced_toggle">Mostrar parámetros que se pueden comandar</string>
+    <string name="settings_advanced_prompt">Desbloquear actuación</string>
+    <string name="settings_advanced_warning">Comandar una centralita mueve piezas de un vehículo que puede tener a alguien dentro o al lado. Leer siempre está permitido; este interruptor solo enseña el resto, detrás del bloqueo del dispositivo.</string>
+    <string name="settings_advanced_unavailable">Este dispositivo no tiene bloqueo de pantalla, así que la actuación no se puede desbloquear.</string>
+
+    <string name="settings_about">Acerca de</string>
+    <string name="settings_version">Versión %1$s</string>
+
+    <string name="catalogues">Catálogos</string>
+    <string name="catalogues_installed">Instalados</string>
+    <string name="catalogues_none">Ninguno instalado. El OBD-II estándar funciona sin catálogo.</string>
+    <string name="catalogues_entry">%1$d parámetros</string>
+    <string name="catalogues_sources">Fuentes</string>
+    <string name="catalogues_no_sources">No hay ninguna fuente configurada.</string>
+    <string name="catalogues_add_source">Añadir una fuente</string>
+    <string name="catalogues_install">Instalar</string>
+    <string name="catalogues_brand">Nombre del catálogo</string>
+    <string name="catalogues_installing">Descargando %1$s…</string>
+    <string name="catalogues_installed_ok">Instalados %1$d parámetros</string>
+
+    <string name="source_name">Nombre</string>
+    <string name="source_kind_github">GitHub</string>
+    <string name="source_kind_gitlab">GitLab</string>
+    <string name="source_kind_gitea">Gitea / Forgejo</string>
+    <string name="source_kind_https">HTTPS simple</string>
+    <string name="source_kind_ssh">SSH / SFTP</string>
+    <string name="source_repo">Repositorio (dueño/nombre)</string>
+    <string name="source_url">URL base</string>
+    <string name="source_ssh_target">usuario\@host:/ruta</string>
+    <string name="source_branch">Rama</string>
+    <string name="source_token">Token de acceso</string>
+    <string name="source_token_hint">Limitado a leer un repositorio y revocable desde la forja. Déjalo vacío si el repositorio es público.</string>
+    <string name="source_ssh_hint">Para un host al que llegas con una clave SSH: un servidor de casa, un NAS, otra máquina. Los archivos se traen por SFTP.</string>
+    <string name="source_private">privada</string>
+
+    <string name="ssh_keys">Claves SSH</string>
+    <string name="ssh_none">Todavía no hay clave.</string>
+    <string name="ssh_generate">Generar una clave</string>
+    <string name="ssh_import">Importar una clave privada</string>
+    <string name="ssh_fingerprint">Huella</string>
+    <string name="ssh_delete">Borrar clave</string>
+    <string name="ssh_hint">Añade la clave pública al host como clave autorizada, o a una forja como clave de despliegue. La privada no sale de este dispositivo.</string>
+    <string name="ssh_copied">Clave pública copiada</string>
+    <string name="ssh_imported">Clave importada</string>
+    <string name="ssh_import_failed">No se pudo leer esa clave: %1$s</string>
+
+    <string name="error_no_channel">Abre un canal primero</string>
 </resources>

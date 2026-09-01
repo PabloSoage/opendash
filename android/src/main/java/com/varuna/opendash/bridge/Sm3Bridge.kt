@@ -15,7 +15,7 @@ class Sm3Bridge : Bridge {
 
     private val lock = Any()
 
-    override val batteryMillivolts: Int get() = Session.batteryMillivolts()
+    override val batteryMillivolts: Int get() = Session.refreshBattery()
 
     override fun request(header: Int, payload: ByteArray, timeoutMs: Long): Pair<Int, ByteArray>? {
         if (Session.state != Session.State.CHANNEL_OPEN) return null

@@ -31,7 +31,8 @@ class BridgeService : LifecycleService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-        val s = server ?: ElmServer(Sm3Bridge()).also { server = it }
+        val port = intent?.getIntExtra(EXTRA_PORT, 35000) ?: 35000
+        val s = server ?: ElmServer(Sm3Bridge(), port).also { server = it }
         s.start()
         startForeground(NOTIFICATION_ID, notification(s.port))
 
@@ -70,10 +71,10 @@ class BridgeService : LifecycleService() {
             )
         }
         val state = when (Session.state) {
-            Session.State.CHANNEL_OPEN -> getString(R.string.device_channel_open)
-            Session.State.CONNECTED -> getString(R.string.device_connected, Session.serial)
-            Session.State.CONNECTING -> getString(R.string.device_connecting)
-            Session.State.DISCONNECTED -> getString(R.string.device_disconnected)
+            Session.State.CHANNEL_OPEN -> getString(R.string.link_channel_open)
+            Session.State.CONNECTED -> getString(R.string.link_connected)
+            Session.State.CONNECTING -> getString(R.string.link_connecting)
+            Session.State.DISCONNECTED -> getString(R.string.link_disconnected)
         }
         val open = PendingIntent.getActivity(
             this,
@@ -92,6 +93,7 @@ class BridgeService : LifecycleService() {
 
     companion object {
         private const val CHANNEL = "bridge"
+        private const val EXTRA_PORT = "port"
         private const val NOTIFICATION_ID = 1
 
         fun start(context: Context) {

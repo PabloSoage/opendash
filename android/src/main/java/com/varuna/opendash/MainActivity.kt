@@ -2,53 +2,97 @@ package com.varuna.opendash
 
 import android.os.Bundle
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.MonitorHeart
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.core.content.ContextCompat
 import com.varuna.opendash.data.Monitor
 import com.varuna.opendash.data.PluginRepository
+import com.varuna.opendash.data.RecordingStore
 import com.varuna.opendash.data.Settings
-import com.varuna.opendash.ui.ConnectionScreen
+import com.varuna.opendash.ui.CataloguesScreen
+import com.varuna.opendash.ui.FilesScreen
+import com.varuna.opendash.ui.HealthScreen
+import com.varuna.opendash.ui.LinkScreen
 import com.varuna.opendash.ui.LiveScreen
-import com.varuna.opendash.ui.PluginsScreen
-import com.varuna.opendash.ui.ReadinessScreen
-import com.varuna.opendash.ui.RecordingsScreen
 import com.varuna.opendash.ui.SettingsScreen
+import com.varuna.opendash.ui.theme.OpenDashTheme
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var settings: Settings
+    private lateinit var store: RecordingStore
     private lateinit var plugins: PluginRepository
     private lateinit var monitor: Monitor
 
     override fun onCreate(savedInstanceState: Bundle?) {
         LocaleManager.restore(this)
-        super.onCreate(savedInstanceState)
         settings = Settings(this)
+        // Set before super so AppCompat picks the right resource qualifiers
+        // while inflating, which is what keeps the window background from
+        // flashing the wrong colour on launch. The live theme below is what
+        // actually drives the UI, so changing the setting is instant and this
+        // only has to be right by the next launch.
+        AppCompatDelegate.setDefaultNightMode(
+            when (settings.theme) {
+                Settings.ThemeMode.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+                Settings.ThemeMode.DARK -> AppCompatDelegate.MODE_NIGHT_YES
+                Settings.ThemeMode.SYSTEM -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+            }
+        )
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+
+        store = RecordingStore(this, settings)
         plugins = PluginRepository(this)
-        monitor = Monitor(settings)
+        monitor = Monitor(settings, store)
 
         setContent {
-            MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    App(settings, plugins, monitor, ::unlock)
+            val dark = when (settings.theme) {
+                Settings.ThemeMode.LIGHT -> false
+                Settings.ThemeMode.DARK -> true
+                Settings.ThemeMode.SYSTEM -> isSystemInDarkTheme()
+            }
+            OpenDashTheme(dark = dark) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background,
+                ) {
+                    App(settings, store, plugins, monitor, ::unlock)
                 }
             }
         }
@@ -63,14 +107,13 @@ class MainActivity : AppCompatActivity() {
      * Ask for the device credential before letting the actuation menu appear.
      *
      * Whatever the phone is already set up with — fingerprint, face, PIN or
-     * pattern — rather than a password of our own. A password we invented would
-     * be one more thing to forget, and no safer.
+     * pattern — rather than a password of our own, which would be one more
+     * thing to forget and no safer.
      */
     private fun unlock(onResult: (Boolean) -> Unit) {
         val allowed = BiometricManager.Authenticators.BIOMETRIC_WEAK or
             BiometricManager.Authenticators.DEVICE_CREDENTIAL
         if (BiometricManager.from(this).canAuthenticate(allowed) != BiometricManager.BIOMETRIC_SUCCESS) {
-            // No screen lock at all: refuse rather than silently open it up.
             onResult(false)
             return
         }
@@ -86,59 +129,118 @@ class MainActivity : AppCompatActivity() {
         )
         prompt.authenticate(
             BiometricPrompt.PromptInfo.Builder()
-                .setTitle(getString(R.string.settings_advanced))
-                .setSubtitle(getString(R.string.settings_advanced_prompt))
+                .setTitle(getString(R.string.settings_advanced_prompt))
+                .setSubtitle(getString(R.string.settings_advanced))
                 .setAllowedAuthenticators(allowed)
                 .build()
         )
     }
 }
 
-private enum class Tab(val label: Int) {
-    CONNECTION(R.string.tab_connection),
-    LIVE(R.string.tab_live),
-    READINESS(R.string.tab_readiness),
-    RECORDINGS(R.string.tab_recordings),
-    PLUGINS(R.string.tab_plugins),
-    SETTINGS(R.string.tab_settings),
+/**
+ * The five places the app goes, and what each is called.
+ *
+ * One short word each. A navigation bar splits the width evenly between its
+ * items, so a longer word does not shrink the label — it wraps it, and
+ * "Recordings" arriving as "Recordin" over "gs" is the result. The Spanish and
+ * German strings are held to the same length for the same reason.
+ */
+private enum class Tab(val label: Int, val icon: ImageVector) {
+    LINK(R.string.tab_link, Icons.Filled.Link),
+    LIVE(R.string.tab_live, Icons.Filled.ShowChart),
+    HEALTH(R.string.tab_health, Icons.Filled.MonitorHeart),
+    FILES(R.string.tab_files, Icons.Filled.Folder),
+    SETTINGS(R.string.tab_settings, Icons.Filled.Settings),
 }
 
+/** Screens reached from within a tab rather than from the bar. */
+private enum class Detail(val title: Int) {
+    CATALOGUES(R.string.catalogues),
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun App(
     settings: Settings,
+    store: RecordingStore,
     plugins: PluginRepository,
     monitor: Monitor,
     unlock: ((Boolean) -> Unit) -> Unit,
 ) {
-    var tab by remember { mutableStateOf(Tab.CONNECTION) }
-    var advanced by remember { mutableStateOf(false) }
+    // Saved rather than merely remembered: changing the language recreates the
+    // activity, and coming back on the tab you left is the difference between
+    // a setting being applied and the app appearing to restart.
+    var tabName by rememberSaveable { mutableStateOf(Tab.LINK.name) }
+    var detailName by rememberSaveable { mutableStateOf<String?>(null) }
+    var advanced by rememberSaveable { mutableStateOf(false) }
+
+    val tab = Tab.valueOf(tabName)
+    val detail = detailName?.let { Detail.valueOf(it) }
 
     Scaffold(
+        topBar = {
+            if (detail != null) {
+                TopAppBar(
+                    title = { Text(stringResource(detail.title)) },
+                    navigationIcon = {
+                        IconButton(onClick = { detailName = null }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.action_back),
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                    ),
+                )
+            }
+        },
         bottomBar = {
-            NavigationBar {
-                Tab.entries.forEach { t ->
-                    NavigationBarItem(
-                        selected = tab == t,
-                        onClick = { tab = t },
-                        icon = {},
-                        label = { Text(stringResource(t.label)) },
-                    )
+            if (detail == null) {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+                    Tab.entries.forEach { t ->
+                        NavigationBarItem(
+                            selected = tab == t,
+                            onClick = { tabName = t.name },
+                            icon = { Icon(t.icon, contentDescription = null) },
+                            label = {
+                                Text(
+                                    stringResource(t.label),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primary,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
+                        )
+                    }
                 }
             }
-        }
+        },
     ) { inner ->
-        Column(modifier = Modifier.fillMaxSize().padding(inner)) {
-            when (tab) {
-                Tab.CONNECTION -> ConnectionScreen()
-                Tab.LIVE -> LiveScreen(monitor, plugins, settings)
-                Tab.READINESS -> ReadinessScreen()
-                Tab.RECORDINGS -> RecordingsScreen(settings)
-                Tab.PLUGINS -> PluginsScreen(plugins, settings)
-                Tab.SETTINGS -> SettingsScreen(
+        Box(modifier = Modifier.fillMaxSize().padding(inner)) {
+            when {
+                detail == Detail.CATALOGUES -> CataloguesScreen(plugins, settings)
+                tab == Tab.LINK -> LinkScreen(settings)
+                tab == Tab.LIVE -> LiveScreen(monitor, plugins, settings)
+                tab == Tab.HEALTH -> HealthScreen()
+                tab == Tab.FILES -> FilesScreen(store)
+                tab == Tab.SETTINGS -> SettingsScreen(
                     settings = settings,
+                    store = store,
+                    plugins = plugins,
                     advancedEnabled = advanced,
                     onUnlockAdvanced = unlock,
                     onAdvancedChanged = { advanced = it },
+                    onOpenCatalogues = { detailName = Detail.CATALOGUES.name },
                 )
             }
         }

@@ -9,19 +9,20 @@ import java.net.URLEncoder
  * public one and a private repository of your own, say — and each keeps its
  * own credential.
  *
- * ## Why a token and not an SSH key
+ * ## Tokens and keys
  *
- * SSH would mean a git client on the phone: JGit plus a Java SSH stack, several
- * megabytes of dependency, a key to generate and store, and host-key handling.
- * All of that to download a handful of text files.
+ * Two credentials, because the two kinds of host want different things.
  *
- * Over HTTPS the same private repository is one header. GitHub, GitLab and
- * Gitea all take a token, all can be scoped to read a single repository, and
- * all can be revoked from a web page if the phone is lost — which an SSH key
- * sitting in app storage cannot, not easily.
+ * A forge — GitHub, GitLab, Gitea — serves individual files over HTTPS with a
+ * token in a header. That token can be scoped to read one repository and
+ * revoked from a web page, and fetching a catalogue costs four small requests.
+ * Reaching the same repository over SSH would mean the git wire protocol: a
+ * packfile reader and the whole history downloaded to end up with those same
+ * four files. So forges use a token.
  *
- * So: token by default. A key pair can be added later if some forge genuinely
- * needs one, and [Kind] is where that would go.
+ * Any other SSH host — a home server, a NAS, another machine, a repository
+ * someone else exports for you — is reached with a key over SFTP, which is
+ * what [Kind.SSH] is for. See [SshKey].
  */
 data class PluginSource(
     val id: String,
@@ -33,9 +34,9 @@ data class PluginSource(
     /** Empty for a public repository. */
     val token: String = "",
 ) {
-    enum class Kind { GITHUB, GITLAB, GITEA, HTTPS }
+    enum class Kind { GITHUB, GITLAB, GITEA, HTTPS, SSH }
 
-    val isPrivate: Boolean get() = token.isNotEmpty()
+    val isPrivate: Boolean get() = token.isNotEmpty() || kind == Kind.SSH
 
     /** URL for one file inside the source. */
     fun urlFor(path: String): String = when (kind) {
@@ -46,6 +47,8 @@ data class PluginSource(
                 "/repository/files/" + URLEncoder.encode(path, "UTF-8") + "/raw?ref=" + ref
         Kind.GITEA -> location + "/raw/branch/" + ref + "/" + path
         Kind.HTTPS -> location.trimEnd('/') + "/" + path
+        // Reached over SFTP; the path is joined by the fetcher, not here.
+        Kind.SSH -> location
     }
 
     /** The header this forge wants, if any. */
@@ -58,6 +61,7 @@ data class PluginSource(
             Kind.GITLAB -> if (token.isNotEmpty()) put("PRIVATE-TOKEN", token)
             Kind.GITEA -> if (token.isNotEmpty()) put("Authorization", "token " + token)
             Kind.HTTPS -> if (token.isNotEmpty()) put("Authorization", "Bearer " + token)
+            Kind.SSH -> Unit
         }
     }
 
