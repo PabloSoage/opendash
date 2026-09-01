@@ -182,12 +182,12 @@ its moment in the recording, which sounds backwards until the recording is
 moving: pinned to the glass, the values under it change as the session runs
 past, so it reads out rather than bookmarks.
 
-Vertical scale goes either way, from a dropdown. Scaled to the window — the
-default — every trace fills its box, so a wobble of a tenth of a degree is as
-visible as a climb of a hundred; the cost is that the line rescales as the
-recording moves under it. Scaled to the whole recording the box is fixed, so
-flat looks flat, at the price of one spike elsewhere in the session flattening
-everything either side of it. Both ends of whichever range is in force are
+Vertical scale goes either way, from a dropdown. Scaled to the whole recording —
+the default — the box is fixed, so flat looks flat and the trace does not
+rescale under your finger while the fling is running; the price is that one
+spike elsewhere in the session flattens everything either side of it. Scaled to
+the window, every trace fills its box, so a wobble of a tenth of a degree is as
+visible as a climb of a hundred. Both ends of whichever range is in force are
 printed under the parameter name, so it is never a guess which you are looking
 at.
 
@@ -251,6 +251,11 @@ Richer catalogues are per-brand plugins: parameter names, scaling formulas,
 units, ranges, module layouts and fault-code ownership, generated from a GDS2
 installation. They are **not** distributed here; the data belongs to GM. If you
 have the software you can generate your own.
+
+A source publishes a `brands.txt` index — tab-separated: name, parameter count,
+languages — and the app lists what is in it beside what is already on disk, one
+row each, with an arrow to fetch and a bin to remove. A source that publishes no
+index still works; you just have to know the directory name and type it.
 
 Sources are configured one per repository, each with its own credential, so a
 credential that reads one cannot reach another.

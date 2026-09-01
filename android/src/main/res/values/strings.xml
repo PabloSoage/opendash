@@ -146,7 +146,9 @@
 
     <!-- Catalogues -->
     <string name="catalogues">Catalogues</string>
-    <string name="catalogues_installed">Installed</string>
+    <string name="catalogues_available">Available</string>
+    <string name="catalogues_source">Source</string>
+    <string name="catalogues_manual">Install by name</string>
     <string name="catalogues_none">None installed. Standard OBD-II works without one.</string>
     <string name="catalogues_entry">%1$d parameters</string>
     <string name="catalogues_sources">Sources</string>

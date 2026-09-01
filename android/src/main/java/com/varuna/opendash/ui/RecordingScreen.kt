@@ -85,7 +85,9 @@ fun RecordingScreen(session: SessionFile.Session) {
     var rows by remember { mutableStateOf(3) }
     var marker by remember { mutableStateOf<Float?>(null) }
     var picking by remember { mutableStateOf(false) }
-    var scaleToWindow by remember { mutableStateOf(true) }
+    // Fixed to the whole recording by default: the trace does not rescale under
+    // your finger, which matters most while the fling is running.
+    var scaleToWindow by remember { mutableStateOf(false) }
 
     val shown: SnapshotStateList<Int> = remember(session) {
         mutableStateListOf<Int>().apply {

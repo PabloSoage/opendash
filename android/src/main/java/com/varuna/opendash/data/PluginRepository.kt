@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -61,6 +62,17 @@ class PluginRepository(context: Context) {
     fun load(brand: String, language: String): Catalogue? =
         Catalogue.load(File(root, brand), language)
 
+    /**
+     * How many parameters an installed catalogue has, from its `plugin.json`.
+     *
+     * Reading the count out of the manifest rather than loading the tables: the
+     * Opel one is 21 382 rows and a megabyte and a half of text, and a list
+     * that shows five catalogues would parse all of them on every redraw.
+     */
+    fun size(brand: String): Int = runCatching {
+        JSONObject(File(File(root, brand), "plugin.json").readText()).optInt("parameters", 0)
+    }.getOrDefault(0)
+
     fun remove(brand: String) {
         File(root, brand).deleteRecursively()
         revision++
@@ -107,11 +119,32 @@ class PluginRepository(context: Context) {
         }
     }
 
-    /** Which catalogues a source offers, from its own index if it publishes one. */
-    fun discover(source: PluginSource): Result<List<String>> = runCatching {
+    /** One line of a source's index. */
+    class Listing(val name: String, val parameters: Int, val languages: List<String>)
+
+    /**
+     * What a source offers, from the index it publishes.
+     *
+     * `brands.txt`, tab-separated: name, parameter count, languages. The last
+     * two are optional — a source that lists bare names still works, it just
+     * cannot say how big anything is until it is installed.
+     */
+    fun discover(source: PluginSource): Result<List<Listing>> = runCatching {
         val raw = fetchAll(source, "", listOf("brands.txt")) {}["brands.txt"]
             ?: error("this source publishes no brands.txt, so its contents cannot be listed")
-        String(raw, Charsets.UTF_8).lines().map { it.trim() }.filter { it.isNotEmpty() }
+        String(raw, Charsets.UTF_8).lines()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") }
+            .map { line ->
+                val fields = line.split('\t')
+                Listing(
+                    name = fields[0].trim(),
+                    parameters = fields.getOrNull(1)?.trim()?.toIntOrNull() ?: 0,
+                    languages = fields.getOrNull(2)?.split(',')?.map { it.trim() }
+                        ?.filter { it.isNotEmpty() } ?: emptyList(),
+                )
+            }
+            .filter { it.name.isNotEmpty() }
     }
 
     /**
