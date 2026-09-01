@@ -18,12 +18,14 @@ what is still open.
 
 - Opens a session with the device over its Wi-Fi access point and puts the CAN
   channel into a state where the bus can be read.
-- Asks the car what it is. GM service `0x1A` returns the VIN, the system name
-  and the engine code, so there is no make-and-model menu to get wrong and a
-  swapped engine identifies itself correctly.
+- Asks the car what it is. GM service `0x1A` returns the VIN, the supplier, the
+  engine code and the date it was programmed, so there is no make-and-model menu
+  to get wrong and a swapped engine identifies itself correctly.
 - Reads standard OBD-II live data. It first asks which PIDs the engine answers,
   so nothing offered can be refused. Values and charts, any number at once.
 - Reads readiness monitors and fault codes, stored and pending.
+- Reads the whole identification block out of every module that answers: part
+  numbers, alpha codes, programming date, traceability number, broadcast code.
 - Records sessions to gzipped CSV, flushed row by row, into a folder chosen from
   the system picker.
 - Opens recordings back up: its own `.csv`/`.csv.gz`, and `.sm2` files written by
@@ -47,9 +49,18 @@ It never writes to a module. See [Only reading](#only-reading).
   does not answer three times running. What is not known is how many of the
   other 4 774 answer at all; that is a measurement to make on a car, not a claim
   to put in a README.
-- **Stream.** GM service `0xAA` asks a module to push a packet of parameters
-  continuously, defined beforehand with `0x2C`; the app polls one at a time. The
-  mechanism is understood and documented, not implemented.
+- **Stream.** Both halves of it are settled from the capture: `2C <dpid> <id16>…`
+  defines a packet, `AA 04 <dpid>…` starts it, and the module then puts out raw
+  eight-byte frames on `0x5E8` instead of one round trip per value. It is not
+  implemented because `0x2C` is the one piece that is not a read — it writes a
+  definition into the module. The factory tool did it seven times on this car,
+  redefined the same packet mid-session with different contents, and needed no
+  session change to do it, which is good evidence that it is scratch space. Good
+  evidence is not the same as a decision, and the decision has not been taken.
+  What is still unknown either way is how the seven data bytes divide between
+  the fields of a multi-field packet; the earlier claim that this was confirmed
+  did not hold, because every frame on `0x5E8` is eight bytes whatever the
+  definition says.
 - **Share one implementation.** `bridge/ElmSession.kt` mirrors
   `core/src/elm327.rs` in Kotlin so the socket could be exercised before a JNI
   bridge exists. Two implementations of one command set will drift. The Rust one

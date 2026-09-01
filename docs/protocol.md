@@ -107,27 +107,74 @@ the source for `ATRV`.
 
 ## Live data, the fast way
 
-The factory tool does not poll one PID at a time. It sends GM service `0xAA`
-(ReadDataByPacketIdentifier) to the engine at `0x7E0`:
+The factory tool does not poll one PID at a time. It defines a packet and asks
+the module to stream it. Both halves are settled, from the four `0xAA` forms and
+the seven `0x2C` forms the capture contains:
 
 ```
-AA 04 FE FD FC      mode 0x04 is the fast rate; the rest are packet ids
-AA 00               stop
+2C <dpid> <id16> <id16> …     define packet <dpid> as these parameters
+6C <dpid>                     accepted
+
+AA 04 <dpid> <dpid> …         start sending them
+AA 00                         stop
 ```
 
-and the module then streams on CAN id `0x5E8`, each frame beginning with the
-packet id. One request, then read — far better than a round trip per value.
+There is no ISO-TP answer to `0xAA`. The answer is the stream: raw 8-byte CAN
+frames on `0x5E8`, the packet id in the first byte and seven bytes of data
+behind it. Over a 23-minute session that came to 33 925 frames for one packet and
+33 920 for another, against one round trip per value the other way.
+
+Three things the capture settles about `0x2C`, which matter because it is the one
+piece here that is not a read:
+
+- All seven went to the engine and all seven were accepted, with no
+  `DiagnosticSessionControl` first. The only `10 03` in the capture is addressed
+  to `0x94DA45F1`, not to `0x7E0`.
+- The same packet was redefined mid-session with different contents — `2c fc 00
+  0d` and later `2c fc 20 60`. A module does not allow that on anything it
+  stores; it is scratch space.
+- What it defines is what the module *reports*, not what it does.
+
+What the capture does **not** settle is how the seven data bytes are divided
+between the fields of a multi-field packet. An earlier reading claimed it did,
+because the `FE` packet returned seven bytes and its two parameters were four
+and three bytes in the catalogue. That proves nothing: every frame on `0x5E8` is
+eight bytes, including the ones for packets whose two fields are one byte each. A
+CAN frame is eight bytes.
+
+`0x2C` is therefore absent from the app's allowed services, and streaming with it
+is not implemented. It is a decision, not an oversight.
 
 ## Identifying the car
 
-Not from make and model. GM service `0x1A` with a local identifier:
+Not from make and model. GM service `0x1A` with a local identifier. The engine
+answers directly to what it is:
 
 ```
-1A 90  ->  VIN
-1A 92  ->  system name, e.g. DENSO0100
-1A 97  ->  engine code, e.g. A17DTJ
-1A 98  ->  calibration number
-1A b4  ->  module serial
+1A 90  ->  W0LP-------------   VIN
+1A 92  ->  DENSO0100           supplier identification
+1A 97  ->  A17DTJ              system name or engine type
+1A 98  ->  O100------          subscriber ID
+1A 99  ->  20 11 10 25         date programmed, BCD
+1A B4  ->  86AAS-----------    manufacturer's traceability number
 ```
 
 The VIN answered consistently from eight different modules on one car.
+
+That is the readable end of a block of 58 identifiers the factory tool reads to
+fill its ECU ID screen, and the answers carry no labels of their own. The names
+above are not from a specification: the catalogue extracted from GDS2 lists those
+same identifiers as parameters with a name and a byte count, and the join is
+accepted only where the catalogue's length equals the number of bytes the car
+actually returned. 56 of the 58 match.
+
+Two structures fall out that could not arise from a bad join. `0xC1`–`0xCC` are
+part numbers and `0xD1`–`0xDC` are their alpha codes, paired one for one down the
+range; and `0x42`–`0x49` come out as Calibration Part Number 12 through 19, eight
+in a numbered row.
+
+Eight identifiers are left deliberately unlabelled — `0x22`, `0x2F`, `0x30`,
+`0x3D`, `0x41`, `0x5E`, `0x75`, `0xDF`. The only catalogue entries carrying those
+numbers are mode 01 PIDs that share them by accident: a local identifier and a
+mode 01 PID are different namespaces over the same integers. They are read and
+shown as bytes rather than labelled with something plausible and wrong.
