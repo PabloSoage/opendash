@@ -33,6 +33,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -43,12 +44,14 @@ import androidx.core.content.ContextCompat
 import com.varuna.opendash.data.Monitor
 import com.varuna.opendash.data.PluginRepository
 import com.varuna.opendash.data.RecordingStore
+import com.varuna.opendash.data.SessionFile
 import com.varuna.opendash.data.Settings
 import com.varuna.opendash.ui.CataloguesScreen
 import com.varuna.opendash.ui.FilesScreen
 import com.varuna.opendash.ui.HealthScreen
 import com.varuna.opendash.ui.LinkScreen
 import com.varuna.opendash.ui.LiveScreen
+import com.varuna.opendash.ui.RecordingScreen
 import com.varuna.opendash.ui.SettingsScreen
 import com.varuna.opendash.ui.theme.OpenDashTheme
 
@@ -156,6 +159,9 @@ private enum class Tab(val label: Int, val icon: ImageVector) {
 /** Screens reached from within a tab rather than from the bar. */
 private enum class Detail(val title: Int) {
     CATALOGUES(R.string.catalogues),
+
+    /** The recording viewer. Its title is the file name, not this. */
+    RECORDING(R.string.files_recordings),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -174,14 +180,31 @@ private fun App(
     var detailName by rememberSaveable { mutableStateOf<String?>(null) }
     var advanced by rememberSaveable { mutableStateOf(false) }
 
+    // The opened recording is deliberately not saved: it is eighty thousand
+    // readings, far past what an instance-state bundle will carry, so on a
+    // rotation the viewer closes back to the file list rather than failing.
+    var recording by remember { mutableStateOf<SessionFile.Session?>(null) }
+    var recordingName by rememberSaveable { mutableStateOf("") }
+
     val tab = Tab.valueOf(tabName)
-    val detail = detailName?.let { Detail.valueOf(it) }
+    // A saved route pointing at a recording that is no longer loaded resolves
+    // to no route at all, which lands back on the file list.
+    val detail = detailName
+        ?.let { Detail.valueOf(it) }
+        ?.takeUnless { it == Detail.RECORDING && recording == null }
 
     Scaffold(
         topBar = {
             if (detail != null) {
                 TopAppBar(
-                    title = { Text(stringResource(detail.title)) },
+                    title = {
+                        Text(
+                            if (detail == Detail.RECORDING && recordingName.isNotEmpty()) recordingName
+                            else stringResource(detail.title),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
                     navigationIcon = {
                         IconButton(onClick = { detailName = null }) {
                             Icon(
@@ -229,10 +252,15 @@ private fun App(
         Box(modifier = Modifier.fillMaxSize().padding(inner)) {
             when {
                 detail == Detail.CATALOGUES -> CataloguesScreen(plugins, settings)
+                detail == Detail.RECORDING -> recording?.let { RecordingScreen(it) }
                 tab == Tab.LINK -> LinkScreen(settings)
                 tab == Tab.LIVE -> LiveScreen(monitor, plugins, settings)
                 tab == Tab.HEALTH -> HealthScreen()
-                tab == Tab.FILES -> FilesScreen(store)
+                tab == Tab.FILES -> FilesScreen(store) { session, name ->
+                    recording = session
+                    recordingName = name
+                    detailName = Detail.RECORDING.name
+                }
                 tab == Tab.SETTINGS -> SettingsScreen(
                     settings = settings,
                     store = store,

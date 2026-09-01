@@ -85,8 +85,20 @@
     <string name="files_location">Se guardan en %1$s</string>
     <string name="files_choose_folder">Cambiar carpeta</string>
     <string name="files_open_sm2">Abrir un archivo .sm2 de Scanmatik</string>
-    <string name="files_summary">%1$d parámetros · %2$d lecturas · %3$d:%4$02d</string>
     <string name="files_unreadable">No se pudo leer el archivo: %1$s</string>
+
+    <string name="viewer_window">Ventana</string>
+    <string name="viewer_window_all">Todo</string>
+    <string name="viewer_rows">Filas</string>
+    <string name="viewer_parameters">Parámetros</string>
+    <string name="viewer_all">Todos</string>
+    <string name="viewer_none">Ninguno</string>
+    <string name="viewer_marker_clear">Quitar marca</string>
+    <string name="viewer_marker_hint">Mantén pulsado sobre una gráfica para poner una marca. Se queda fija mientras la grabación pasa por debajo, así que los valores la siguen.</string>
+    <string name="viewer_filtered">Scanmatik enseñaba %1$d de estos cuando se guardó el archivo. Se grabaron los %2$d, y aquí están los %2$d.</string>
+    <string name="viewer_empty">No hay ningún parámetro seleccionado.</string>
+    <string name="viewer_summary">%1$d parámetros · %2$d lecturas · %3$s</string>
+    <string name="viewer_close">Cerrar</string>
 
     <string name="settings_appearance">Apariencia</string>
     <string name="settings_theme">Tema</string>

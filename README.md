@@ -170,18 +170,49 @@ uninstalled.
 The format the Windows software writes, worked out from the files:
 
 ```
-0x00   "SMFS" and a version
-0x1d   Windows FILETIME — when the recording started
-0x410  header: <u32 marker=1><u32 characters><UTF-16>, title, summary,
-       and every parameter name and unit
-...    the series: pairs of <u32 milliseconds><double value>, cycling
-       through the parameters and starting over
+0x000  "SMFS" and a version
+0x01d  Windows FILETIME — when the recording started
+0x410  from here, SECTORS of 0x400 bytes
 ```
 
-Between blocks there are control records that are not pairs, so a run that stops
-making sense is resynchronised at the next place four consecutive pairs do.
-Checked against a 23-minute drive: the series comes out 23:13.7 long, and the
-header inside the file says "23:13.740".
+Every sector opens with a nine-byte record, `01 <u32 previous> <u32 next>` — a
+linked list, with 0xFFFFFFFF for the first one's previous and the last one's
+next. Checked sector by sector on a 23-minute recording: 958 of 958.
+
+Strip those nine bytes and the rest is one continuous stream: the UTF-16
+parameter names, then pairs of `<u32 milliseconds><double value>` cycling
+through the parameters, then 0xff padding to the end of the last sector.
+
+The sectors are the whole difficulty. Those nine bytes go in wherever the
+boundary falls, cutting in half whatever they land in — a value pair, or a
+parameter name. An earlier version of this reader did not know about them and
+resynchronised by scanning for the next place four pairs made sense. That cost
+953 resynchronisations, three parameter names, and, worse, the alignment between
+a reading and its channel: the channel comes from the reading's position in the
+rotation, so skipping bytes moved everything after it. Charts came out with one
+parameter's values under another's name.
+
+Read with the markers removed first, the same file gives 80 670 readings, no
+resynchronisation at all, and 80 670 is exactly 2689 × 30. The series comes out
+23:13.7 long, and the header inside the file says "23:13.740".
+
+**How many channels** is not the number of names. The header carries a summary
+line — `30 of 30 items 23:13.740` — where the second number is how many
+parameters were recorded and the first is how many the Scanmatik window happened
+to be showing when the file was saved. A recording saved with the view filtered
+down to three still holds all thirty, and counting the visible names spread
+thirty channels of readings across three of them.
+
+Two independent checks agree with that line. The reading count divides by thirty
+exactly; and the sampling rhythm — the gap between two readings of the same
+channel, which is the poll period and barely varies when the split is right —
+comes out 518.3 ms with 4.7% spread at thirty, against 4.8% and worse at every
+neighbouring value.
+
+The file carries no units at all: the header holds exactly as many text records
+as there are channels, and each one is a name. Those names are SAE J1979, so
+`Units.kt` maps the ones whose unit the standard fixes and leaves the rest blank
+rather than guessing.
 
 ---
 

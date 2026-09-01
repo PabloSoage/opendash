@@ -31,7 +31,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.varuna.opendash.R
 import com.varuna.opendash.data.RecordingStore
-import com.varuna.opendash.data.Series
 import com.varuna.opendash.data.SessionFile
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -47,14 +46,13 @@ import kotlin.concurrent.thread
  * open comes from the document picker, and both arrive as URIs carrying their
  * own permission.
  *
- * The .sm2 format is Scanmatik's own and was worked out from the files
- * themselves, so a session recorded with the Windows software opens here.
+ * Opening one hands it to [RecordingScreen]; this screen only finds files and
+ * reads them, which it does off the main thread because a twenty-three minute
+ * session is eighty thousand readings.
  */
 @Composable
-fun FilesScreen(store: RecordingStore) {
+fun FilesScreen(store: RecordingStore, onOpen: (SessionFile.Session, String) -> Unit) {
     var entries by remember { mutableStateOf(store.list()) }
-    var opened by remember { mutableStateOf<SessionFile.Session?>(null) }
-    var openedName by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
 
@@ -63,11 +61,10 @@ fun FilesScreen(store: RecordingStore) {
         error = null
         thread {
             try {
-                opened = SessionFile.read(store.read(uri))
-                openedName = name
+                val session = SessionFile.read(store.read(uri))
+                onOpen(session, name)
             } catch (e: Exception) {
                 error = e.message ?: e.javaClass.simpleName
-                opened = null
             }
             busy = false
         }
@@ -80,9 +77,9 @@ fun FilesScreen(store: RecordingStore) {
         entries = store.list()
     }
 
-    // Any type, not just .sm2: the picker on most phones will not filter on an
-    // extension it does not know, and refusing the file the user just chose is
-    // worse than reading it and saying it is not an .sm2.
+    // Any type, not just .sm2: most pickers will not filter on an extension
+    // they do not know, and refusing the file someone just chose is worse than
+    // reading it and saying what went wrong.
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -116,7 +113,7 @@ fun FilesScreen(store: RecordingStore) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { open(entry.uri, entry.name) }
+                            .clickable(enabled = !busy) { open(entry.uri, entry.name) }
                             .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -170,49 +167,6 @@ fun FilesScreen(store: RecordingStore) {
                 )
             }
             ErrorLine(error?.let { stringResource(R.string.files_unreadable, it) })
-
-            opened?.let { rec ->
-                Text(openedName, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-                        .format(Date(rec.startedAt)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                val seconds = rec.durationMs / 1000
-                Text(
-                    stringResource(
-                        R.string.files_summary,
-                        rec.parameters.size,
-                        rec.samples.size,
-                        seconds / 60,
-                        seconds % 60,
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        // Charts for whatever the file holds, drawn from its own series.
-        //
-        // Built once per file rather than per recomposition: a 23-minute
-        // session is eighty thousand readings, and re-bucketing them on every
-        // frame would make scrolling the list unusable. Parameters with a
-        // single reading are dropped here rather than skipped in the loop, so
-        // the number of charts only changes when the file does.
-        val charts = remember(opened) {
-            val session = opened
-            if (session == null) emptyList()
-            else session.parameters.mapIndexedNotNull { index, name ->
-                val points = session.seriesOf(index)
-                if (points.size < 2) null
-                else name to Series(capacity = points.size)
-                    .also { s -> points.forEach { s.add(it.second) } }
-            }
-        }
-        charts.forEachIndexed { index, (name, series) ->
-            ParameterChart(name, "", series, tick = index)
         }
     }
 }

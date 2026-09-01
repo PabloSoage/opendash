@@ -85,8 +85,20 @@
     <string name="files_location">Gespeichert unter %1$s</string>
     <string name="files_choose_folder">Ordner ändern</string>
     <string name="files_open_sm2">Eine Scanmatik-.sm2-Datei öffnen</string>
-    <string name="files_summary">%1$d Parameter · %2$d Messwerte · %3$d:%4$02d</string>
     <string name="files_unreadable">Datei konnte nicht gelesen werden: %1$s</string>
+
+    <string name="viewer_window">Fenster</string>
+    <string name="viewer_window_all">Alles</string>
+    <string name="viewer_rows">Zeilen</string>
+    <string name="viewer_parameters">Parameter</string>
+    <string name="viewer_all">Alle</string>
+    <string name="viewer_none">Keine</string>
+    <string name="viewer_marker_clear">Marke entfernen</string>
+    <string name="viewer_marker_hint">Zum Setzen einer Marke lange auf ein Diagramm drücken. Sie bleibt stehen, während die Aufzeichnung darunter durchläuft, die Werte laufen also mit.</string>
+    <string name="viewer_filtered">Scanmatik zeigte beim Speichern %1$d davon an. Aufgezeichnet wurden alle %2$d, und alle %2$d sind hier.</string>
+    <string name="viewer_empty">Kein Parameter ausgewählt.</string>
+    <string name="viewer_summary">%1$d Parameter · %2$d Messwerte · %3$s</string>
+    <string name="viewer_close">Schließen</string>
 
     <string name="settings_appearance">Darstellung</string>
     <string name="settings_theme">Design</string>
