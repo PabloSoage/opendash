@@ -12,7 +12,7 @@ jobs:
       run:
         working-directory: core
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -30,8 +30,8 @@ jobs:
   resources:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       # Missing translations and mismatched placeholders are silent until
@@ -41,10 +41,13 @@ jobs:
   android:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
-      - uses: gradle/actions/setup-gradle@v4
-      - run: gradle :android:assembleDebug --no-daemon
+      - uses: gradle/actions/setup-gradle@v5
+      # -Popendash.rust=false: no NDK and no cargo-ndk on the runner, and
+      # nothing in the app loads the native library yet. What this job is for is
+      # catching a Kotlin or resource break, and that still happens.
+      - run: gradle :android:assembleDebug -Popendash.rust=false --no-daemon
