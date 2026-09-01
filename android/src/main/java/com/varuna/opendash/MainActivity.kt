@@ -17,7 +17,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.automirrored.filled.ShowChart
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -147,7 +147,7 @@ class MainActivity : AppCompatActivity() {
  */
 private enum class Tab(val label: Int, val icon: ImageVector) {
     LINK(R.string.tab_link, Icons.Filled.Link),
-    LIVE(R.string.tab_live, Icons.Filled.ShowChart),
+    LIVE(R.string.tab_live, Icons.AutoMirrored.Filled.ShowChart),
     HEALTH(R.string.tab_health, Icons.Filled.MonitorHeart),
     FILES(R.string.tab_files, Icons.Filled.Folder),
     SETTINGS(R.string.tab_settings, Icons.Filled.Settings),
