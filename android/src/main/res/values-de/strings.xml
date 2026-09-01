@@ -89,6 +89,9 @@
 
     <string name="viewer_window">Fenster</string>
     <string name="viewer_window_all">Alles</string>
+    <string name="viewer_scale">Skala</string>
+    <string name="viewer_scale_window">Fenster</string>
+    <string name="viewer_scale_recording">Ganze Aufzeichnung</string>
     <string name="viewer_rows">Zeilen</string>
     <string name="viewer_parameters">Parameter</string>
     <string name="viewer_all">Alle</string>

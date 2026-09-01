@@ -85,6 +85,7 @@ fun RecordingScreen(session: SessionFile.Session) {
     var rows by remember { mutableStateOf(3) }
     var marker by remember { mutableStateOf<Float?>(null) }
     var picking by remember { mutableStateOf(false) }
+    var scaleToWindow by remember { mutableStateOf(true) }
 
     val shown: SnapshotStateList<Int> = remember(session) {
         mutableStateListOf<Int>().apply {
@@ -97,9 +98,22 @@ fun RecordingScreen(session: SessionFile.Session) {
     val position = remember(session) { Animatable(0f) }
     position.updateBounds(0f, (duration - span).toFloat().coerceAtLeast(0f))
 
-    // Barely any friction: a flick should coast across minutes of recording,
-    // not stop in the next second.
-    val decay = remember { exponentialDecay<Float>(frictionMultiplier = 0.12f) }
+    /**
+     * The fling.
+     *
+     * With exponential decay the coast distance is `velocity / friction` and
+     * the coast time is roughly `5 / friction`, where friction is 4.2 times the
+     * multiplier. The first setting stopped after a second or two, which is
+     * fine for a list and useless here: the point of the fling is to push the
+     * recording at the start and watch it run to the end.
+     *
+     * So: friction 0.084, which is about a minute of coasting, and the velocity
+     * multiplied by [FLING_GAIN] on top of the drag scale. At a five-second
+     * window on a phone that puts a firm flick at roughly a twenty-minute
+     * journey and a gentle one at a few minutes, and it stays in proportion at
+     * every window size because the drag scale is what it is built on.
+     */
+    val decay = remember { exponentialDecay<Float>(frictionMultiplier = 0.02f) }
 
     Column(modifier = Modifier.fillMaxSize()) {
 
@@ -114,6 +128,8 @@ fun RecordingScreen(session: SessionFile.Session) {
         // Whatever windows fit inside this recording, plus the recording
         // itself, which is what "All" means.
         val allLabel = stringResource(R.string.viewer_window_all)
+        val windowScale = stringResource(R.string.viewer_scale_window)
+        val recordingScale = stringResource(R.string.viewer_scale_recording)
         val windows = remember(duration) { WINDOWS.filter { it < duration } + duration }
 
         Row(
@@ -130,6 +146,13 @@ fun RecordingScreen(session: SessionFile.Session) {
                 options = windows,
                 render = { if (it >= duration) allLabel else windowLabel(it) },
                 onSelect = { window = it },
+            )
+            Combo(
+                label = stringResource(R.string.viewer_scale),
+                value = scaleToWindow,
+                options = listOf(true, false),
+                render = { if (it) windowScale else recordingScale },
+                onSelect = { scaleToWindow = it },
             )
             Combo(
                 label = stringResource(R.string.viewer_rows),
@@ -217,7 +240,7 @@ fun RecordingScreen(session: SessionFile.Session) {
                         state = dragState,
                         onDragStarted = { position.stop() },
                         onDragStopped = { velocity ->
-                            position.animateDecay(-velocity * msPerPx.value, decay)
+                            position.animateDecay(-velocity * msPerPx.value * FLING_GAIN, decay)
                         },
                     )
             ) {
@@ -234,6 +257,7 @@ fun RecordingScreen(session: SessionFile.Session) {
                                 position = position,
                                 span = span,
                                 marker = marker,
+                                scaleToWindow = scaleToWindow,
                                 modifier = Modifier.height(chartHeight),
                             )
                         }
@@ -263,11 +287,19 @@ fun RecordingScreen(session: SessionFile.Session) {
 /**
  * One channel over `[from, from + span]`.
  *
- * The vertical scale is the whole recording's range, not the window's. Scaling
- * to the window would make every trace fill its box, which looks better in a
- * screenshot and is useless while scrolling: the line would rescale under the
- * finger and a flat stretch would look like noise. Fixed, a flat stretch looks
- * flat and a climb looks like a climb.
+ * The vertical scale goes either way, and the choice is a real one.
+ *
+ * Scaled to the window, every trace fills its box, so a wobble of a tenth of a
+ * degree is as visible as a climb of a hundred — which is usually what you came
+ * to look at, and is the default. The cost is that the line rescales as the
+ * recording moves under it, so a flat stretch can come out looking like noise.
+ *
+ * Scaled to the whole recording, the box is fixed: flat looks flat, a climb
+ * looks like a climb, and one spike somewhere else in the session flattens
+ * everything either side of it.
+ *
+ * Both ends of whichever range is in force are printed under the name, so it is
+ * never a guess which of the two you are looking at.
  */
 @Composable
 private fun WindowChart(
@@ -275,6 +307,7 @@ private fun WindowChart(
     position: Animatable<Float, AnimationVector1D>,
     span: Int,
     marker: Float?,
+    scaleToWindow: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val line = MaterialTheme.colorScheme.primary
@@ -284,16 +317,34 @@ private fun WindowChart(
     val at = marker?.let { (from + it * span).toInt() }
     val value = channel.valueAt(at ?: (from + span).toInt())
 
+    // Either the range inside the window, which makes a small wobble fill the
+    // box, or the range over the recording, which keeps the trace from
+    // rescaling under your finger. Whichever it is, both ends are printed, so
+    // the height of a bump is never a mystery.
+    val range = if (scaleToWindow) {
+        channel.rangeIn(from.toInt(), (from + span).toInt())
+    } else {
+        null
+    } ?: (channel.min to channel.max)
+
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(
-                channel.name,
-                style = MaterialTheme.typography.labelLarge,
-                color = muted,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    channel.name,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = muted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    format(range.first) + " – " + format(range.second) +
+                        if (channel.unit.isEmpty()) "" else " " + channel.unit,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = muted.copy(alpha = 0.7f),
+                    maxLines = 1,
+                )
+            }
             Text(
                 value?.let { format(it) } ?: "—",
                 style = ValueStyle,
@@ -311,8 +362,8 @@ private fun WindowChart(
         // weight, not fillMaxSize: inside a Column a child asking for the full
         // height gets the whole box, not what is left after the label row.
         androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            var low = channel.min
-            var high = channel.max
+            var low = range.first
+            var high = range.second
             if (high - low < 1e-9) {
                 low -= 1.0
                 high += 1.0
@@ -533,6 +584,9 @@ private fun ParameterPicker(
  * Windows worth offering. Down to fifty milliseconds, where individual readings
  * separate, and up to a quarter of an hour, plus whatever the recording is.
  */
+/** How much further a flick travels than the finger that threw it. */
+private const val FLING_GAIN = 4f
+
 private val WINDOWS = listOf(50, 100, 200, 500, 1_000, 2_000, 5_000, 10_000, 30_000, 60_000, 300_000, 900_000)
 
 private fun windowLabel(ms: Int): String = when {

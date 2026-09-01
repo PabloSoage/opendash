@@ -89,6 +89,9 @@
 
     <string name="viewer_window">Ventana</string>
     <string name="viewer_window_all">Todo</string>
+    <string name="viewer_scale">Escala</string>
+    <string name="viewer_scale_window">Ventana</string>
+    <string name="viewer_scale_recording">Toda la grabación</string>
     <string name="viewer_rows">Filas</string>
     <string name="viewer_parameters">Parámetros</string>
     <string name="viewer_all">Todos</string>

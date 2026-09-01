@@ -182,10 +182,14 @@ its moment in the recording, which sounds backwards until the recording is
 moving: pinned to the glass, the values under it change as the session runs
 past, so it reads out rather than bookmarks.
 
-Vertical scale is each parameter's range over the whole recording, not over the
-window. Scaling to the window looks better in a screenshot and is useless while
-scrolling: the trace would rescale under your finger and a flat stretch would
-come out looking like noise.
+Vertical scale goes either way, from a dropdown. Scaled to the window — the
+default — every trace fills its box, so a wobble of a tenth of a degree is as
+visible as a climb of a hundred; the cost is that the line rescales as the
+recording moves under it. Scaled to the whole recording the box is fixed, so
+flat looks flat, at the price of one spike elsewhere in the session flattening
+everything either side of it. Both ends of whichever range is in force are
+printed under the parameter name, so it is never a guess which you are looking
+at.
 
 ### Reading .sm2
 

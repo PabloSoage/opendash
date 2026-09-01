@@ -95,6 +95,9 @@
 
     <string name="viewer_window">Window</string>
     <string name="viewer_window_all">All</string>
+    <string name="viewer_scale">Scale</string>
+    <string name="viewer_scale_window">Window</string>
+    <string name="viewer_scale_recording">Whole recording</string>
     <string name="viewer_rows">Rows</string>
     <string name="viewer_parameters">Parameters</string>
     <string name="viewer_all">All</string>

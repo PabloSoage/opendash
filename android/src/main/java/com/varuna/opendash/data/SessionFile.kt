@@ -43,6 +43,29 @@ object SessionFile {
             return low
         }
 
+        /**
+         * The lowest and highest value between [from] and [to], with the
+         * sample either side included so a trace that only crosses the window
+         * still has a range.
+         *
+         * Null when there is nothing in there at all, which is the caller's cue
+         * to fall back to the whole recording.
+         */
+        fun rangeIn(from: Int, to: Int): Pair<Double, Double>? {
+            if (times.isEmpty()) return null
+            val first = (firstAtOrAfter(from) - 1).coerceAtLeast(0)
+            val last = firstAtOrAfter(to).coerceAtMost(times.size - 1)
+            if (last < first) return null
+            var low = values[first]
+            var high = low
+            for (i in first..last) {
+                val v = values[i]
+                if (v < low) low = v
+                if (v > high) high = v
+            }
+            return low to high
+        }
+
         /** The value in force at [ms] — the last one recorded at or before it. */
         fun valueAt(ms: Int): Double? {
             if (times.isEmpty()) return null
