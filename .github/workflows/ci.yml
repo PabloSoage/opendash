@@ -37,6 +37,8 @@ jobs:
       # Missing translations and mismatched placeholders are silent until
       # someone switches language, so they are checked here instead.
       - run: node tools/check-resources.mjs
+      # Cheap, and it fails in seconds rather than after a Gradle run.
+      - run: node tools/check-braces.mjs
 
   android:
     runs-on: ubuntu-latest

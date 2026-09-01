@@ -30,8 +30,8 @@
     <string name="link_voltage">Batería</string>
     <string name="link_host">Dirección</string>
     <string name="link_port">Puerto</string>
+    <string name="link_resync">Resincronizado</string>
     <string name="link_psk">Contraseña Wi-Fi</string>
-    <string name="link_psk_hint">Solo hace falta si se cambió la contraseña de la interfaz desde el software de Scanmatik.</string>
 
     <string name="vehicle">Vehículo</string>
     <string name="vehicle_unknown">Sin identificar</string>
@@ -192,4 +192,17 @@
     <string name="ssh_import_failed">No se pudo leer esa clave: %1$s</string>
 
     <string name="error_no_channel">Abre un canal primero</string>
+    <!-- Wi-Fi -->
+    <string name="wifi">Wi-Fi</string>
+    <string name="wifi_off">Sin conectar</string>
+    <string name="wifi_joining">Conectando a %1$s</string>
+    <string name="wifi_joined">Conectado a %1$s</string>
+    <string name="wifi_failed">No se pudo conectar</string>
+    <string name="wifi_network">Red</string>
+    <string name="wifi_any">cualquiera que empiece por %1$s</string>
+    <string name="wifi_join">Conectar</string>
+    <string name="wifi_leave">Desconectar</string>
+    <string name="wifi_list">Ver redes</string>
+    <string name="wifi_settings">Abrir ajustes de Wi-Fi</string>
+    <string name="wifi_hint">Conectando desde aquí, el socket de la interfaz queda fijado a esta red y los datos móviles pueden seguir encendidos. Deja la red en blanco para que Android ofrezca las que hay al alcance.</string>
 </resources>

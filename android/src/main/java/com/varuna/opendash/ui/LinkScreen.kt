@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings as AndroidSettings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,6 +36,7 @@ import com.varuna.opendash.R
 import com.varuna.opendash.Session
 import com.varuna.opendash.bridge.BridgeService
 import com.varuna.opendash.data.Settings
+import com.varuna.opendash.net.WifiLink
 import java.util.Locale
 import kotlin.concurrent.thread
 import kotlinx.coroutines.Dispatchers
@@ -53,8 +56,12 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
     val context = LocalContext.current
     var busy by remember { mutableStateOf(false) }
     var identifying by remember { mutableStateOf(false) }
-    var bridgeRunning by remember { mutableStateOf(false) }
     var showAddress by remember { mutableStateOf(false) }
+    var nearby by remember { mutableStateOf(WifiLink.visible(context, settings.wifiPrefix)) }
+
+    val askLocation = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { nearby = WifiLink.visible(context, settings.wifiPrefix) }
 
     // The voltage comes off the adapter, not the bus, so it is readable the
     // moment the socket is up. Polled here rather than during composition,
@@ -72,7 +79,82 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
-        Section(stringResource(R.string.link_adapter), first = true)
+        Section(stringResource(R.string.wifi), first = true)
+        Panel {
+            StatusLine(
+                text = when (WifiLink.state) {
+                    WifiLink.State.OFF -> stringResource(R.string.wifi_off)
+                    WifiLink.State.JOINING -> stringResource(R.string.wifi_joining, WifiLink.target)
+                    WifiLink.State.JOINED -> stringResource(R.string.wifi_joined, WifiLink.target)
+                    WifiLink.State.FAILED -> stringResource(R.string.wifi_failed)
+                },
+                colour = when (WifiLink.state) {
+                    WifiLink.State.JOINED -> MaterialTheme.colorScheme.tertiary
+                    WifiLink.State.FAILED -> MaterialTheme.colorScheme.error
+                    else -> MaterialTheme.colorScheme.secondary
+                },
+                busy = WifiLink.state == WifiLink.State.JOINING,
+            )
+            ErrorLine(WifiLink.lastError)
+
+            // The list is only there when the location permission was given.
+            // Without it the system picker does the same job, so the combo
+            // appears when it can and the field is always available. The empty
+            // name stays in the list as an explicit choice rather than being
+            // implied by a blank field: it means "whatever Android finds".
+            val anywhere = stringResource(R.string.wifi_any, settings.wifiPrefix)
+            if (nearby.isNotEmpty()) {
+                Combo(
+                    label = stringResource(R.string.wifi_network),
+                    value = settings.wifiSsid,
+                    options = listOf("") + nearby,
+                    render = { it.ifEmpty { anywhere } },
+                    onSelect = { settings.wifiSsid = it },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                OutlinedTextField(
+                    value = settings.wifiSsid,
+                    onValueChange = { settings.wifiSsid = it },
+                    label = { Text(stringResource(R.string.wifi_network)) },
+                    placeholder = { Text(anywhere) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            OutlinedTextField(
+                value = settings.wifiPassword,
+                onValueChange = { settings.wifiPassword = it },
+                label = { Text(stringResource(R.string.link_psk)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    enabled = WifiLink.state != WifiLink.State.JOINING,
+                    onClick = {
+                        WifiLink.join(context, settings.wifiSsid, settings.wifiPassword, settings.wifiPrefix)
+                    },
+                ) { Text(stringResource(R.string.wifi_join)) }
+                OutlinedButton(
+                    enabled = WifiLink.state == WifiLink.State.JOINED,
+                    onClick = { WifiLink.leave(context) },
+                ) { Text(stringResource(R.string.wifi_leave)) }
+                if (nearby.isEmpty()) {
+                    TextButton(
+                        onClick = { askLocation.launch(android.Manifest.permission.ACCESS_FINE_LOCATION) },
+                    ) { Text(stringResource(R.string.wifi_list)) }
+                }
+            }
+            Hint(stringResource(R.string.wifi_hint))
+            TextButton(onClick = { copyThenOpenWifi(context, settings.wifiPassword) }) {
+                Text(stringResource(R.string.wifi_settings))
+            }
+        }
+
+        Section(stringResource(R.string.link_adapter))
         Panel {
             val state = Session.state
             StatusLine(
@@ -102,7 +184,16 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
                     String.format(Locale.ROOT, "%.2f V", Session.batteryMillivolts / 1000.0),
                 )
             }
-            ErrorLine(Session.lastError)
+            // Only shown when it is not zero, and then it is the whole story:
+            // bytes the reader had to throw away to find the start of a
+            // message. A healthy link never needs to.
+            if (Session.resynchronised > 0) {
+                Field(
+                    stringResource(R.string.link_resync),
+                    Session.resynchronised.toString(),
+                )
+            }
+            ErrorLine(Session.lastError ?: Session.transportFault)
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
@@ -110,9 +201,12 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
                     onClick = {
                         busy = true
                         thread {
-                            Session.configure(settings.host, settings.port)
-                            Session.openChannel()
-                            busy = false
+                            try {
+                                Session.configure(settings.host, settings.port)
+                                Session.openChannel()
+                            } finally {
+                                busy = false
+                            }
                         }
                     },
                 ) { Text(stringResource(R.string.action_connect)) }
@@ -143,17 +237,6 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
                         modifier = Modifier.weight(1f),
                     )
                 }
-                OutlinedTextField(
-                    value = settings.wifiPassword,
-                    onValueChange = { settings.wifiPassword = it },
-                    label = { Text(stringResource(R.string.link_psk)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Hint(stringResource(R.string.link_psk_hint))
-                OutlinedButton(onClick = { copyThenOpenWifi(context, settings.wifiPassword) }) {
-                    Text(stringResource(R.string.action_copy))
-                }
             }
         }
 
@@ -176,8 +259,11 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
                 onClick = {
                     identifying = true
                     thread {
-                        Session.vehicle = Session.diagnostics.identify()
-                        identifying = false
+                        try {
+                            Session.identify()
+                        } finally {
+                            identifying = false
+                        }
                     }
                 },
             ) {
@@ -195,28 +281,26 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
 
         Section(stringResource(R.string.bridge))
         Panel {
+            // Read from the service, not from the button: starting it can fail
+            // and the label has to follow what actually happened.
+            val running = Session.bridgePort > 0
             Text(
-                if (bridgeRunning) {
-                    stringResource(R.string.bridge_listening, "127.0.0.1", settings.elmPort)
+                if (running) {
+                    stringResource(R.string.bridge_listening, "127.0.0.1", Session.bridgePort)
                 } else {
                     stringResource(R.string.bridge_stopped)
                 },
                 style = MaterialTheme.typography.bodyMedium,
             )
+            ErrorLine(Session.bridgeError)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
-                    enabled = !bridgeRunning,
-                    onClick = {
-                        BridgeService.start(context, settings.elmPort)
-                        bridgeRunning = true
-                    },
+                    enabled = !running,
+                    onClick = { BridgeService.start(context, settings.elmPort) },
                 ) { Text(stringResource(R.string.action_start)) }
                 OutlinedButton(
-                    enabled = bridgeRunning,
-                    onClick = {
-                        BridgeService.stop(context)
-                        bridgeRunning = false
-                    },
+                    enabled = running,
+                    onClick = { BridgeService.stop(context) },
                 ) { Text(stringResource(R.string.action_stop)) }
             }
             Hint(stringResource(R.string.bridge_hint))
@@ -227,9 +311,10 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
 /**
  * Put the access point password on the clipboard and open the Wi-Fi settings.
  *
- * Joining a network on the app's behalf needs location permission and an API
- * that behaves differently on every Android version. Two taps with the password
- * already copied is less code, fewer permissions, and works everywhere.
+ * The way out when the app cannot do it itself: Android 9 and older have no API
+ * to join a named network, and a device that refuses the request leaves the
+ * user somewhere. Two taps with the password already on the clipboard works
+ * everywhere.
  */
 private fun copyThenOpenWifi(context: Context, password: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager

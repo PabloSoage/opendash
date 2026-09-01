@@ -5,6 +5,22 @@
          listens on the loopback for the phone app. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+
+    <!-- Two jobs. Asking the system to join the adapter's access point needs
+         these, and from Android 14 a connectedDevice foreground service will
+         not start at all without one of them: the service throws a
+         SecurityException the moment it calls startForeground, which from
+         outside looks like the app closing the instant the bridge is
+         started. -->
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+
+    <!-- Only so the access points in range can be listed inside the app. The
+         system picker works without it, so the app asks and carries on when
+         the answer is no. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />

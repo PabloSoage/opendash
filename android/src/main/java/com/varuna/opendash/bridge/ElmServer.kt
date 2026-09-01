@@ -39,7 +39,17 @@ class ElmServer(
                 } catch (_: Exception) {
                     return@thread          // closed
                 }
-                thread(name = "elm-session", isDaemon = true) { serve(client) }
+                // One phone app hanging up, or the link to the adapter going
+                // away mid-command, must end that session and nothing else. An
+                // exception escaping here would take the whole process with it,
+                // bridge and screens included.
+                thread(name = "elm-session", isDaemon = true) {
+                    try {
+                        serve(client)
+                    } catch (_: Exception) {
+                        try { client.close() } catch (_: Exception) {}
+                    }
+                }
             }
         }
     }

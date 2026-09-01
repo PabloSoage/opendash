@@ -63,26 +63,35 @@ fun IdentificationScreen() {
         results.clear()
         modules = 0
         thread {
-            val present = Session.diagnostics.modulesPresent { module ->
-                progress = "0x" + module.toString(16).uppercase()
-                fraction = 0f
+            try {
+                // A sweep is minutes of questions and the link can go at any
+                // point in them — the adapter loses power with the ignition.
+                // Guarded so that ends the sweep and says so, instead of ending
+                // the app.
+                Session.guarded {
+                    val present = Session.diagnostics.modulesPresent { module ->
+                        progress = "0x" + module.toString(16).uppercase()
+                        fraction = 0f
+                    }
+                    modules = present.size
+                    present.forEachIndexed { index, module ->
+                        if (cancel) return@forEachIndexed
+                        val name = "0x" + module.toString(16).uppercase()
+                        val found = Session.diagnostics.identification(
+                            module = module,
+                            stop = { cancel },
+                            onProgress = { done, total ->
+                                progress = name
+                                fraction = (index + done.toFloat() / total) / present.size
+                            },
+                        )
+                        results.addAll(found)
+                    }
+                }
+            } finally {
+                progress = null
+                busy = false
             }
-            modules = present.size
-            present.forEachIndexed { index, module ->
-                if (cancel) return@forEachIndexed
-                val name = "0x" + module.toString(16).uppercase()
-                val found = Session.diagnostics.identification(
-                    module = module,
-                    stop = { cancel },
-                    onProgress = { done, total ->
-                        progress = name
-                        fraction = (index + done.toFloat() / total) / present.size
-                    },
-                )
-                results.addAll(found)
-            }
-            progress = null
-            busy = false
         }
     }
 

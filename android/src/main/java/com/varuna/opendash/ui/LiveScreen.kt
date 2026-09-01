@@ -68,38 +68,46 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
     fun rebuild() {
         busy = true
         thread {
-            val supported = Session.diagnostics.supportedPids()
-            val standard = com.varuna.opendash.obd.Pids.standard.filter { it.id in supported }
-            val c = catalogue
-            rows = if (c == null) {
-                standard.map { Item.Standard(it) }
-            } else {
-                // A catalogue renames and rescales the same identifiers, and
-                // adds the two-byte ones the vehicle never advertises. The
-                // standard list stays, so nothing is lost by turning it on.
-                //
-                // The variant is what makes it usable. A brand catalogue is
-                // every module configuration the marque ever shipped — 21 382
-                // parameters for Opel, 14 117 of them two-byte — and one
-                // vehicle is a handful of them. Narrowed to a variant, an
-                // engine module is a few hundred.
-                val keys = settings.catalogueVariant
-                    .takeIf { it.isNotEmpty() }
-                    ?.let { c.variants[it]?.toSet() }
-                val pool = monitor.requestable(c)
-                    .let { all -> if (keys == null) all else all.filter { it.key in keys } }
+            // Guarded: asking the car what it supports is a socket
+            // conversation, and a link that goes mid-question must end the
+            // rebuild, not the app.
+            try {
+                Session.guarded {
+                    val supported = Session.diagnostics.supportedPids()
+                    val standard = com.varuna.opendash.obd.Pids.standard.filter { it.id in supported }
+                    val c = catalogue
+                    rows = if (c == null) {
+                        standard.map { Item.Standard(it) }
+                    } else {
+                        // A catalogue renames and rescales the same identifiers, and
+                        // adds the two-byte ones the vehicle never advertises. The
+                        // standard list stays, so nothing is lost by turning it on.
+                        //
+                        // The variant is what makes it usable. A brand catalogue is
+                        // every module configuration the marque ever shipped — 21 382
+                        // parameters for Opel, 14 117 of them two-byte — and one
+                        // vehicle is a handful of them. Narrowed to a variant, an
+                        // engine module is a few hundred.
+                        val keys = settings.catalogueVariant
+                            .takeIf { it.isNotEmpty() }
+                            ?.let { c.variants[it]?.toSet() }
+                        val pool = monitor.requestable(c)
+                            .let { all -> if (keys == null) all else all.filter { it.key in keys } }
 
-                val byPid = pool.groupBy { it.pid }
-                val named = standard.map { pid ->
-                    byPid[pid.id]?.firstOrNull()?.let { Item.FromCatalogue(it, certain = true) }
-                        ?: Item.Standard(pid)
+                        val byPid = pool.groupBy { it.pid }
+                        val named = standard.map { pid ->
+                            byPid[pid.id]?.firstOrNull()?.let { Item.FromCatalogue(it, certain = true) }
+                                ?: Item.Standard(pid)
+                        }
+                        val extra = pool
+                            .filter { it.pid > 0xff }
+                            .map { Item.FromCatalogue(it, certain = false) }
+                        named + extra
+                    }
                 }
-                val extra = pool
-                    .filter { it.pid > 0xff }
-                    .map { Item.FromCatalogue(it, certain = false) }
-                named + extra
+            } finally {
+                busy = false
             }
-            busy = false
         }
     }
 

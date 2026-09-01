@@ -101,15 +101,23 @@ fun CataloguesScreen(repository: PluginRepository, settings: Settings) {
         working = name
         status = ""
         thread {
-            val result = repository.install(s, name, settings.catalogueLanguage) {
-                status = context.getString(R.string.catalogues_installing, it)
+            try {
+                val result = repository.install(s, name, settings.catalogueLanguage) {
+                    status = context.getString(R.string.catalogues_installing, it)
+                }
+                status = result.fold(
+                    onSuccess = { n -> context.getString(R.string.catalogues_installed_ok, n) },
+                    onFailure = { e -> e.message ?: e.javaClass.simpleName },
+                )
+                installed = repository.installed()
+            } catch (e: Exception) {
+                // install returns a Result, but the download underneath can
+                // still throw before it gets that far. On a worker thread that
+                // is a closed app rather than a failed install.
+                status = e.message ?: e.javaClass.simpleName
+            } finally {
+                working = null
             }
-            status = result.fold(
-                onSuccess = { n -> context.getString(R.string.catalogues_installed_ok, n) },
-                onFailure = { e -> e.message ?: e.javaClass.simpleName },
-            )
-            installed = repository.installed()
-            working = null
         }
     }
 

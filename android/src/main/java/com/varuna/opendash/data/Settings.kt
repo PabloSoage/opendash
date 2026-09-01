@@ -35,13 +35,21 @@ class Settings(context: Context) {
     var port: Int by pref(KEY_PORT, prefs.getInt(KEY_PORT, 777)) { it }
 
     /**
-     * The access point password, kept only so it can be copied into the system
-     * Wi-Fi dialog. Joining a network on the app's behalf needs location
-     * permission and a suggestion API that behaves differently on every
-     * Android version; opening the Wi-Fi panel with the password on the
-     * clipboard is one tap and always works.
+     * The access point password. Every one of these adapters leaves the factory
+     * with the same one, so it is filled in rather than asked for.
      */
     var wifiPassword: String by pref(KEY_PSK, prefs.getString(KEY_PSK, null) ?: "12345678") { it }
+
+    /**
+     * The access point to join, or empty for "offer everything starting with
+     * [wifiPrefix]". Empty is the better default the first time: the adapter's
+     * name carries its serial number, so nobody knows it before they have seen
+     * it once, and the system picker shows what is in range.
+     */
+    var wifiSsid: String by pref(KEY_SSID, prefs.getString(KEY_SSID, null) ?: "") { it }
+
+    /** Narrows the picker to the adapter's own access points. */
+    var wifiPrefix: String by pref(KEY_PREFIX, prefs.getString(KEY_PREFIX, null) ?: "SM") { it }
 
     var elmPort: Int by pref(KEY_ELM_PORT, prefs.getInt(KEY_ELM_PORT, 35000)) { it }
 
@@ -116,6 +124,8 @@ class Settings(context: Context) {
         const val KEY_HOST = "sm3_host"
         const val KEY_PORT = "sm3_port"
         const val KEY_PSK = "sm3_psk"
+        const val KEY_SSID = "sm3_ssid"
+        const val KEY_PREFIX = "sm3_ssid_prefix"
         const val KEY_ELM_PORT = "elm_port"
         const val KEY_TREE = "recording_tree"
         const val KEY_GZIP = "compress_recordings"

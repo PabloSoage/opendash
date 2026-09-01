@@ -23,6 +23,22 @@ are identical**, which is why a capture from either side is worth the same.
 16..   data
 ```
 
+**Every answer carries `op = 0x00`, whatever was asked.** Counted over the whole
+factory capture: 1502 answers to `0x20`, 1387 to `0x1c`, 603 to `0x50`, 599 to
+`0x52`, 86 to the greeting — all `0x00`. Nothing in the reply says what it
+answers, so the only thing that pairs a reply with its request is the order they
+arrive in. Messages with `op = 0xfe` are the exception and are not answers at
+all: those are frame deliveries the device sends unasked, interleaved with
+everything else.
+
+That has a consequence worth stating plainly, because getting it wrong is
+invisible. A client that writes a request and then reads whatever is in the
+socket will sooner or later read the answer to something else. The answer to a
+bus poll is 28 bytes, and its first two bytes read as millivolts give **0.640 V**
+— which is what 1069 of the 1387 poll answers in the capture do. A battery
+reading of about two thirds of a volt on a car with a good battery is that bug,
+not a flat battery.
+
 A message occupies **`align(16 + len, 4)`** bytes on the wire, not `16 + len`.
 Measured across 4066 messages from two independent sessions: the gap between
 one message and the next is always exactly that padding, with a single
@@ -97,6 +113,19 @@ bytes`.
 starting at offset 305, so the block length is `305 + n * 59`. The block does
 **not** carry the protocol: the protocol is whichever opcode follows the `0x50`.
 
+**A bit rate of zero closes the channel.** 268 of the 603 channel blocks in the
+capture carry zero, and the last three messages of the whole session are one of
+them followed by the two status reads that follow every channel change. That is
+the teardown, and it is worth sending: the device takes one client and does not
+notice a socket that merely goes away, so a session left open is a session that
+keeps the next one out — the manufacturer's own application included, which is
+what makes the adapter look locked up until it is unplugged.
+
+The session in the capture also had **filters set**. Only `0x5E8` and the
+diagnostic response ids come up the channel: 23 distinct ids in 168 404 frames,
+and not one broadcast frame among them. Worth knowing before trying to use that
+capture to learn anything about the rest of the bus.
+
 ## `op = 0x20` — the device's own voltages
 
 No payload, always answered, and the answer is six bytes that appear nowhere
@@ -121,8 +150,46 @@ AA 00                         stop
 
 There is no ISO-TP answer to `0xAA`. The answer is the stream: raw 8-byte CAN
 frames on `0x5E8`, the packet id in the first byte and seven bytes of data
-behind it. Over a 23-minute session that came to 33 925 frames for one packet and
-33 920 for another, against one round trip per value the other way.
+behind it. Over a 29.7-minute session that came to 33 925 frames for one packet
+and 33 920 for another, against one round trip per value the other way.
+
+### The rate is 100 Hz per packet
+
+Not 100 Hz shared out. Counting frames per second against how many packets were
+active at that second, over the whole capture:
+
+| packets active | frames/s | per packet |
+|---|---|---|
+| 2 | 200 | 100 Hz |
+| 3 | 300 | 100 Hz |
+| 4 | 400 | 100 Hz |
+| 6 | 600 | 100 Hz |
+| 7 | 714 | 102 Hz |
+
+One packet asked for on a car gave 102 frames a second, which is the same
+number from an independent session. Worth knowing before asking for many: seven
+packets is 714 eight-byte frames a second, about a sixth of a 500 kbit/s bus.
+
+### It stops about five seconds after the tester goes quiet
+
+This is the part that costs a trip to the car if it is not known. A module
+streams only while the tester keeps talking to it. Two measurements, and they
+agree:
+
+* On a car, `AA 04` with nothing sent afterwards produced **three bursts of
+  4.914, 4.895 and 4.911 seconds**, each starting at a request and stopping on
+  its own, with recording windows of 10, 15, 10, 8 and 25 seconds around them
+  that caught nothing else.
+* In the factory capture, the longest the tool ever went without speaking to the
+  engine **while the stream was still running is 3.29 seconds**, over 29.7
+  minutes. It keeps that up with `3E` TesterPresent to the engine 141 times, a
+  median of 3.08 seconds apart. Every one of the 22 bursts in that session ends,
+  and is followed by 22 to 32 seconds of the tool saying nothing to the engine.
+
+So anything that streams has to send `3E` about every two seconds, in its own
+thread, from before the first request until after the last. A `7F .. 78`
+"response pending" has the same clock: waiting quietly for the real answer is
+waiting for one that will not come.
 
 Three things the capture settles about `0x2C`, which matter because it is the one
 piece here that is not a read:
@@ -135,15 +202,41 @@ piece here that is not a read:
   stores; it is scratch space.
 - What it defines is what the module *reports*, not what it does.
 
-What the capture does **not** settle is how the seven data bytes are divided
-between the fields of a multi-field packet. An earlier reading claimed it did,
-because the `FE` packet returned seven bytes and its two parameters were four
-and three bytes in the catalogue. That proves nothing: every frame on `0x5E8` is
-eight bytes, including the ones for packets whose two fields are one byte each. A
-CAN frame is eight bytes.
+### How the seven bytes are divided
 
-`0x2C` is therefore absent from the app's allowed services, and streaming with it
-is not implemented. It is a decision, not an oversight.
+The capture could not settle this. An earlier reading claimed it did, because
+the `FE` packet returned seven bytes and its two parameters were four and three
+bytes in the catalogue. That proved nothing: every frame on `0x5E8` is eight
+bytes, including the ones for packets whose two fields are one byte each.
+
+A car settled it. The same packet was defined twice, fifteen seconds apart:
+
+| definition | condition | frame |
+|---|---|---|
+| `2C FD 00 0C` | ignition on, engine stopped | `fd 00 00 `**`00`**` 00 00 00 00` |
+| `2C FD 00 0C 00 05` | idling, 750 rpm | `fd 0b bb `**`45`**` 00 00 00 00` |
+
+`0x000C` is engine speed, two bytes; `0x0005` is coolant temperature, one. Bytes
+1 and 2 give `0x0bbb / 4 = 749 rpm`, the idle that was there. Byte 3 is
+`0x45 = 69`, and `69 - 40 = 29 °C`.
+
+What makes it a proof rather than a plausible reading is byte 3 of the first
+row. With the ignition on and the engine stopped the coolant sensor reads
+ambient — known, because forty seconds later it read 24 °C — so if temperature
+were always in the frame, `0x40` would have been there. It was `0x00`. Same
+physical conditions, different definition, different byte 3.
+
+```
+0x5E8:  <dpid> <field 1> <field 2> … <zero padding>
+```
+
+Fields go **in the order they were asked for**, each the width the catalogue
+gives, big-endian, and the rest of the eight bytes is zero. No length header, no
+separators. The catalogue is what makes it sliceable.
+
+`0x2C` is still absent from the app's allowed services and streaming with it is
+still not implemented. That is now a decision about writing to a module rather
+than a gap in what is known.
 
 ## Identifying the car
 
@@ -173,8 +266,29 @@ part numbers and `0xD1`–`0xDC` are their alpha codes, paired one for one down 
 range; and `0x42`–`0x49` come out as Calibration Part Number 12 through 19, eight
 in a numbered row.
 
-Eight identifiers are left deliberately unlabelled — `0x22`, `0x2F`, `0x30`,
-`0x3D`, `0x41`, `0x5E`, `0x75`, `0xDF`. The only catalogue entries carrying those
-numbers are mode 01 PIDs that share them by accident: a local identifier and a
-mode 01 PID are different namespaces over the same integers. They are read and
-shown as bytes rather than labelled with something plausible and wrong.
+Eight were left deliberately unlabelled — `0x22`, `0x2F`, `0x30`, `0x3D`,
+`0x41`, `0x5E`, `0x75`, `0xDF` — because the only catalogue entries carrying
+those numbers were mode 01 PIDs sharing them by accident: a local identifier and
+a mode 01 PID are different namespaces over the same integers.
+
+Asking all 58 of them to every module that answers has since closed four of the
+eight. The extra leverage is that a module's address gives its name, and a name
+restricts the catalogue to that module's own variants, which is a far narrower
+join than "any parameter with this number".
+
+* **`0xDF` on the engine is the odometer.** One name, from a variant of the
+  engine itself, with the catalogue's own scale (`X * 0.015625`, km):
+  `00 fc 69 40` is 16 542 016 / 64 = **258 469 km**. The body control module
+  answers the same identifier with `00 fc 6a 24` three times over — GM keeps the
+  odometer in triplicate — and its copy is 3.6 km ahead of the engine's. This one
+  can be checked against the dashboard in five seconds.
+* **`0x41` on the body control module is Calibration Part Number 11**, one name
+  from that module's variants, completing the run: `0x42`–`0x49` were already
+  Calibration Part Number 12 to 19.
+* **`0x5E` and `0x75` are not implemented here.** All four modules answer
+  `7F 1A 31`, request out of range. Nothing to name.
+* `0x22`, `0x2F`, `0x30` and `0x3D` stay unlabelled, now for a measured reason:
+  several parameters of the same module share the number and the length, and
+  there is nothing to break the tie. `0x3D` on the engine, one byte, ties
+  between *Calculated Fuel Economy Setup*, *Data Version* and three
+  *NDP_Message*. Picking one would be inventing.

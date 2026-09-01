@@ -1,5 +1,6 @@
 package com.varuna.opendash.protocol
 
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
@@ -14,8 +15,27 @@ import java.util.concurrent.ConcurrentLinkedQueue
  * the manufacturer's driver sends — the firmware checks the h4 fingerprint on
  * every message, so anything hand-rolled is refused.
  *
- * Reading is a poll: send op 0x1c with subcommand 40 80 02 and the device
- * answers with 0xfe blocks carrying whatever CAN frames arrived.
+ * Two rules govern everything below, and both were learnt the hard way.
+ *
+ * **TCP is a stream, not a sequence of messages.** One `read` returns whatever
+ * happened to arrive: half a message, three messages, a message and a half.
+ * Treating a read as a message makes the greeting come back too short to hold a
+ * serial number, and from then on every following read is offset by the
+ * leftovers. So the socket feeds a buffer and messages are taken out of it by
+ * length, never by read boundary.
+ *
+ * **Every reply carries op 0x00, whatever was asked.** Measured over the whole
+ * factory capture: 1502 answers to `0x20`, 1387 to `0x1c`, 603 to `0x50`, 86 to
+ * the greeting — all of them op 0x00. What tells them apart is only the order
+ * they arrive in. Messages with op 0xfe are different: those are frame
+ * deliveries the device sends unasked, interleaved with the answers.
+ *
+ * Together they explain a symptom worth writing down. Asking for the voltage
+ * and reading back whatever was in the socket returns the answer to the
+ * previous bus poll, whose first two bytes read as millivolts give **0.640 V**
+ * — 1069 of the 1387 poll answers in the capture do exactly that. So: one
+ * request at a time under a lock, then read until an op 0x00 arrives, stashing
+ * any frames met on the way.
  */
 class Sm3Client(
     /** Where the adapter answers. Editable: the firmware lets both change. */
@@ -26,8 +46,36 @@ class Sm3Client(
     private var input: InputStream? = null
     private var output: OutputStream? = null
 
+    /** Guards the socket. Every screen and the bridge share one link. */
+    private val lock = Any()
+
     /** Frames seen since the last drain, oldest first. */
     private val received = ConcurrentLinkedQueue<CanFrame>()
+
+    /** Running total, so a poll can report its own yield without walking it. */
+    private var stashed = 0
+
+    /** Bytes read but not yet a whole message. */
+    private val buffer = ByteArray(1 shl 16)
+    private var used = 0
+
+    /**
+     * Bytes thrown away resynchronising, and what last went wrong. Both are
+     * shown on the health screen: a link that works has zero and null, and a
+     * link that is lying about working does not.
+     */
+    var resynchronised = 0
+        private set
+    var lastFault: String? = null
+        private set
+
+    /**
+     * Called with the socket before it connects, so it can be pinned to a
+     * particular network. Without it Android sends the packets out over mobile
+     * data — the adapter's access point has no internet, so the system prefers
+     * the other one — and the connection simply never arrives.
+     */
+    var bindSocket: ((Socket) -> Unit)? = null
 
     data class CanFrame(val id: Int, val data: ByteArray) {
         override fun equals(other: Any?) =
@@ -44,82 +92,98 @@ class Sm3Client(
      * Open the socket and greet. Returns what the device says it is, which
      * doubles as proof the link works before anything else is attempted.
      */
-    fun connect(timeoutMs: Int = 4000): Identity {
-        close()
+    fun connect(timeoutMs: Int = 4000): Identity = synchronized(lock) {
+        closeLocked()
+        lastFault = null
         val s = Socket()
-        s.connect(InetSocketAddress(host, port), timeoutMs)
-        s.soTimeout = timeoutMs
+        try {
+            bindSocket?.invoke(s)
+            s.connect(InetSocketAddress(host, port), timeoutMs)
+        } catch (e: Exception) {
+            try { s.close() } catch (_: Exception) {}
+            throw e
+        }
+        s.soTimeout = READ_SLICE_MS
         s.tcpNoDelay = true
         socket = s
         input = s.getInputStream()
         output = s.getOutputStream()
+        used = 0
 
-        val reply = exchange(Recorded.opening[0]) ?: error("no answer to the greeting")
-        return identity(reply)
+        val reply = exchangeLocked(Recorded.opening[0], timeoutMs.toLong())
+        if (reply == null) {
+            closeLocked()
+            throw IOException("the adapter did not answer the greeting")
+        }
+        identity(reply)
     }
 
     /**
-     * Replay the recorded opening: session, config, channel and filters. After
-     * this the bus can be polled.
+     * Replay the recorded opening: session, config, channel and filters.
+     *
+     * Every step is checked. Replaying the rest of the sequence after one has
+     * gone unanswered is what leaves the device in a state where it stops
+     * talking to anything, its own application included, until it is unplugged.
      */
-    fun openChannel() {
+    fun openChannel() = synchronized(lock) {
         for (i in 1 until Recorded.opening.size) {
-            exchange(Recorded.opening[i])
+            if (exchangeLocked(Recorded.opening[i], STEP_TIMEOUT_MS) == null) {
+                val at = "step $i of ${Recorded.opening.size}"
+                closeLocked()
+                throw IOException("the adapter stopped answering at $at of the opening")
+            }
         }
     }
 
     /** Poll once; returns how many frames arrived. */
-    fun poll(): Int {
-        val reply = exchange(Recorded.read) ?: return 0
-        var n = 0
-        for (msg in Frame.split(reply)) {
-            if (msg.op != OP_FRAMES) continue
-            for (f in framesIn(msg.data)) {
-                received.add(f)
-                n++
-            }
-        }
-        return n
+    fun poll(): Int = synchronized(lock) {
+        val before = stashed
+        exchangeLocked(Recorded.read, STEP_TIMEOUT_MS)
+        stashed - before
     }
 
     /**
      * The device's own voltages, from opcode 0x20.
      *
-     * No payload, always answered, and the answer is six bytes that appear
-     * nowhere else in the protocol. Read as three little-endian u16, the first
-     * is the battery in millivolts: over one recorded session it ran from 8765
-     * while cranking to 14 674 with the alternator charging, sitting at 12 348
-     * with the engine off. That is where ATRV comes from.
+     * The answer is six bytes that appear nowhere else in the protocol. Read as
+     * three little-endian u16, the first is the battery in millivolts: over one
+     * recorded session it ran from 8765 while cranking to 14 674 with the
+     * alternator charging, sitting at 12 348 with the engine off. That is where
+     * ATRV comes from.
+     *
+     * The length is checked exactly rather than as a minimum. Six is what this
+     * answer is; anything else is somebody else's answer, and accepting it is
+     * how a battery reads 0.64 V.
      *
      * A message with no data is the one case where h4 needs no table: it is
      * simply seq, so this frame can be built rather than replayed.
      */
-    fun voltages(): Voltages? {
+    fun voltages(): Voltages? = synchronized(lock) {
         val frame = ByteArray(Frame.HEADER)
         Frame.putLe32(frame, 0, 0x0000ffff)          // seq 0xffff, token 0
         Frame.putLe32(frame, 4, 0x0000ffff)          // len = 0, so h4 == seq
         frame[12] = OP_VOLTAGES.toByte()
         frame[15] = Frame.checksum(OP_VOLTAGES, 0).toByte()
 
-        val reply = exchange(frame) ?: return null
-        for (msg in Frame.split(reply)) {
-            if (msg.op != 0x00 || msg.data.size < 6) continue
-            return Voltages(
-                batteryMillivolts = Frame.le16(msg.data, 0),
-                second = Frame.le16(msg.data, 2),
-                flags = Frame.le16(msg.data, 4),
-            )
+        val reply = exchangeLocked(frame, STEP_TIMEOUT_MS) ?: return null
+        if (reply.data.size != VOLTAGES_LENGTH) {
+            lastFault = "voltage answer was ${reply.data.size} bytes, not $VOLTAGES_LENGTH"
+            return null
         }
-        return null
+        Voltages(
+            batteryMillivolts = Frame.le16(reply.data, 0),
+            second = Frame.le16(reply.data, 2),
+            flags = Frame.le16(reply.data, 4),
+        )
     }
 
     /** The second field is unidentified; the flags take a handful of values. */
     class Voltages(val batteryMillivolts: Int, val second: Int, val flags: Int)
 
     /** Put a request on the bus. The h4 is computed, not guessed. */
-    fun send(canId: Int, payload: ByteArray) {
-        val frame = H4.write(canId, payload)
-        exchange(frame)
+    fun send(canId: Int, payload: ByteArray) = synchronized(lock) {
+        exchangeLocked(H4.write(canId, payload), STEP_TIMEOUT_MS)
+        Unit
     }
 
     fun drain(): List<CanFrame> {
@@ -128,7 +192,27 @@ class Sm3Client(
         return out
     }
 
-    fun close() {
+    /**
+     * Hand the channel back before dropping the socket.
+     *
+     * Best effort, and short: if the device has already stopped answering there
+     * is nothing to say to it, and the socket goes either way. Skipped entirely
+     * when the link is already known bad, since writing to a dead socket only
+     * produces another exception.
+     */
+    fun close() = synchronized(lock) {
+        if (output != null && lastFault == null) {
+            try {
+                for (message in Recorded.closing) exchangeLocked(message, CLOSE_TIMEOUT_MS)
+            } catch (_: Exception) {
+            }
+        }
+        closeLocked()
+    }
+
+    // ── the wire ──────────────────────────────────────────────────────────
+
+    private fun closeLocked() {
         try {
             socket?.close()
         } catch (_: Exception) {
@@ -136,23 +220,114 @@ class Sm3Client(
         socket = null
         input = null
         output = null
+        used = 0
         received.clear()
     }
 
-    // ── the wire ──────────────────────────────────────────────────────────
-
-    private fun exchange(message: ByteArray): ByteArray? {
-        val out = output ?: error("not connected")
-        val inp = input ?: error("not connected")
-        out.write(message)
-        out.flush()
-        val buf = ByteArray(8192)
-        return try {
-            val n = inp.read(buf)
-            if (n <= 0) null else buf.copyOf(n)
-        } catch (_: java.net.SocketTimeoutException) {
-            null
+    /**
+     * Write one message and wait for the answer to it.
+     *
+     * Answers all carry op 0x00, so the one that belongs to this request is
+     * simply the next one; frame deliveries met on the way are kept rather than
+     * discarded, which is what makes polling and asking share a socket without
+     * stealing each other's replies.
+     */
+    private fun exchangeLocked(message: ByteArray, timeoutMs: Long): Frame.Message? {
+        val out = output ?: throw IOException("not connected")
+        try {
+            out.write(message)
+            out.flush()
+        } catch (e: IOException) {
+            fail("write failed: " + (e.message ?: e.javaClass.simpleName))
+            throw e
         }
+
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (true) {
+            val msg = nextMessage(deadline)
+            if (msg == null) {
+                lastFault = "no answer within ${timeoutMs} ms"
+                return null
+            }
+            if (msg.op == OP_FRAMES) {
+                for (f in framesIn(msg.data)) {
+                    received.add(f)
+                    stashed++
+                }
+                continue
+            }
+            return msg
+        }
+    }
+
+    /** Take the next whole message out of the buffer, filling it as needed. */
+    private fun nextMessage(deadline: Long): Frame.Message? {
+        while (true) {
+            if (used >= Frame.HEADER) {
+                val size = Frame.sizeAt(buffer, 0)
+                if (size == null) {
+                    // Not a header. One byte at a time is the only honest way
+                    // back: the stream has no marker to search for.
+                    discard(1)
+                    resynchronised++
+                    continue
+                }
+                if (used >= size) {
+                    val msg = Frame.decode(buffer, 0)?.first
+                    discard(size)
+                    if (msg != null) return msg
+                    resynchronised += size
+                    continue
+                }
+                if (size > buffer.size) {
+                    val why = "a message of $size bytes does not fit the read buffer"
+                    fail(why)
+                    throw IOException(why)
+                }
+            }
+            if (!fill(deadline)) return null
+        }
+    }
+
+    /** Read once into the buffer. False means the deadline passed. */
+    private fun fill(deadline: Long): Boolean {
+        val inp = input ?: throw IOException("not connected")
+        while (System.currentTimeMillis() < deadline) {
+            if (used == buffer.size) {
+                val why = "read buffer full with nothing that parses"
+                fail(why)
+                throw IOException(why)
+            }
+            val n = try {
+                inp.read(buffer, used, buffer.size - used)
+            } catch (_: java.net.SocketTimeoutException) {
+                continue
+            } catch (e: IOException) {
+                fail("read failed: " + (e.message ?: e.javaClass.simpleName))
+                throw e
+            }
+            if (n < 0) {
+                val why = "the adapter closed the connection"
+                fail(why)
+                throw IOException(why)
+            }
+            if (n > 0) {
+                used += n
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun discard(n: Int) {
+        System.arraycopy(buffer, n, buffer, 0, used - n)
+        used -= n
+    }
+
+    /** Record what went wrong and drop the link, so the device frees it. */
+    private fun fail(why: String) {
+        lastFault = why
+        closeLocked()
     }
 
     /**
@@ -174,17 +349,20 @@ class Sm3Client(
     }
 
     /**
-     * The greeting answer carries the serial and the firmware version at fixed
-     * offsets, which is how a session is confirmed good before trusting it.
+     * The greeting answer carries the serial at bytes 0..7 and the firmware
+     * version as a little-endian u32 at 28. On one device that reads DA4 and
+     * 17204, and the same offsets in the factory capture give the same pair.
+     *
+     * A short answer used to come out as two question marks. It now says so:
+     * the greeting is 66 bytes and anything else means the read is wrong, which
+     * is worth knowing rather than hiding.
      */
-    private fun identity(reply: ByteArray): Identity {
-        val d = Frame.decode(reply)?.first?.data ?: return Identity("?", "?")
-        val serial = if (d.size >= 24) {
-            val raw = String(d.copyOfRange(0, 8), Charsets.US_ASCII).trim { it <= ' ' }
-            raw.trimStart('0').ifEmpty { raw }
-        } else "?"
-        val firmware = if (d.size >= 32) Frame.le32(d, 28).toString() else "?"
-        return Identity(serial, firmware)
+    private fun identity(reply: Frame.Message): Identity {
+        val d = reply.data
+        if (d.size < 32) throw IOException("the greeting answer was ${d.size} bytes, expected 66")
+        val raw = String(d.copyOfRange(0, 8), Charsets.US_ASCII).trim { it <= ' ' }
+        val serial = raw.trimStart('0').ifEmpty { raw }
+        return Identity(serial, Frame.le32(d, 28).toString())
     }
 
     companion object {
@@ -192,5 +370,15 @@ class Sm3Client(
         const val DEFAULT_PORT = 777
         private const val OP_FRAMES = 0xfe
         private const val OP_VOLTAGES = 0x20
+        private const val VOLTAGES_LENGTH = 6
+
+        /** How long one socket read blocks before the deadline is rechecked. */
+        private const val READ_SLICE_MS = 250
+
+        /** Long enough for a slow answer, short enough not to freeze a screen. */
+        private const val STEP_TIMEOUT_MS = 2000L
+
+        /** Saying goodbye is worth a moment, not a wait. */
+        private const val CLOSE_TIMEOUT_MS = 400L
     }
 }

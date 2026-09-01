@@ -37,6 +37,24 @@ object Frame {
         val data: ByteArray,
     )
 
+    /**
+     * How many bytes the message starting at [offset] occupies, or null if
+     * there is no message header there.
+     *
+     * Reading a socket needs this separately from [decode], which answers null
+     * both for "that is not a header" and for "the rest has not arrived yet".
+     * A reader that cannot tell those apart either throws away good bytes or
+     * waits forever, and both look the same from outside: a serial number that
+     * comes out as a question mark.
+     */
+    fun sizeAt(buf: ByteArray, offset: Int): Int? {
+        if (offset + HEADER > buf.size) return null
+        val op = buf[offset + 12].toInt() and 0xff
+        val len = (buf[offset + 13].toInt() and 0xff) or ((buf[offset + 14].toInt() and 0xff) shl 8)
+        if ((buf[offset + 15].toInt() and 0xff) != checksum(op, len)) return null
+        return stride(len)
+    }
+
     /** Parse one message at [offset]. Returns it and how many bytes it took. */
     fun decode(buf: ByteArray, offset: Int = 0): Pair<Message, Int>? {
         if (offset + HEADER > buf.size) return null

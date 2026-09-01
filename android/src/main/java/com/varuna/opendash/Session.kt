@@ -3,6 +3,7 @@ package com.varuna.opendash
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.varuna.opendash.net.WifiLink
 import com.varuna.opendash.obd.Diagnostics
 import com.varuna.opendash.protocol.Sm3Client
 
@@ -16,7 +17,13 @@ import com.varuna.opendash.protocol.Sm3Client
  */
 object Session {
 
-    val sm3 = Sm3Client()
+    /**
+     * The socket is pinned to the adapter's Wi-Fi when the app joined it
+     * itself. [WifiLink.bind] does nothing when it did not, so this covers both
+     * the phone-joins-the-adapter case and a tablet already on the same
+     * network, without the screens having to know which is which.
+     */
+    val sm3 = Sm3Client().apply { bindSocket = { WifiLink.bind(it) } }
     val diagnostics = Diagnostics(sm3)
 
     var state by mutableStateOf(State.DISCONNECTED)
@@ -34,6 +41,37 @@ object Session {
     var vehicle by mutableStateOf<Diagnostics.VehicleId?>(null)
 
     enum class State { DISCONNECTED, CONNECTING, CONNECTED, CHANNEL_OPEN }
+
+    // ── the bridge, as the service actually found it ──────────────────────
+
+    /**
+     * The port the bridge is listening on, or zero.
+     *
+     * Owned by the service rather than by the button that started it. A
+     * foreground service can refuse to start — a missing permission, a port
+     * already taken — and a screen that turned its own label to "listening"
+     * when the button was pressed would then be telling the user something
+     * that is not true.
+     */
+    var bridgePort by mutableStateOf(0)
+        private set
+
+    var bridgeError by mutableStateOf<String?>(null)
+        private set
+
+    fun noteBridgeUp(port: Int) {
+        bridgePort = port
+        bridgeError = null
+    }
+
+    fun noteBridgeFault(why: String) {
+        bridgePort = 0
+        bridgeError = why
+    }
+
+    fun noteBridgeDown() {
+        bridgePort = 0
+    }
 
     /** Point the client at whatever the settings say before opening a socket. */
     fun configure(host: String, port: Int) {
@@ -58,7 +96,14 @@ object Session {
         }
     }
 
-    /** Replay the recorded opening so the bus can be polled. */
+    /**
+     * Replay the recorded opening so the bus can be polled.
+     *
+     * A failure here drops the link rather than leaving it half open. The
+     * adapter keeps one client and forgets it slowly: an abandoned session is
+     * what leaves it refusing everything, its own application included, until
+     * it is unplugged and back in.
+     */
     fun openChannel(): Boolean {
         if (state == State.DISCONNECTED && !connect()) return false
         return try {
@@ -67,8 +112,64 @@ object Session {
             true
         } catch (e: Exception) {
             lastError = e.message ?: e.javaClass.simpleName
+            disconnect()
             false
         }
+    }
+
+    /**
+     * Ask the car what it is.
+     *
+     * Wrapped because it runs on a worker thread, and an exception on a worker
+     * thread with nobody to catch it takes the whole app down. A link that has
+     * gone away mid-question is an ordinary event — the adapter loses power
+     * with the ignition — and it belongs on the error line, not in a crash.
+     */
+    fun identify(): Boolean {
+        lastError = null
+        return guarded {
+            vehicle = diagnostics.identify()
+            true
+        } ?: false
+    }
+
+    /**
+     * Run something that touches the socket; report rather than crash.
+     *
+     * Success does not clear the error line. The battery is re-read every two
+     * seconds, and clearing on every success would wipe the message explaining
+     * why the last thing the user actually asked for did not work, a second
+     * after it appeared.
+     */
+    fun <T> guarded(work: () -> T): T? = try {
+        work().also { syncTransport() }
+    } catch (e: Exception) {
+        lastError = e.message ?: e.javaClass.simpleName
+        syncTransport()
+        if (!sm3.isConnected) state = State.DISCONNECTED
+        null
+    }
+
+    // ── what the transport is reporting about itself ──────────────────────
+
+    /**
+     * Bytes the reader had to throw away to find the start of a message, and
+     * the last thing that went wrong down there.
+     *
+     * Mirrored here because the client is plain Kotlin with no Compose in it,
+     * and a screen has to be told to redraw. Worth showing: a link that is
+     * quietly resynchronising still answers, so nothing looks broken until a
+     * value comes back wrong.
+     */
+    var resynchronised by mutableStateOf(0)
+        private set
+
+    var transportFault by mutableStateOf<String?>(null)
+        private set
+
+    private fun syncTransport() {
+        resynchronised = sm3.resynchronised
+        transportFault = sm3.lastFault
     }
 
     fun disconnect() {
@@ -97,17 +198,21 @@ object Session {
     var batteryMillivolts by mutableStateOf(0)
         private set
 
-    /** Blocking. Call it from a worker thread; the bridge and the UI both do. */
+    /**
+     * Blocking. Call it from a worker thread; the bridge and the UI both do.
+     *
+     * A failed reading leaves the last good one on screen but does not pretend
+     * the link is fine: if the socket has gone, the state goes with it. The
+     * alternative is a voltage frozen at a plausible number next to a status
+     * line that says connected, which is worse than an error.
+     */
     fun refreshBattery(): Int {
         if (state == State.DISCONNECTED) return 0
         val now = System.currentTimeMillis()
         if (now - voltsAt < 1000) return batteryMillivolts
-        batteryMillivolts = try {
-            sm3.voltages()?.batteryMillivolts ?: batteryMillivolts
-        } catch (_: Exception) {
-            batteryMillivolts
-        }
         voltsAt = now
+        val reading = guarded { sm3.voltages() }
+        if (reading != null) batteryMillivolts = reading.batteryMillivolts
         return batteryMillivolts
     }
 }

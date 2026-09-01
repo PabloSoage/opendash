@@ -52,11 +52,19 @@ fun HealthScreen() {
             onClick = {
                 busy = true
                 thread {
-                    readiness = Session.diagnostics.readiness()
-                    stored = Session.diagnostics.storedFaults()
-                    pending = Session.diagnostics.pendingFaults()
-                    read = true
-                    busy = false
+                    try {
+                        // Guarded because this runs on a worker thread, and an
+                        // exception with nobody to catch it takes the process
+                        // down rather than the screen.
+                        Session.guarded {
+                            readiness = Session.diagnostics.readiness()
+                            stored = Session.diagnostics.storedFaults()
+                            pending = Session.diagnostics.pendingFaults()
+                            read = true
+                        }
+                    } finally {
+                        busy = false
+                    }
                 }
             },
         ) {
@@ -65,6 +73,7 @@ fun HealthScreen() {
                 else stringResource(R.string.health_read)
             )
         }
+        ErrorLine(Session.lastError)
 
         if (!read) {
             Hint(

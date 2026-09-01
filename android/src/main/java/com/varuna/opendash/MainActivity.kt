@@ -1,8 +1,11 @@
 package com.varuna.opendash
 
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.biometric.BiometricManager
@@ -84,6 +87,7 @@ class MainActivity : AppCompatActivity() {
         store = RecordingStore(this, settings)
         plugins = PluginRepository(this)
         monitor = Monitor(settings, store)
+        askForNotifications()
 
         setContent {
             val dark = when (settings.theme) {
@@ -114,6 +118,31 @@ class MainActivity : AppCompatActivity() {
      * pattern — rather than a password of our own, which would be one more
      * thing to forget and no safer.
      */
+    /**
+     * Ask once for the notification permission.
+     *
+     * The bridge runs as a foreground service and a foreground service is its
+     * notification: without permission the service still runs but nothing shows
+     * it, so there is no way to tell from a locked phone whether the link is up.
+     * Asked here rather than when the bridge starts, because a permission
+     * dialog appearing over the car screen at the moment of connecting is the
+     * worst possible time for one.
+     */
+    private fun askForNotifications() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val granted = ContextCompat.checkSelfPermission(
+            this, android.Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    /**
+     * Registered as a field so it exists before the activity is started, which
+     * is the only point at which registering is allowed.
+     */
+    private val notificationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
+
     private fun unlock(onResult: (Boolean) -> Unit) {
         val allowed = BiometricManager.Authenticators.BIOMETRIC_WEAK or
             BiometricManager.Authenticators.DEVICE_CREDENTIAL

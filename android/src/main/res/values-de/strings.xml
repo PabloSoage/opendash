@@ -30,8 +30,8 @@
     <string name="link_voltage">Batterie</string>
     <string name="link_host">Adresse</string>
     <string name="link_port">Port</string>
+    <string name="link_resync">Neu synchronisiert</string>
     <string name="link_psk">WLAN-Passwort</string>
-    <string name="link_psk_hint">Nur nötig, wenn das Adapter-Passwort in der Scanmatik-Software geändert wurde.</string>
 
     <string name="vehicle">Fahrzeug</string>
     <string name="vehicle_unknown">Nicht identifiziert</string>
@@ -192,4 +192,17 @@
     <string name="ssh_import_failed">Dieser Schlüssel konnte nicht gelesen werden: %1$s</string>
 
     <string name="error_no_channel">Zuerst einen Kanal öffnen</string>
+    <!-- Wi-Fi -->
+    <string name="wifi">WLAN</string>
+    <string name="wifi_off">Nicht verbunden</string>
+    <string name="wifi_joining">Verbinde mit %1$s</string>
+    <string name="wifi_joined">Verbunden mit %1$s</string>
+    <string name="wifi_failed">Verbindung fehlgeschlagen</string>
+    <string name="wifi_network">Netz</string>
+    <string name="wifi_any">beliebig, beginnend mit %1$s</string>
+    <string name="wifi_join">Verbinden</string>
+    <string name="wifi_leave">Trennen</string>
+    <string name="wifi_list">Netze anzeigen</string>
+    <string name="wifi_settings">WLAN-Einstellungen öffnen</string>
+    <string name="wifi_hint">Von hier aus verbunden, wird der Adapter-Socket an dieses Netz gebunden, sodass mobile Daten anbleiben können. Netz leer lassen, damit Android die Netze in Reichweite anbietet.</string>
 </resources>

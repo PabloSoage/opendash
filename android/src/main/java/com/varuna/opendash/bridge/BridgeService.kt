@@ -32,9 +32,31 @@ class BridgeService : LifecycleService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
         val port = intent?.getIntExtra(EXTRA_PORT, 35000) ?: 35000
+
+        // The notification comes first. Android gives a service started into
+        // the foreground a few seconds to show one and kills the process if it
+        // does not, and this call is also where a missing permission surfaces —
+        // as an exception, not a return code. Reported rather than thrown: a
+        // bridge that will not start is a message, not a crash.
+        try {
+            startForeground(NOTIFICATION_ID, notification(port))
+        } catch (e: Exception) {
+            Session.noteBridgeFault(e.message ?: e.javaClass.simpleName)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
         val s = server ?: ElmServer(Sm3Bridge(), port).also { server = it }
-        s.start()
-        startForeground(NOTIFICATION_ID, notification(s.port))
+        try {
+            s.start()
+        } catch (e: Exception) {
+            Session.noteBridgeFault(e.message ?: e.javaClass.simpleName)
+            server = null
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        Session.noteBridgeUp(s.port)
 
         // Refresh the status line so the notification says something true
         // rather than whatever was the case when it started.
@@ -54,6 +76,7 @@ class BridgeService : LifecycleService() {
         server?.stop()
         server = null
         ticker = null
+        Session.noteBridgeDown()
         super.onDestroy()
     }
 
