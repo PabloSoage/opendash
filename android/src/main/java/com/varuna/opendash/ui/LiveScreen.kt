@@ -77,12 +77,24 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                 // A catalogue renames and rescales the same identifiers, and
                 // adds the two-byte ones the vehicle never advertises. The
                 // standard list stays, so nothing is lost by turning it on.
-                val byPid = monitor.requestable(c).groupBy { it.pid }
+                //
+                // The variant is what makes it usable. A brand catalogue is
+                // every module configuration the marque ever shipped — 21 382
+                // parameters for Opel, 14 117 of them two-byte — and one
+                // vehicle is a handful of them. Narrowed to a variant, an
+                // engine module is a few hundred.
+                val keys = settings.catalogueVariant
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { c.variants[it]?.toSet() }
+                val pool = monitor.requestable(c)
+                    .let { all -> if (keys == null) all else all.filter { it.key in keys } }
+
+                val byPid = pool.groupBy { it.pid }
                 val named = standard.map { pid ->
                     byPid[pid.id]?.firstOrNull()?.let { Item.FromCatalogue(it, certain = true) }
                         ?: Item.Standard(pid)
                 }
-                val extra = monitor.requestable(c)
+                val extra = pool
                     .filter { it.pid > 0xff }
                     .map { Item.FromCatalogue(it, certain = false) }
                 named + extra
@@ -146,6 +158,25 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                     }
                 }
                 catalogue?.let { c ->
+                    if (c.variants.isNotEmpty()) {
+                        val allVariants = stringResource(R.string.live_variant_all)
+                        val names = remember(c) { listOf("") + c.variants.keys.sorted() }
+                        Combo(
+                            label = stringResource(R.string.live_variant),
+                            value = settings.catalogueVariant,
+                            options = names,
+                            render = { name ->
+                                if (name.isEmpty()) allVariants
+                                else name + "  (" + (c.variants[name]?.size ?: 0) + ")"
+                            },
+                            onSelect = {
+                                settings.catalogueVariant = it
+                                selected.clear()
+                                rows = emptyList()
+                            },
+                        )
+                        Hint(stringResource(R.string.live_variant_hint))
+                    }
                     Hint(
                         stringResource(
                             R.string.live_coverage,

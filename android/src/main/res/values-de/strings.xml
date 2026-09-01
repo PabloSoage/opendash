@@ -58,6 +58,9 @@
     <string name="live_record">Diese Sitzung aufzeichnen</string>
     <string name="live_recording">%1$d Zeilen · %2$s</string>
     <string name="live_catalogue_off">Standard-OBD-II-Namen</string>
+    <string name="live_variant">Variante</string>
+    <string name="live_variant_all">Alle Varianten</string>
+    <string name="live_variant_hint">Ein Markenkatalog enthält jede Steuergeräte-Konfiguration, die diese Marke je verbaut hat. Erst die Einschränkung auf eine Variante macht aus einer Liste von Tausenden eine lesbare.</string>
     <string name="live_coverage">%1$d Parameter sind abrufbar, %2$d noch nicht</string>
     <string name="live_search">Filtern</string>
     <string name="live_clear_selection">Auswahl aufheben</string>

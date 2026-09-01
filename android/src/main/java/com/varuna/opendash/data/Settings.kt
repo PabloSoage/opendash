@@ -74,6 +74,13 @@ class Settings(context: Context) {
      */
     var pollIntervalMs: Int by pref(KEY_POLL, prefs.getInt(KEY_POLL, 0)) { it }
 
+    /**
+     * Which variant of an installed catalogue to offer, or empty for all of
+     * them. A brand catalogue is every module configuration the marque ever
+     * shipped; one vehicle is a handful of them.
+     */
+    var catalogueVariant: String by pref(KEY_VARIANT, prefs.getString(KEY_VARIANT, null) ?: "") { it }
+
     var catalogueLanguage: String by pref(
         KEY_CATALOGUE_LANG,
         prefs.getString(KEY_CATALOGUE_LANG, null) ?: "en",
@@ -115,5 +122,6 @@ class Settings(context: Context) {
         const val KEY_CHARTS = "chart_count"
         const val KEY_POLL = "poll_interval"
         const val KEY_CATALOGUE_LANG = "catalogue_language"
+        const val KEY_VARIANT = "catalogue_variant"
     }
 }

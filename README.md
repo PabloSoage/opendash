@@ -252,6 +252,26 @@ units, ranges, module layouts and fault-code ownership, generated from a GDS2
 installation. They are **not** distributed here; the data belongs to GM. If you
 have the software you can generate your own.
 
+Installs are per brand and not per model, because that is the shape of the
+source data. GDS2 organises by module configuration, not by car: the 221
+variants in the Opel catalogue are things like `ECM EDC17 C49 Bosch UDS` and
+`Engine Control Module - ECM - Global A - E78 Ref`. Two of them name a model at
+all, and both are peripherals — an instrument cluster and a trailer interface.
+So there is no Astra J bundle to download, and there is nothing to build one
+from.
+
+Narrowing happens at use, not at install, with a variant picker on the live
+screen. It is where the win is anyway: the whole Opel catalogue is 15 MB, which
+is nothing on a phone, but it is 21 382 parameters, 14 117 of them two-byte, and
+that is a list nobody can read. One variant is a median of 47 parameters, and an
+engine module a few hundred — 292 for the EDC17 C49, 1745 for the E78.
+
+Which variant is your car is not answerable from the data. The car reports
+`DENSO0100` and `A17DTJ` over service `0x1A`, and neither string appears
+anywhere in any of the five packages; GDS2 does not carry a model-to-variant
+table either, it asks the car and matches at run time. So the picker shows every
+variant with its parameter count and you choose once.
+
 A source publishes a `brands.txt` index — tab-separated: name, parameter count,
 languages — and the app lists what is in it beside what is already on disk, one
 row each, with an arrow to fetch and a bin to remove. A source that publishes no

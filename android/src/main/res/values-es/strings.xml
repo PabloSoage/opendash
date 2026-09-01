@@ -58,6 +58,9 @@
     <string name="live_record">Grabar esta sesión</string>
     <string name="live_recording">%1$d filas · %2$s</string>
     <string name="live_catalogue_off">Nombres OBD-II estándar</string>
+    <string name="live_variant">Variante</string>
+    <string name="live_variant_all">Todas las variantes</string>
+    <string name="live_variant_hint">Un catálogo de marca es toda configuración de centralita que esa marca haya montado. Elegir una variante es lo que convierte una lista de miles en una que se puede leer.</string>
     <string name="live_coverage">%1$d parámetros se pueden pedir, %2$d todavía no</string>
     <string name="live_search">Filtrar</string>
     <string name="live_clear_selection">Quitar selección</string>
