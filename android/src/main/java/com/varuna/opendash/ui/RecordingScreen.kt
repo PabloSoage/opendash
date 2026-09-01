@@ -4,7 +4,8 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.horizontalScroll
@@ -22,7 +23,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -111,53 +111,33 @@ fun RecordingScreen(session: SessionFile.Session) {
             onSeekStart = { scope.launch { position.stop() } },
         )
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                stringResource(R.string.viewer_window),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            WINDOWS.forEach { ms ->
-                FilterChip(
-                    selected = window == ms,
-                    onClick = { window = ms },
-                    label = { Text(windowLabel(ms), maxLines = 1) },
-                )
-            }
-            FilterChip(
-                selected = window >= duration,
-                onClick = { window = duration },
-                label = { Text(stringResource(R.string.viewer_window_all), maxLines = 1) },
-            )
-        }
+        // Whatever windows fit inside this recording, plus the recording
+        // itself, which is what "All" means.
+        val allLabel = stringResource(R.string.viewer_window_all)
+        val windows = remember(duration) { WINDOWS.filter { it < duration } + duration }
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                stringResource(R.string.viewer_rows),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Combo(
+                label = stringResource(R.string.viewer_window),
+                value = span,
+                options = windows,
+                render = { if (it >= duration) allLabel else windowLabel(it) },
+                onSelect = { window = it },
             )
-            (1..4).forEach { n ->
-                FilterChip(
-                    selected = rows == n,
-                    onClick = { rows = n },
-                    label = { Text(n.toString()) },
-                )
-            }
+            Combo(
+                label = stringResource(R.string.viewer_rows),
+                value = rows,
+                options = listOf(1, 2, 3, 4),
+                render = { it.toString() },
+                onSelect = { rows = it },
+            )
             TextButton(onClick = { picking = true }) {
                 Text(
                     stringResource(R.string.viewer_parameters) + "  " +
@@ -196,14 +176,41 @@ fun RecordingScreen(session: SessionFile.Session) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    // Long press first: it does not consume the drag, so the
-                    // scroll below still sees everything it needs.
+                    // Press and hold places the marker; two fingers held down
+                    // take it away. Written out rather than using
+                    // detectTapGestures because that one reports where the
+                    // press was and not how many fingers were on the glass,
+                    // and the difference is the whole gesture.
+                    //
+                    // Nothing here consumes anything, so the drag and the
+                    // vertical scroll below still see every event they need.
                     .pointerInput(session, span) {
-                        detectTapGestures(
-                            onLongPress = { offset ->
-                                marker = (offset.x / widthPx).coerceIn(0f, 1f)
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            var fingers = 1
+                            val ended = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    fingers = maxOf(fingers, event.changes.count { it.pressed })
+                                    // A finger lifted, or the press turned into
+                                    // a drag: not a hold either way.
+                                    if (event.changes.any { !it.pressed }) break
+                                    val moved = event.changes.firstOrNull { it.id == down.id } ?: break
+                                    if ((moved.position - down.position).getDistance() >
+                                        viewConfiguration.touchSlop
+                                    ) break
+                                }
                             }
-                        )
+                            // The timeout expiring is the success case: it means
+                            // the fingers were still down and still still.
+                            if (ended == null) {
+                                marker = if (fingers >= 2) {
+                                    null
+                                } else {
+                                    (down.position.x / widthPx).coerceIn(0f, 1f)
+                                }
+                            }
+                        }
                     }
                     .draggable(
                         orientation = Orientation.Horizontal,

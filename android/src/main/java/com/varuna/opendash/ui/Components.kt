@@ -7,14 +7,26 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -127,4 +139,54 @@ fun ErrorLine(text: String?) {
         color = MaterialTheme.colorScheme.error,
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+/**
+ * A labelled dropdown.
+ *
+ * A row of chips is fine for three or four choices and stops working at twelve:
+ * the window sizes alone run from fifty milliseconds to the whole recording, and
+ * as chips they either wrap onto three lines or hide behind a horizontal scroll
+ * nobody notices. A dropdown says what is selected without spending the width.
+ */
+@Composable
+fun <T> Combo(
+    label: String,
+    value: T,
+    options: List<T>,
+    render: (T) -> String,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box(modifier = modifier) {
+        OutlinedButton(onClick = { open = true }, contentPadding = PaddingValues(horizontal = 12.dp)) {
+            Text(
+                label + "  " + render(value),
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+            )
+            Icon(
+                Icons.Filled.ArrowDropDown,
+                contentDescription = null,
+                modifier = Modifier.padding(start = 2.dp),
+            )
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(render(option)) },
+                    onClick = {
+                        onSelect(option)
+                        open = false
+                    },
+                    trailingIcon = {
+                        if (option == value) {
+                            Icon(Icons.Filled.Check, contentDescription = null)
+                        }
+                    },
+                )
+            }
+        }
+    }
 }

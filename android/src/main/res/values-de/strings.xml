@@ -94,7 +94,7 @@
     <string name="viewer_all">Alle</string>
     <string name="viewer_none">Keine</string>
     <string name="viewer_marker_clear">Marke entfernen</string>
-    <string name="viewer_marker_hint">Zum Setzen einer Marke lange auf ein Diagramm drücken. Sie bleibt stehen, während die Aufzeichnung darunter durchläuft, die Werte laufen also mit.</string>
+    <string name="viewer_marker_hint">Zum Setzen einer Marke lange auf ein Diagramm drücken. Sie bleibt stehen, während die Aufzeichnung darunter durchläuft, die Werte laufen also mit. Mit zwei Fingern gedrückt halten entfernt sie wieder.</string>
     <string name="viewer_filtered">Scanmatik zeigte beim Speichern %1$d davon an. Aufgezeichnet wurden alle %2$d, und alle %2$d sind hier.</string>
     <string name="viewer_empty">Kein Parameter ausgewählt.</string>
     <string name="viewer_summary">%1$d Parameter · %2$d Messwerte · %3$s</string>

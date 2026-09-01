@@ -100,7 +100,7 @@
     <string name="viewer_all">All</string>
     <string name="viewer_none">None</string>
     <string name="viewer_marker_clear">Clear marker</string>
-    <string name="viewer_marker_hint">Press and hold on a chart to place a marker. It stays put while the recording scrolls under it, so the values follow along.</string>
+    <string name="viewer_marker_hint">Press and hold on a chart to place a marker. It stays put while the recording scrolls under it, so the values follow along. Hold with two fingers to take it away.</string>
     <string name="viewer_filtered">Scanmatik was showing %1$d of these when the file was saved. All %2$d were recorded, and all %2$d are here.</string>
     <string name="viewer_empty">No parameter selected.</string>
     <string name="viewer_summary">%1$d parameters · %2$d readings · %3$s</string>

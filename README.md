@@ -165,6 +165,28 @@ the picker returns, with its permission persisted across reboots. With no folder
 chosen, recordings go to app storage, which is fine until the app is
 uninstalled.
 
+### Viewing one
+
+A twenty-three minute session is not legible as one picture, so the viewer shows
+a window and moves it: five seconds by default, anything from fifty milliseconds
+to the whole recording, one to four charts on screen, and a picker for which of
+the thirty channels to look at.
+
+Dragging moves every chart and the scrub bar together. The fling uses very
+little friction on purpose — a flick at the start coasts through the whole
+session, which is the closest thing to watching it happen.
+
+Press and hold puts a dashed marker across every visible chart; hold with two
+fingers to take it away. The marker keeps its place on the screen rather than
+its moment in the recording, which sounds backwards until the recording is
+moving: pinned to the glass, the values under it change as the session runs
+past, so it reads out rather than bookmarks.
+
+Vertical scale is each parameter's range over the whole recording, not over the
+window. Scaling to the window looks better in a screenshot and is useless while
+scrolling: the trace would rescale under your finger and a flat stretch would
+come out looking like noise.
+
 ### Reading .sm2
 
 The format the Windows software writes, worked out from the files:

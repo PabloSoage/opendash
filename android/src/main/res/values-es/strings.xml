@@ -94,7 +94,7 @@
     <string name="viewer_all">Todos</string>
     <string name="viewer_none">Ninguno</string>
     <string name="viewer_marker_clear">Quitar marca</string>
-    <string name="viewer_marker_hint">Mantén pulsado sobre una gráfica para poner una marca. Se queda fija mientras la grabación pasa por debajo, así que los valores la siguen.</string>
+    <string name="viewer_marker_hint">Mantén pulsado sobre una gráfica para poner una marca. Se queda fija mientras la grabación pasa por debajo, así que los valores la siguen. Mantén pulsado con dos dedos para quitarla.</string>
     <string name="viewer_filtered">Scanmatik enseñaba %1$d de estos cuando se guardó el archivo. Se grabaron los %2$d, y aquí están los %2$d.</string>
     <string name="viewer_empty">No hay ningún parámetro seleccionado.</string>
     <string name="viewer_summary">%1$d parámetros · %2$d lecturas · %3$s</string>
