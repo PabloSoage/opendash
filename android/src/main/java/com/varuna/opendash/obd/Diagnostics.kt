@@ -174,6 +174,68 @@ class Diagnostics(private val sm3: Sm3Client) {
         )
     }
 
+    /** One identifier, as a module answered it. */
+    class Identification(
+        val module: Int,
+        val id: Int,
+        val label: String,
+        val bytes: ByteArray,
+    ) {
+        val hex: String get() = Identifiers.hex(bytes)
+    }
+
+    /**
+     * Read one local identifier. Null when the module does not answer or
+     * refuses, which is most of them for most identifiers.
+     *
+     * The timeout is short because a sweep is mostly misses: a module answers
+     * the dozen identifiers it implements and ignores the rest, and at a second
+     * and a half each that would take a quarter of an hour.
+     */
+    fun readLocalIdentifier(id: Int, txId: Int = ENGINE, timeoutMs: Long = 400): ByteArray? {
+        val r = request(txId, byteArrayOf(0x1A, id.toByte()), timeoutMs = timeoutMs) ?: return null
+        if (r.size < 2 || (r[0].toInt() and 0xff) != 0x5A) return null
+        if ((r[1].toInt() and 0xff) != id) return null
+        return r.copyOfRange(2, r.size)
+    }
+
+    /**
+     * Which of [MODULES] are on the bus, found by asking each for its VIN.
+     *
+     * Every module in the factory capture answered `1A 90`, including the ones
+     * that returned zeros, so it makes a cheap liveness probe: one short
+     * request each rather than a full sweep of something that is not there.
+     */
+    fun modulesPresent(onProgress: (Int) -> Unit = {}): List<Int> = MODULES.filter { module ->
+        onProgress(module)
+        readLocalIdentifier(0x90, module, timeoutMs = 300) != null
+    }
+
+    /**
+     * Everything [module] will say about itself.
+     *
+     * Read-only by construction — 0x1A is in [readServices] and nothing here
+     * writes — so this is safe to run on a car with the engine running, and it
+     * is the only way to find out what the unlabelled identifiers hold: the
+     * catalogue names 50 of the 58 the factory tool asks, and the rest come
+     * back as bytes with an honest blank beside them.
+     */
+    fun identification(
+        module: Int = ENGINE,
+        stop: () -> Boolean = { false },
+        onProgress: (Int, Int) -> Unit = { _, _ -> },
+    ): List<Identification> {
+        val out = ArrayList<Identification>()
+        Identifiers.all.forEachIndexed { index, entry ->
+            if (stop()) return out
+            onProgress(index, Identifiers.all.size)
+            val bytes = readLocalIdentifier(entry.id, module) ?: return@forEachIndexed
+            if (bytes.isEmpty()) return@forEachIndexed
+            out.add(Identification(module, entry.id, entry.label, bytes))
+        }
+        return out
+    }
+
     class VehicleId(
         val vin: String?,
         val system: String?,
@@ -191,6 +253,18 @@ class Diagnostics(private val sm3: Sm3Client) {
         const val ENGINE = 0x7E0
         /** Accept whichever module replies. */
         const val ANY = -1
+
+        /**
+         * Modules worth asking, request-side.
+         *
+         * The engine over the OBD pair, then the GM range. The factory capture
+         * only ever addressed 0x242, 0x243, 0x249 and 0x254 and saw answers
+         * from 0x241, 0x242, 0x243, 0x244, 0x247, 0x24A, 0x24C, 0x24D and
+         * 0x251 — different sets, because it also listened to modules it never
+         * asked. Neither is the whole list, so the whole range is swept: a
+         * module that is not there costs one short timeout.
+         */
+        val MODULES: List<Int> = listOf(ENGINE) + (0x241..0x25F).toList()
 
         /** GM keeps request and response 0x400 apart; OBD uses 0x7E0/0x7E8. */
         fun responseIdFor(txId: Int): Int = when {

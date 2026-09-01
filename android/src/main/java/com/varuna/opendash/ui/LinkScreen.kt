@@ -49,7 +49,7 @@ import kotlinx.coroutines.withContext
  * how an app gets killed for not responding.
  */
 @Composable
-fun LinkScreen(settings: Settings) {
+fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
     val context = LocalContext.current
     var busy by remember { mutableStateOf(false) }
     var identifying by remember { mutableStateOf(false) }
@@ -187,6 +187,10 @@ fun LinkScreen(settings: Settings) {
                 )
             }
             Hint(stringResource(R.string.vehicle_hint))
+            OutlinedButton(
+                enabled = Session.state == Session.State.CHANNEL_OPEN,
+                onClick = onOpenIdentification,
+            ) { Text(stringResource(R.string.ident_open)) }
         }
 
         Section(stringResource(R.string.bridge))

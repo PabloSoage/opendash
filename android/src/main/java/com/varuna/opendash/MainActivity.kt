@@ -49,6 +49,7 @@ import com.varuna.opendash.data.Settings
 import com.varuna.opendash.ui.CataloguesScreen
 import com.varuna.opendash.ui.FilesScreen
 import com.varuna.opendash.ui.HealthScreen
+import com.varuna.opendash.ui.IdentificationScreen
 import com.varuna.opendash.ui.LinkScreen
 import com.varuna.opendash.ui.LiveScreen
 import com.varuna.opendash.ui.RecordingScreen
@@ -162,6 +163,8 @@ private enum class Detail(val title: Int) {
 
     /** The recording viewer. Its title is the file name, not this. */
     RECORDING(R.string.files_recordings),
+
+    IDENTIFICATION(R.string.ident_title),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -253,7 +256,8 @@ private fun App(
             when {
                 detail == Detail.CATALOGUES -> CataloguesScreen(plugins, settings)
                 detail == Detail.RECORDING -> recording?.let { RecordingScreen(it) }
-                tab == Tab.LINK -> LinkScreen(settings)
+                detail == Detail.IDENTIFICATION -> IdentificationScreen()
+                tab == Tab.LINK -> LinkScreen(settings) { detailName = Detail.IDENTIFICATION.name }
                 tab == Tab.LIVE -> LiveScreen(monitor, plugins, settings)
                 tab == Tab.HEALTH -> HealthScreen()
                 tab == Tab.FILES -> FilesScreen(store) { session, name ->

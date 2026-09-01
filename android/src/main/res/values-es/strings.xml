@@ -42,6 +42,17 @@
     <string name="vehicle_engine">Motor</string>
     <string name="vehicle_calibration">Calibración</string>
 
+    <string name="ident_title">Identificación de centralitas</string>
+    <string name="ident_open">Leer lo que dicen de sí mismas las centralitas</string>
+    <string name="ident_scan">Leer todas las centralitas</string>
+    <string name="ident_stop">Parar</string>
+    <string name="ident_probing">Buscando centralitas… %1$s</string>
+    <string name="ident_reading">%1$s · %2$d de %3$d</string>
+    <string name="ident_found">%1$d centralitas han contestado</string>
+    <string name="ident_none">Todavía no se ha leído nada.</string>
+    <string name="ident_unlabelled">sin nombre en el catálogo</string>
+    <string name="ident_hint">Todo esto es el servicio 0x1A, que solo lee. Los nombres salen del catálogo de GDS2, cruzados por identificador y por la longitud de la respuesta; los que no tienen nombre se piden igual, porque lo que vuelva es una medición, y dejarlo en blanco es mejor que ponerle un nombre verosímil.</string>
+
     <string name="bridge">Puente ELM327</string>
     <string name="bridge_stopped">Parado</string>
     <string name="bridge_listening">Escuchando en %1$s:%2$d</string>

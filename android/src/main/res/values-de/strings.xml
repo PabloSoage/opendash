@@ -42,6 +42,17 @@
     <string name="vehicle_engine">Motor</string>
     <string name="vehicle_calibration">Kalibrierung</string>
 
+    <string name="ident_title">Steuergeräte-Identifikation</string>
+    <string name="ident_open">Lesen, was die Steuergeräte über sich sagen</string>
+    <string name="ident_scan">Alle Steuergeräte lesen</string>
+    <string name="ident_stop">Stoppen</string>
+    <string name="ident_probing">Suche Steuergeräte… %1$s</string>
+    <string name="ident_reading">%1$s · %2$d von %3$d</string>
+    <string name="ident_found">%1$d Steuergeräte haben geantwortet</string>
+    <string name="ident_none">Noch nichts gelesen.</string>
+    <string name="ident_unlabelled">kein Name im Katalog</string>
+    <string name="ident_hint">Das alles ist Dienst 0x1A, der nur liest. Die Namen stammen aus dem GDS2-Katalog, verknüpft über Kennung und Antwortlänge; die ohne Namen werden trotzdem abgefragt, denn was zurückkommt ist eine Messung, und ein leeres Feld ist besser als ein plausibler Name.</string>
+
     <string name="bridge">ELM327-Brücke</string>
     <string name="bridge_stopped">Gestoppt</string>
     <string name="bridge_listening">Lauscht auf %1$s:%2$d</string>

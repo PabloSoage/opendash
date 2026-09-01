@@ -45,6 +45,17 @@
     <string name="vehicle_engine">Engine</string>
     <string name="vehicle_calibration">Calibration</string>
 
+    <string name="ident_title">Module identification</string>
+    <string name="ident_open">Read what the modules say about themselves</string>
+    <string name="ident_scan">Read all modules</string>
+    <string name="ident_stop">Stop</string>
+    <string name="ident_probing">Looking for modules… %1$s</string>
+    <string name="ident_reading">%1$s · %2$d of %3$d</string>
+    <string name="ident_found">%1$d modules answered</string>
+    <string name="ident_none">Nothing read yet.</string>
+    <string name="ident_unlabelled">no name in the catalogue</string>
+    <string name="ident_hint">All of this is service 0x1A, which only reads. The names come from the GDS2 catalogue, joined by identifier and by the length of the answer; the ones with no name are asked anyway, because what comes back is a measurement and a blank beside it beats a plausible guess.</string>
+
     <string name="bridge">ELM327 bridge</string>
     <string name="bridge_stopped">Stopped</string>
     <string name="bridge_listening">Listening on %1$s:%2$d</string>
