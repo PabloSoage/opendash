@@ -280,8 +280,14 @@ join than "any parameter with this number".
   engine itself, with the catalogue's own scale (`X * 0.015625`, km):
   `00 fc 69 40` is 16 542 016 / 64 = **258 469 km**. The body control module
   answers the same identifier with `00 fc 6a 24` three times over — GM keeps the
-  odometer in triplicate — and its copy is 3.6 km ahead of the engine's. This one
-  can be checked against the dashboard in five seconds.
+  odometer in triplicate — and its copy is 3.6 km ahead of the engine's.
+
+  **The dashboard on that car reads 258 470 km.** Which settles the scale as
+  well as the label: the catalogue carries several formulas under the name
+  *Odometer*, and the others would give 165 420 km or 16.5 million. Landing
+  within a kilometre happens only with the one the catalogue attaches to
+  identifier 223. A label can be guessed right by accident; a scale to that
+  precision cannot.
 * **`0x41` on the body control module is Calibration Part Number 11**, one name
   from that module's variants, completing the run: `0x42`–`0x49` were already
   Calibration Part Number 12 to 19.
