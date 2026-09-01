@@ -367,3 +367,20 @@ factory capture and was answered, which fixes the form; whether the other 4 774
 catalogue identifiers answer to it is unmeasured. The app asks, labels them
 unconfirmed, and drops the ones that stay silent — so using it is what produces
 the measurement.
+
+---
+
+## License
+
+Copyright (C) 2026 Pablo Soage Rodas
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the **GNU General Public License v3.0** as published by the Free
+Software Foundation.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the `LICENSE` file for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program. If not, see https://www.gnu.org/licenses/.
