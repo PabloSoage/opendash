@@ -70,6 +70,18 @@ class Sm3Client(
         private set
 
     /**
+     * Answers that arrived with no request outstanding, dropped rather than
+     * kept. Measured against the factory capture this should stay at zero:
+     * 5597 of 5683 requests were answered exactly once and the 85 apparent
+     * doubles are the same bytes captured twice, a retransmission rather than
+     * the firmware speaking twice. A number that climbs here means that model
+     * is wrong on this device, which is worth knowing before it shows up as a
+     * voltage reading from the wrong answer.
+     */
+    var unpaired = 0
+        private set
+
+    /**
      * Called with the socket before it connects, so it can be pinned to a
      * particular network. Without it Android sends the packets out over mobile
      * data — the adapter's access point has no internet, so the system prefers
@@ -143,6 +155,44 @@ class Sm3Client(
     }
 
     /**
+     * Read what the device is sending, without asking it for anything.
+     *
+     * The adapter pushes. Measured over the factory session: 226 121 frame
+     * blocks arrived unasked against 1744 polls the tool sent — 130 pushed for
+     * every one requested, at 135 blocks a second on average and 639 while a
+     * packet was streaming. The poll is a status read at roughly one a second
+     * (median gap 1003 ms), not a way to fetch frames.
+     *
+     * That matters because a request used to wait for its answer by polling
+     * every 10 millisecond, some ninety times what the manufacturer tool ever
+     * sends, and it read the socket only while a poll was outstanding. This
+     * reads the socket for its own sake, which is what the protocol actually
+     * wants.
+     *
+     * Answers arriving with nobody waiting for them are counted and dropped.
+     * Carrying one forward is what would make the next request read the
+     * previous answer, and a battery that reads 0.640 V is what that looks
+     * like from the outside.
+     */
+    fun receive(timeoutMs: Long): Int = synchronized(lock) {
+        if (output == null) return 0
+        val before = stashed
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (true) {
+            val msg = nextMessage(deadline) ?: break
+            if (msg.op == OP_FRAMES) {
+                for (f in framesIn(msg.data)) {
+                    received.add(f)
+                    stashed++
+                }
+            } else {
+                unpaired++
+            }
+        }
+        stashed - before
+    }
+
+    /**
      * The device's own voltages, from opcode 0x20.
      *
      * The answer is six bytes that appear nowhere else in the protocol. Read as
@@ -196,12 +246,19 @@ class Sm3Client(
      * Hand the channel back before dropping the socket.
      *
      * Best effort, and short: if the device has already stopped answering there
-     * is nothing to say to it, and the socket goes either way. Skipped entirely
-     * when the link is already known bad, since writing to a dead socket only
-     * produces another exception.
+     * is nothing to say to it, and the socket goes either way.
+     *
+     * Attempted whenever the socket is still open, which used not to be the
+     * case. It used to be skipped whenever anything had gone wrong earlier in
+     * the session, and that is precisely backwards: a single request that timed
+     * out — an ordinary event — left a fault recorded, and every disconnect
+     * from then on dropped the socket without a word. The device keeps the
+     * session, and the next application to try, its own included, finds the
+     * adapter refusing everything until it is unplugged. A link that is really
+     * dead has no output stream by this point and the loop is skipped anyway.
      */
     fun close() = synchronized(lock) {
-        if (output != null && lastFault == null) {
+        if (output != null) {
             try {
                 for (message in Recorded.closing) exchangeLocked(message, CLOSE_TIMEOUT_MS)
             } catch (_: Exception) {

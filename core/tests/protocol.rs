@@ -47,7 +47,7 @@ fn greeting_round_trips() {
 #[test]
 fn a_write_round_trips_with_its_padding() {
     // A 0100 request to 0x7DF, as the official tool put it on the wire.
-    let wire = hex("ffff0000406d9bc6708202e91c13008460800208000000df070000020100000000000000");
+    let wire = hex("ffff0000c69b6d40688002e91c13008460800208000000df070000020100000000000000");
     let (m, used) = frame::Message::decode(&wire).expect("decodes");
     assert_eq!(m.op, 0x1c);
     assert_eq!(m.data.len(), 19);

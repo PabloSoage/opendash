@@ -30,11 +30,17 @@ object Recorded {
     )
 
     /**
-     * How the manufacturer tool ends a session: a channel block with the bit
-     * rate set to zero, then the two status reads that follow every channel
-     * change. It is the last thing on the wire in the capture, and 268 of the
-     * 603 channel blocks in that session carry a rate of zero, so shutting a
-     * channel this way is ordinary rather than a one-off.
+     * How the manufacturer tool ends a session, read off the tail of the
+     * capture: control 0x1000, a channel block with the bit rate set to zero,
+     * then the two status reads that follow every channel change.
+     *
+     * The control message is the one the app used to leave out. Opening sends
+     * control 0x3000 and there are 49 of those in the session against 98 of
+     * 0x1000, the last of them immediately before the last channel block —
+     * they are stop and start. Shutting a channel this way is ordinary rather
+     * than a one-off: 268 of the 369 full-size channel blocks carry a rate of
+     * zero, and all 268 have the same body but for a per-message stamp, so the
+     * block closes whatever is open rather than naming a channel.
      *
      * Worth sending. The device takes one client and does not notice a socket
      * that simply goes away, so a session left open is a session that keeps
@@ -42,7 +48,8 @@ object Recorded {
      * what makes the adapter look locked up until it is unplugged.
      */
     val closing: List<ByteArray> = listOf(
-        "ffff00003ac7ffd200ff0700503101d70000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ff0700".hex(),   // canal a velocidad cero: cerrarlo
+        "ffff000087f4ebfa10000000530200aa10000000".hex(),   // CONTROL, stop
+        "ffff00003ac7ffd200ff0700503101d70000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ff0700".hex(),   // CANAL, rate zero: close it
         "ffff000009d208760000000051af00550000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000".hex(),   // ESTADO_A
         "ffff000009d208760000000052af00560000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000".hex(),   // ESTADO_B
     )
@@ -54,8 +61,23 @@ object Recorded {
      * A recorded write — mode 01 PID 00 to 0x7DF — used as the reference the
      * h4 of every other write is derived from. Its seq, h8 and padding are
      * reused unchanged; only the id and the payload move.
+     *
+     * This is the frame as it appears in the capture, and it did not used to
+     * be. What was here carried the same four h4 bytes in the opposite order,
+     * `40 6d 9b c6` for `c6 9b 6d 40`, paired with an h8 belonging to some
+     * other message. Nothing built on it could be right: h4 is a function of
+     * seq, h8 and data together, so every single write the app made carried a
+     * fingerprint the firmware rejects, and a rejected write is dropped in
+     * silence. That is why the greeting, the channel and the battery all
+     * worked — they are recorded messages replayed unchanged — while nothing
+     * ever asked of the car got an answer, whether asked by the identify
+     * button or by an ELM327 client through the bridge.
+     *
+     * The check that catches it is in the other repository,
+     * `61-plantilla-escritura.mjs`: this frame has to appear verbatim in a
+     * capture, and it now does.
      */
-    val writeTemplate: ByteArray = "ffff0000406d9bc6708202e91c13008460800208000000df070000020100000000000000".hex()
+    val writeTemplate: ByteArray = "ffff0000c69b6d40688002e91c13008460800208000000df070000020100000000000000".hex()
 
     /**
      * Contribution of each data bit to h4, byte * 8 + bit. Recovered from a

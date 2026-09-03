@@ -31,6 +31,7 @@
     <string name="link_host">Dirección</string>
     <string name="link_port">Puerto</string>
     <string name="link_resync">Resincronizado</string>
+    <string name="link_unpaired">Respuestas sueltas</string>
     <string name="link_psk">Contraseña Wi-Fi</string>
 
     <string name="vehicle">Vehículo</string>
@@ -205,4 +206,9 @@
     <string name="wifi_list">Ver redes</string>
     <string name="wifi_settings">Abrir ajustes de Wi-Fi</string>
     <string name="wifi_hint">Conectando desde aquí, el socket de la interfaz queda fijado a esta red y los datos móviles pueden seguir encendidos. Deja la red en blanco para que Android ofrezca las que hay al alcance.</string>
+    <string name="wifi_prefix">El nombre empieza por</string>
+    <string name="wifi_why_permission">Para listar las redes al alcance hace falta permiso. Pulsa Ver redes para darlo, o deja el nombre en blanco y que lo haga el selector del sistema.</string>
+    <string name="wifi_why_location">Android no devuelve ninguna red mientras la ubicación esté apagada, dé el permiso que dé la app. Enciéndela, o deja el nombre en blanco y que lo haga el selector del sistema.</string>
+    <string name="wifi_why_off">El Wi-Fi está apagado.</string>
+    <string name="wifi_why_nothing">Todavía no hay nada al alcance. La interfaz tarda unos segundos en levantar su punto de acceso desde que se enchufa.</string>
 </resources>

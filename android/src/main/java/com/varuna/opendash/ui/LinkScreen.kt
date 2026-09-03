@@ -59,7 +59,7 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
     var showAddress by remember { mutableStateOf(false) }
     var nearby by remember { mutableStateOf(WifiLink.visible(context, settings.wifiPrefix)) }
 
-    val askLocation = rememberLauncherForActivityResult(
+    val askToScan = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { nearby = WifiLink.visible(context, settings.wifiPrefix) }
 
@@ -103,11 +103,11 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
             // name stays in the list as an explicit choice rather than being
             // implied by a blank field: it means "whatever Android finds".
             val anywhere = stringResource(R.string.wifi_any, settings.wifiPrefix)
-            if (nearby.isNotEmpty()) {
+            if (nearby.names.isNotEmpty()) {
                 Combo(
                     label = stringResource(R.string.wifi_network),
                     value = settings.wifiSsid,
-                    options = listOf("") + nearby,
+                    options = listOf("") + nearby.names,
                     render = { it.ifEmpty { anywhere } },
                     onSelect = { settings.wifiSsid = it },
                     modifier = Modifier.fillMaxWidth(),
@@ -118,6 +118,34 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
                     onValueChange = { settings.wifiSsid = it },
                     label = { Text(stringResource(R.string.wifi_network)) },
                     placeholder = { Text(anywhere) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                // Never an empty list on its own: it looks identical whether
+                // the permission was refused, the location switch is off, the
+                // Wi-Fi is off or there is genuinely nothing there, and only
+                // the last of those is out of the user's hands.
+                Hint(
+                    stringResource(
+                        when (nearby.why) {
+                            WifiLink.Why.NO_PERMISSION -> R.string.wifi_why_permission
+                            WifiLink.Why.LOCATION_OFF -> R.string.wifi_why_location
+                            WifiLink.Why.WIFI_OFF -> R.string.wifi_why_off
+                            else -> R.string.wifi_why_nothing
+                        }
+                    )
+                )
+            }
+
+            // Only matters when no name was given: it is what the system
+            // picker is asked to offer. Editable because an adapter whose
+            // access point has been renamed is otherwise unreachable from
+            // here, with no way to tell that from it being out of range.
+            if (settings.wifiSsid.isBlank()) {
+                OutlinedTextField(
+                    value = settings.wifiPrefix,
+                    onValueChange = { settings.wifiPrefix = it.trim() },
+                    label = { Text(stringResource(R.string.wifi_prefix)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -142,11 +170,19 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
                     enabled = WifiLink.state == WifiLink.State.JOINED,
                     onClick = { WifiLink.leave(context) },
                 ) { Text(stringResource(R.string.wifi_leave)) }
-                if (nearby.isEmpty()) {
-                    TextButton(
-                        onClick = { askLocation.launch(android.Manifest.permission.ACCESS_FINE_LOCATION) },
-                    ) { Text(stringResource(R.string.wifi_list)) }
-                }
+                // Always here, never only when the list is empty. Pressing it
+                // scans, and asks for the permission only if that is what is
+                // missing — so it does something visible every time, which is
+                // what a button that scanned nothing and said nothing did not.
+                TextButton(
+                    onClick = {
+                        val found = WifiLink.visible(context, settings.wifiPrefix)
+                        nearby = found
+                        if (found.why == WifiLink.Why.NO_PERMISSION) {
+                            askToScan.launch(WifiLink.scanPermission)
+                        }
+                    },
+                ) { Text(stringResource(R.string.wifi_list)) }
             }
             Hint(stringResource(R.string.wifi_hint))
             TextButton(onClick = { copyThenOpenWifi(context, settings.wifiPassword) }) {
@@ -191,6 +227,15 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
                 Field(
                     stringResource(R.string.link_resync),
                     Session.resynchronised.toString(),
+                )
+            }
+            // Answers nobody was waiting for. Zero on a link whose model of
+            // the protocol is right, and the first thing to look at if a
+            // reading ever comes back belonging to the previous question.
+            if (Session.unpaired > 0) {
+                Field(
+                    stringResource(R.string.link_unpaired),
+                    Session.unpaired.toString(),
                 )
             }
             ErrorLine(Session.lastError ?: Session.transportFault)

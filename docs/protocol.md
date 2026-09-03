@@ -93,6 +93,19 @@ given frame.
 
 ## Reading the bus
 
+The adapter pushes. Counted over the factory session: **226 121 frame blocks
+arrived unasked against 1744 polls the tool sent** — 130 pushed for every one
+requested — at 135 blocks a second on average, 639 while a packet was
+streaming, up to 61 KiB/s. The polls themselves come at a median of one a
+second, and the tool never sustains more than 27 in a second.
+
+So `op = 0x1c` is a status read, not a way to fetch frames, and a client that
+reads the socket only while a poll is outstanding leaves everything pushed in
+between unread. A request waiting for its answer should read; polling at ten
+milliseconds, as this once did, is ninety times anything the manufacturer tool
+does and fetches nothing that would not have arrived anyway.
+
+
 `op = 0x1c` with subcommand `40 80 02` reads. Replies come as `op = 0xfe`
 blocks: a 32-byte block header, a frame count in the high nibble of byte 34,
 then 16-byte records of `len u32 | id u32 | 8 data bytes`.
@@ -105,6 +118,40 @@ driver sees.
 
 Same opcode with subcommand `60 80 02`, followed by `len u32 | id u32 | 8
 bytes`.
+
+Every write is derived from one recorded frame, so **that frame has to be a
+frame the device actually accepted**, byte for byte. It is worth saying why in
+its own paragraph, because getting it wrong costs more than it looks.
+
+`h4` is a function of `seq`, `h8` and the data together. Derivation reuses the
+reference's `seq` and `h8` unchanged and XORs in the contribution of the data
+bits that moved, so a reference whose `h4` does not belong to its own `seq`,
+`h8` and data poisons every write built from it. The app shipped exactly that
+for a while: a template carrying the right four `h4` bytes in the wrong order,
+`40 6d 9b c6` where the capture says `c6 9b 6d 40`, paired with an `h8` taken
+from some other message. The frame does not appear in any capture.
+
+What that looks like from outside is worth recording, because it looks like
+almost anything except a bad fingerprint. The greeting, the channel setup and
+the battery all work — they are recorded messages replayed unchanged, with no
+`h4` to compute. The link comes up, the serial and the firmware are right, the
+voltage is right. But a write with a bad fingerprint is dropped in silence, so
+**nothing ever asked of the car is answered**: identification times out, a PID
+scan times out, and an ELM327 client on the bridge sits at "identifying
+vehicle" for ever, with no error to report because nothing failed — an answer
+simply never came.
+
+The check that catches it is external, in the analysis repository: the template
+must appear verbatim in a capture. Two independent routes agree on the frame
+that does — searching the captures for one with identical data, and deriving
+what `h4` the model says belongs to that `(seq, h8, data)` triple. As
+confirmation, deriving a `09 02` request from the corrected template reproduces
+`58 a4 0f 10`, which is the fingerprint the device accepted for that request on
+the wire.
+
+`H4.write` now refuses a frame whose changed bits fall outside what the sweeps
+pinned down, rather than sending something the device will drop without a word.
+For an eleven-bit id and eight payload bytes it never triggers.
 
 ## Channel setup
 
@@ -120,6 +167,20 @@ the teardown, and it is worth sending: the device takes one client and does not
 notice a socket that merely goes away, so a session left open is a session that
 keeps the next one out — the manufacturer's own application included, which is
 what makes the adapter look locked up until it is unplugged.
+
+One message earlier there is an `op = 0x53` carrying `10 00`, and the opening
+sends the same opcode carrying `30 00`: stop and start. The capture holds 98 of
+the first against 49 of the second, the last of them immediately before the
+last channel block. Of the 268 zero-rate blocks, all carry the same body but
+for a per-message stamp — so the block closes whatever is open rather than
+naming a channel, and one of them is enough.
+
+Two things about *when* to send it, both learnt from the same symptom. The
+teardown used to be skipped whenever anything had gone wrong earlier in the
+session, which is backwards: one request timing out is an ordinary event, and
+from then on every disconnect dropped the socket without a word. And an app
+that is swiped shut has to say goodbye too, or it leaves the session held in
+exactly the same way.
 
 The session in the capture also had **filters set**. Only `0x5E8` and the
 diagnostic response ids come up the channel: 23 distinct ids in 168 404 frames,

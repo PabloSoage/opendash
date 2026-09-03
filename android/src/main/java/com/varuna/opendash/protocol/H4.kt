@@ -29,6 +29,17 @@ object H4 {
             }
         }
 
+        // Refused rather than sent. A frame whose fingerprint cannot be
+        // computed from what the sweeps pinned down is one the device drops
+        // without a word, and a request that vanishes is far harder to chase
+        // than one that never left. For an eleven-bit id and eight payload
+        // bytes this never triggers, which is the shape everything here sends.
+        if (!isVerified(frame, data)) {
+            throw IllegalArgumentException(
+                "refusing to send a write whose h4 rests on bits the sweeps never pinned down"
+            )
+        }
+
         val h4 = derive(frame, data)
         System.arraycopy(data, 0, frame, Frame.HEADER, data.size)
         Frame.putLe32(frame, 4, h4)

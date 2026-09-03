@@ -58,6 +58,9 @@ object WifiLink {
     /** Access points whose name starts with this are offered by the picker. */
     const val DEFAULT_PREFIX = "SM"
 
+    /** Long enough to read the picker and pick, short enough to give up. */
+    private const val JOIN_TIMEOUT_MS = 60_000
+
     /** Joining by name needs Android 10; below that the settings panel is it. */
     val supported: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
 
@@ -78,6 +81,38 @@ object WifiLink {
     }
 
     /**
+     * Why a list of networks came back empty. An empty list on its own is the
+     * one answer this screen must never give: four different things produce
+     * it, three of them fixable by the person holding the phone, and a button
+     * that appears to do nothing is what they all looked like.
+     */
+    enum class Why { OK, NO_PERMISSION, LOCATION_OFF, WIFI_OFF, NOTHING_IN_RANGE }
+
+    class Scan(val names: List<String>, val why: Why) {
+        val isEmpty: Boolean get() = names.isEmpty()
+    }
+
+    /**
+     * The permission that lets this app read scan results on this phone.
+     *
+     * From Android 13 there is one that means "find devices near me" without
+     * claiming to be about location, and it is the right one to ask for: the
+     * app wants an access point name, not a position. Below that, Android
+     * treats the list of networks in range as location data and there is only
+     * the one permission to ask for.
+     */
+    val scanPermission: String
+        get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.NEARBY_WIFI_DEVICES
+        } else {
+            Manifest.permission.ACCESS_FINE_LOCATION
+        }
+
+    private fun granted(context: Context, permission: String) =
+        androidx.core.content.ContextCompat.checkSelfPermission(context, permission) ==
+            PackageManager.PERMISSION_GRANTED
+
+    /**
      * Names of the access points in range, the ones matching [prefix] first.
      *
      * Sorted rather than filtered. An adapter whose access point has been
@@ -85,19 +120,26 @@ object WifiLink {
      * tell that from it being out of range, which is the wrong failure for the
      * one screen whose job is to find it.
      *
-     * Empty unless the location permission is granted, which is the rule
-     * Android applies to scan results — a list of nearby networks says where
-     * the phone is. The screen offers the system picker instead when this comes
-     * back empty, so the permission is a convenience and never a requirement.
+     * A scan is asked for rather than assumed. `getScanResults` hands back
+     * whatever the system last found, and on a phone already joined to a
+     * network that can be nothing at all, which is an empty list that means
+     * "nobody has looked" rather than "there is nothing there".
+     *
+     * Below Android 13 the location master switch has to be on as well as the
+     * permission granted, or the results come back empty with no error. That
+     * is a setting, not a refusal, so it is reported separately.
      */
-    fun visible(context: Context, prefix: String = ""): List<String> {
-        if (androidx.core.content.ContextCompat.checkSelfPermission(
-                context, Manifest.permission.ACCESS_FINE_LOCATION,
-            ) != PackageManager.PERMISSION_GRANTED
-        ) return emptyList()
+    fun visible(context: Context, prefix: String = ""): Scan {
         val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-            ?: return emptyList()
-        return try {
+            ?: return Scan(emptyList(), Why.WIFI_OFF)
+        if (!wifi.isWifiEnabled) return Scan(emptyList(), Why.WIFI_OFF)
+        if (!granted(context, scanPermission)) return Scan(emptyList(), Why.NO_PERMISSION)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && !locationOn(context)) {
+            return Scan(emptyList(), Why.LOCATION_OFF)
+        }
+        val names = try {
+            @Suppress("DEPRECATION")
+            wifi.startScan()
             wifi.scanResults
                 .mapNotNull { nameOf(it) }
                 .filter { it.isNotBlank() }
@@ -107,7 +149,21 @@ object WifiLink {
                         .thenBy { it.lowercase() }
                 )
         } catch (_: SecurityException) {
-            emptyList()
+            return Scan(emptyList(), Why.NO_PERMISSION)
+        }
+        return Scan(names, if (names.isEmpty()) Why.NOTHING_IN_RANGE else Why.OK)
+    }
+
+    private fun locationOn(context: Context): Boolean {
+        val lm = context.applicationContext
+            .getSystemService(Context.LOCATION_SERVICE) as? android.location.LocationManager
+            ?: return true
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            lm.isLocationEnabled
+        } else {
+            @Suppress("DEPRECATION")
+            lm.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER) ||
+                lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER)
         }
     }
 
@@ -179,7 +235,9 @@ object WifiLink {
             }
         }
         callback = cb
-        cm.requestNetwork(request, cb)
+        // With a deadline, so a picker the user walks away from ends as a
+        // refusal rather than leaving the screen saying "joining" for ever.
+        cm.requestNetwork(request, cb, JOIN_TIMEOUT_MS)
     }
 
     /** Give the network back. The phone returns to its usual route at once. */

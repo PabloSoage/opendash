@@ -17,6 +17,21 @@ class Diagnostics(private val sm3: Sm3Client) {
     /**
      * Send [payload] to [txId] and wait for the answer from the matching
      * response id. Returns null on timeout.
+     *
+     * The waiting is done by reading, not by asking. This used to send a poll
+     * every ten milliseconds until the answer turned up, on the assumption
+     * that frames have to be fetched; they do not. Over the factory session
+     * the adapter pushed 226 121 frame blocks unasked against 1744 polls the
+     * tool sent — 130 pushed for every one requested — and the polls came at a
+     * median of one a second. So a request now reads the socket in short
+     * slices and polls at [POLL_EVERY_MS], which is a twentieth of what it
+     * did and still four times what the manufacturer tool ever sustains.
+     *
+     * Worth being precise about why this changed. It is not proven that the
+     * old rate is what dropped the link; what is measured is that it was some
+     * ninety times anything in the capture, that it was unnecessary, and that
+     * reading the socket only while a poll was outstanding left everything the
+     * device pushed in between sitting unread.
      */
     /**
      * Services this tool is allowed to emit. All of them read.
@@ -56,8 +71,14 @@ class Diagnostics(private val sm3: Sm3Client) {
 
         val deadline = System.currentTimeMillis() + timeoutMs
         var flowControlSent = false
+        var nextPoll = System.currentTimeMillis() + POLL_EVERY_MS
         while (System.currentTimeMillis() < deadline) {
-            sm3.poll()
+            // Blocks for the slice, so this is a read and not a spin.
+            sm3.receive(minOf(SLICE_MS, deadline - System.currentTimeMillis()))
+            if (System.currentTimeMillis() >= nextPoll) {
+                sm3.poll()
+                nextPoll = System.currentTimeMillis() + POLL_EVERY_MS
+            }
             for (frame in sm3.drain()) {
                 if (frame.id != rxId && rxId != ANY) continue
                 val pci = (frame.data.getOrNull(0)?.toInt() ?: 0) and 0xf0
@@ -69,7 +90,6 @@ class Diagnostics(private val sm3: Sm3Client) {
                     flowControlSent = true
                 }
             }
-            Thread.sleep(10)
         }
         return null
     }
@@ -247,6 +267,21 @@ class Diagnostics(private val sm3: Sm3Client) {
     }
 
     companion object {
+        /**
+         * How long one read blocks before the loop looks at what arrived.
+         * Short enough that a flow control frame goes out well inside the
+         * second an ISO-TP sender waits for one.
+         */
+        private const val SLICE_MS = 50L
+
+        /**
+         * How often a request pokes the adapter while waiting. The factory
+         * tool sends one poll a second at the median and never sustains more
+         * than 27 in a second; four a second stays inside that and is a
+         * twentieth of what this used to do.
+         */
+        private const val POLL_EVERY_MS = 250L
+
         /** OBD functional request: every module that listens answers. */
         const val FUNCTIONAL = 0x7DF
         /** The engine, addressed directly. */

@@ -31,6 +31,7 @@
     <string name="link_host">Adresse</string>
     <string name="link_port">Port</string>
     <string name="link_resync">Neu synchronisiert</string>
+    <string name="link_unpaired">Lose Antworten</string>
     <string name="link_psk">WLAN-Passwort</string>
 
     <string name="vehicle">Fahrzeug</string>
@@ -205,4 +206,9 @@
     <string name="wifi_list">Netze anzeigen</string>
     <string name="wifi_settings">WLAN-Einstellungen öffnen</string>
     <string name="wifi_hint">Von hier aus verbunden, wird der Adapter-Socket an dieses Netz gebunden, sodass mobile Daten anbleiben können. Netz leer lassen, damit Android die Netze in Reichweite anbietet.</string>
+    <string name="wifi_prefix">Name beginnt mit</string>
+    <string name="wifi_why_permission">Das Auflisten der Netze in Reichweite braucht eine Berechtigung. Auf Netze anzeigen tippen, um sie zu erteilen, oder den Namen leer lassen und die Systemauswahl nutzen.</string>
+    <string name="wifi_why_location">Android liefert keine Netze, solange die Ortung aus ist, unabhängig von den Rechten der App. Ortung einschalten, oder den Namen leer lassen und die Systemauswahl nutzen.</string>
+    <string name="wifi_why_off">WLAN ist aus.</string>
+    <string name="wifi_why_nothing">Noch nichts in Reichweite. Der Adapter braucht nach dem Einstecken ein paar Sekunden, bis sein Zugangspunkt steht.</string>
 </resources>

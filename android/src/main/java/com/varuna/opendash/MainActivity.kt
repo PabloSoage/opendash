@@ -108,7 +108,34 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         monitor.stop()
+        handBackTheAdapter()
         super.onDestroy()
+    }
+
+    /**
+     * Say goodbye to the adapter when the app is really going away.
+     *
+     * The device takes one client and does not notice a socket that simply
+     * disappears, so an app that is swiped shut leaves the session held and
+     * the next application to try — the manufacturer's own included — finds it
+     * refusing everything until it is unplugged and back in.
+     *
+     * Not on a rotation, which also calls this, and not while the bridge is
+     * still serving somebody over the same link. On a worker because saying
+     * goodbye is socket writes and those are not allowed on the main thread,
+     * and waited for briefly because the process may not outlive this method.
+     */
+    private fun handBackTheAdapter() {
+        if (!isFinishing || Session.bridgePort > 0) return
+        if (Session.state == Session.State.DISCONNECTED) return
+        val worker = Thread { runCatching { Session.disconnect() } }
+        worker.start()
+        worker.join(GOODBYE_MS)
+    }
+
+    private companion object {
+        /** Three short messages at 400 ms each, and then it goes either way. */
+        const val GOODBYE_MS = 1500L
     }
 
     /**

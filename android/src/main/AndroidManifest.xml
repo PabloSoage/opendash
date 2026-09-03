@@ -17,9 +17,22 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
 
     <!-- Only so the access points in range can be listed inside the app. The
-         system picker works without it, so the app asks and carries on when
-         the answer is no. -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+         system picker works without either of these, so the app asks and
+         carries on when the answer is no.
+
+         Two permissions for one job because Android changed its mind. Up to
+         Android 12 the list of networks in range counts as location data and
+         there is nothing to ask for but the location permission — and the
+         location master switch has to be on as well, or the list comes back
+         empty with no error at all. From Android 13 there is a permission that
+         means what this actually wants, so that is the one asked for there and
+         the location one is not shipped at all. -->
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="32" />
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation" />
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />

@@ -34,6 +34,7 @@
     <string name="link_host">Address</string>
     <string name="link_port">Port</string>
     <string name="link_resync">Resynchronised</string>
+    <string name="link_unpaired">Unpaired answers</string>
     <string name="link_psk">Wi-Fi password</string>
 
     <string name="vehicle">Vehicle</string>
@@ -215,4 +216,9 @@
     <string name="wifi_list">Show networks</string>
     <string name="wifi_settings">Open Wi-Fi settings</string>
     <string name="wifi_hint">Joining from here pins the adapter socket to this network, so mobile data can stay on. Leave the network blank to let Android offer the ones in range.</string>
+    <string name="wifi_prefix">Name starts with</string>
+    <string name="wifi_why_permission">Listing the networks in range needs permission. Tap Show networks to grant it, or leave the name blank and let the system picker do it.</string>
+    <string name="wifi_why_location">Android returns no networks while location is switched off, whatever the app is allowed to do. Turn it on, or leave the name blank and let the system picker do it.</string>
+    <string name="wifi_why_off">Wi-Fi is off.</string>
+    <string name="wifi_why_nothing">Nothing in range yet. The adapter takes a few seconds to raise its access point after it is plugged in.</string>
 </resources>

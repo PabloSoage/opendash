@@ -167,8 +167,13 @@ object Session {
     var transportFault by mutableStateOf<String?>(null)
         private set
 
+    /** Answers that arrived with nothing waiting for them. See [Sm3Client]. */
+    var unpaired by mutableStateOf(0)
+        private set
+
     private fun syncTransport() {
         resynchronised = sm3.resynchronised
+        unpaired = sm3.unpaired
         transportFault = sm3.lastFault
     }
 
