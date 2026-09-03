@@ -331,17 +331,27 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
             val running = Session.bridgePort > 0
             Text(
                 if (running) {
-                    stringResource(R.string.bridge_listening, "127.0.0.1", Session.bridgePort)
+                    stringResource(R.string.bridge_listening, settings.elmHost, Session.bridgePort)
                 } else {
                     stringResource(R.string.bridge_stopped)
                 },
                 style = MaterialTheme.typography.bodyMedium,
             )
             ErrorLine(Session.bridgeError)
+            val hostAll = stringResource(R.string.bridge_host_all)
+            val hostLocal = stringResource(R.string.bridge_host_local)
+            Combo(
+                label = stringResource(R.string.bridge_host_label),
+                value = settings.elmHost,
+                options = listOf("127.0.0.1", "0.0.0.0"),
+                render = { if (it == "0.0.0.0") hostAll else hostLocal },
+                onSelect = { settings.elmHost = it },
+                modifier = Modifier.fillMaxWidth(),
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     enabled = !running,
-                    onClick = { BridgeService.start(context, settings.elmPort) },
+                    onClick = { BridgeService.start(context, settings.elmPort, settings.elmHost) },
                 ) { Text(stringResource(R.string.action_start)) }
                 OutlinedButton(
                     enabled = running,

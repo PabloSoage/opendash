@@ -58,6 +58,9 @@
     <string name="bridge_stopped">Parado</string>
     <string name="bridge_listening">Escuchando en %1$s:%2$d</string>
     <string name="bridge_hint">Apunta una app OBD a esta dirección y puerto. Corre como servicio en primer plano, así que el enlace aguanta con la pantalla bloqueada.</string>
+    <string name="bridge_host_label">Interfaz ELM327</string>
+    <string name="bridge_host_all">Todas las interfaces (Wi-Fi)</string>
+    <string name="bridge_host_local">Solo localhost</string>
     <string name="bridge_notification_channel">Puente</string>
     <string name="bridge_notification_text">Puerto %1$d · %2$s</string>
 

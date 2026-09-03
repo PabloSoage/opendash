@@ -130,7 +130,7 @@ class Diagnostics(private val sm3: Sm3Client) {
     }
 
     /** The supported-PID bitmasks, four requests instead of ninety-six. */
-    fun supportedPids(): Set<Int> {
+    fun supportedPids(): Set<Int> = withTesterPresent {
         val masks = HashMap<Int, ByteArray>()
         for (base in listOf(0x00, 0x20, 0x40, 0x60)) {
             val m = mode01(base) ?: break
@@ -138,7 +138,7 @@ class Diagnostics(private val sm3: Sm3Client) {
             // bit 0 of the last byte says whether the next block exists
             if (m.size < 4 || (m[3].toInt() and 0x01) == 0) break
         }
-        return Pids.supported(masks)
+        Pids.supported(masks)
     }
 
     fun readiness(): Readiness? = mode01(0x01)?.let { Readiness(it) }
@@ -179,19 +179,45 @@ class Diagnostics(private val sm3: Sm3Client) {
      * GM service 0x1A: how the car says what it is. This is what GDS2 asks,
      * and it beats any make-and-model menu — it works on a swapped engine.
      */
-    fun identify(txId: Int = ENGINE): VehicleId {
+    fun identify(txId: Int = ENGINE): VehicleId = withTesterPresent {
         fun read(localId: Int): String? {
             val r = request(txId, byteArrayOf(0x1A, localId.toByte())) ?: return null
             if (r.size < 3 || (r[0].toInt() and 0xff) != 0x5A) return null
             return String(r.copyOfRange(2, r.size), Charsets.US_ASCII).trim { it <= ' ' }
         }
-        return VehicleId(
+        VehicleId(
             vin = read(0x90),
             system = read(0x92),
             engine = read(0x97),
             calibration = read(0x98),
             moduleSerial = read(0xB4),
         )
+    }
+
+    /**
+     * Run [block] while emitting TesterPresent (0x3E 0x00) heartbeats to the
+     * engine module every 2 seconds.
+     *
+     * Long diagnostic operations (e.g. identification sweeps or multi-step
+     * queries) cause the ECU session to time out after ~5 seconds if the
+     * tester remains silent.
+     */
+    private fun <T> withTesterPresent(block: () -> T): T {
+        val running = java.util.concurrent.atomic.AtomicBoolean(true)
+        val hb = kotlin.concurrent.thread(name = "tester-present", isDaemon = true) {
+            while (running.get()) {
+                try {
+                    Thread.sleep(2000)
+                    if (running.get()) sm3.send(0x7E0, byteArrayOf(0x3E, 0x00))
+                } catch (_: Exception) {}
+            }
+        }
+        return try {
+            block()
+        } finally {
+            running.set(false)
+            hb.interrupt()
+        }
     }
 
     /** One identifier, as a module answered it. */
@@ -226,9 +252,11 @@ class Diagnostics(private val sm3: Sm3Client) {
      * that returned zeros, so it makes a cheap liveness probe: one short
      * request each rather than a full sweep of something that is not there.
      */
-    fun modulesPresent(onProgress: (Int) -> Unit = {}): List<Int> = MODULES.filter { module ->
-        onProgress(module)
-        readLocalIdentifier(0x90, module, timeoutMs = 300) != null
+    fun modulesPresent(onProgress: (Int) -> Unit = {}): List<Int> = withTesterPresent {
+        MODULES.filter { module ->
+            onProgress(module)
+            readLocalIdentifier(0x90, module, timeoutMs = 300) != null
+        }
     }
 
     /**
@@ -244,16 +272,16 @@ class Diagnostics(private val sm3: Sm3Client) {
         module: Int = ENGINE,
         stop: () -> Boolean = { false },
         onProgress: (Int, Int) -> Unit = { _, _ -> },
-    ): List<Identification> {
+    ): List<Identification> = withTesterPresent {
         val out = ArrayList<Identification>()
-        Identifiers.all.forEachIndexed { index, entry ->
-            if (stop()) return out
+        for ((index, entry) in Identifiers.all.withIndex()) {
+            if (stop()) break
             onProgress(index, Identifiers.all.size)
-            val bytes = readLocalIdentifier(entry.id, module) ?: return@forEachIndexed
-            if (bytes.isEmpty()) return@forEachIndexed
+            val bytes = readLocalIdentifier(entry.id, module) ?: continue
+            if (bytes.isEmpty()) continue
             out.add(Identification(module, entry.id, entry.label, bytes))
         }
-        return out
+        out
     }
 
     class VehicleId(

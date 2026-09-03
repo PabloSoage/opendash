@@ -89,6 +89,9 @@ class Sm3Client(
      */
     var bindSocket: ((Socket) -> Unit)? = null
 
+    @Volatile private var drainRunning = false
+    private var drainThread: Thread? = null
+
     data class CanFrame(val id: Int, val data: ByteArray) {
         override fun equals(other: Any?) =
             other is CanFrame && id == other.id && data.contentEquals(other.data)
@@ -121,6 +124,8 @@ class Sm3Client(
         input = s.getInputStream()
         output = s.getOutputStream()
         used = 0
+
+        startDrain()
 
         val reply = exchangeLocked(Recorded.opening[0], timeoutMs.toLong())
         if (reply == null) {
@@ -270,6 +275,9 @@ class Sm3Client(
     // ── the wire ──────────────────────────────────────────────────────────
 
     private fun closeLocked() {
+        drainRunning = false
+        drainThread?.interrupt()
+        drainThread = null
         try {
             socket?.close()
         } catch (_: Exception) {
@@ -432,6 +440,44 @@ class Sm3Client(
         return Identity(serial, Frame.le32(d, 28).toString())
     }
 
+    /**
+     * Drain the socket in the background between requests.
+     *
+     * The adapter streams CAN frame deliveries (op 0xfe) continuously at over
+     * 100 Hz. If the phone stops reading the socket between user requests, the
+     * kernel receive buffer fills up, triggering a TCP zero-window and causing
+     * the adapter to reset the connection (ECONNRESET).
+     *
+     * This daemon thread holds the lock for short slices to drain unrequested
+     * frames into [received] and drop stale replies into [unpaired], releasing
+     * the lock promptly so active requests are not blocked.
+     */
+    private fun startDrain() {
+        drainRunning = true
+        drainThread?.interrupt()
+        drainThread = kotlin.concurrent.thread(name = "sm3-drain", isDaemon = true) {
+            while (drainRunning) {
+                try {
+                    synchronized(lock) {
+                        if (output != null) {
+                            val deadline = System.currentTimeMillis() + 20L
+                            while (System.currentTimeMillis() < deadline) {
+                                val msg = nextMessage(deadline) ?: break
+                                if (msg.op == OP_FRAMES) {
+                                    for (f in framesIn(msg.data)) { received.add(f); stashed++ }
+                                } else {
+                                    unpaired++
+                                }
+                            }
+                        }
+                    }
+                    Thread.sleep(20)
+                } catch (_: InterruptedException) { drainRunning = false }
+                catch (_: Exception) { Thread.sleep(50) }
+            }
+        }
+    }
+
     companion object {
         const val DEFAULT_HOST = "192.168.81.1"
         const val DEFAULT_PORT = 777
@@ -440,7 +486,7 @@ class Sm3Client(
         private const val VOLTAGES_LENGTH = 6
 
         /** How long one socket read blocks before the deadline is rechecked. */
-        private const val READ_SLICE_MS = 250
+        private const val READ_SLICE_MS = 10
 
         /** Long enough for a slow answer, short enough not to freeze a screen. */
         private const val STEP_TIMEOUT_MS = 2000L

@@ -32,6 +32,7 @@ class BridgeService : LifecycleService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
         val port = intent?.getIntExtra(EXTRA_PORT, 35000) ?: 35000
+        val host = intent?.getStringExtra(EXTRA_HOST) ?: "127.0.0.1"
 
         // The notification comes first. Android gives a service started into
         // the foreground a few seconds to show one and kills the process if it
@@ -46,7 +47,7 @@ class BridgeService : LifecycleService() {
             return START_NOT_STICKY
         }
 
-        val s = server ?: ElmServer(Sm3Bridge(), port).also { server = it }
+        val s = server ?: ElmServer(Sm3Bridge(), port, host).also { server = it }
         try {
             s.start()
         } catch (e: Exception) {
@@ -117,12 +118,15 @@ class BridgeService : LifecycleService() {
     companion object {
         private const val CHANNEL = "bridge"
         private const val EXTRA_PORT = "port"
+        private const val EXTRA_HOST = "host"
         private const val NOTIFICATION_ID = 1
 
-        /** [port] is where the phone app connects; the notification shows it back. */
-        fun start(context: Context, port: Int = 35000) {
+        /** [port] and [host] define where the phone app connects; the notification shows it back. */
+        fun start(context: Context, port: Int = 35000, host: String = "127.0.0.1") {
             context.startForegroundService(
-                Intent(context, BridgeService::class.java).putExtra(EXTRA_PORT, port)
+                Intent(context, BridgeService::class.java)
+                    .putExtra(EXTRA_PORT, port)
+                    .putExtra(EXTRA_HOST, host)
             )
         }
 

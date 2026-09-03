@@ -61,6 +61,9 @@
     <string name="bridge_stopped">Stopped</string>
     <string name="bridge_listening">Listening on %1$s:%2$d</string>
     <string name="bridge_hint">Point an OBD app at this address and port. It runs as a foreground service, so the link survives a locked screen.</string>
+    <string name="bridge_host_label">ELM327 interface</string>
+    <string name="bridge_host_all">All interfaces (Wi-Fi)</string>
+    <string name="bridge_host_local">Localhost only</string>
     <string name="bridge_notification_channel">Bridge</string>
     <string name="bridge_notification_text">Port %1$d · %2$s</string>
 

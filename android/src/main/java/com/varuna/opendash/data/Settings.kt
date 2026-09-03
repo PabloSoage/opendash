@@ -67,6 +67,12 @@ class Settings(context: Context) {
 
     var elmPort: Int by pref(KEY_ELM_PORT, prefs.getInt(KEY_ELM_PORT, 35000)) { it }
 
+    /**
+     * Which network interface the ELM327 bridge binds to.
+     * "127.0.0.1" for on-device apps, or "0.0.0.0" for external connections over Wi-Fi.
+     */
+    var elmHost: String by pref(KEY_ELM_HOST, prefs.getString(KEY_ELM_HOST, null) ?: "127.0.0.1") { it }
+
     // ── recording ─────────────────────────────────────────────────────────
 
     /**
@@ -147,6 +153,7 @@ class Settings(context: Context) {
         /** The default before anyone had read a real access point name. */
         private const val OLD_PREFIX = "SM"
         const val KEY_ELM_PORT = "elm_port"
+        const val KEY_ELM_HOST = "elm_host"
         const val KEY_TREE = "recording_tree"
         const val KEY_GZIP = "compress_recordings"
         const val KEY_CHARTS = "chart_count"
