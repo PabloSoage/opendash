@@ -48,8 +48,22 @@ class Settings(context: Context) {
      */
     var wifiSsid: String by pref(KEY_SSID, prefs.getString(KEY_SSID, null) ?: "") { it }
 
-    /** Narrows the picker to the adapter's own access points. */
-    var wifiPrefix: String by pref(KEY_PREFIX, prefs.getString(KEY_PREFIX, null) ?: "SM") { it }
+    /**
+     * Narrows the picker to the adapter's own access points.
+     *
+     * `DIRECT-SCANMATIK-#<serial>` is what one of these actually calls itself:
+     * a Wi-Fi Direct name, the make, and the serial number. The default used
+     * to be `SM`, which matches none of it, so asking the system for "anything
+     * starting with the prefix" offered an empty picker and the join was
+     * refused with no way to tell that from the adapter being switched off.
+     *
+     * A stored `SM` is treated as that old default rather than as a choice.
+     * Nobody typed it; it was never able to match anything.
+     */
+    var wifiPrefix: String by pref(
+        KEY_PREFIX,
+        prefs.getString(KEY_PREFIX, null)?.takeUnless { it == OLD_PREFIX } ?: DEFAULT_PREFIX,
+    ) { it }
 
     var elmPort: Int by pref(KEY_ELM_PORT, prefs.getInt(KEY_ELM_PORT, 35000)) { it }
 
@@ -126,6 +140,12 @@ class Settings(context: Context) {
         const val KEY_PSK = "sm3_psk"
         const val KEY_SSID = "sm3_ssid"
         const val KEY_PREFIX = "sm3_ssid_prefix"
+
+        /** What the adapter's own access point is called, up to the serial. */
+        const val DEFAULT_PREFIX = "DIRECT-SCANMATIK"
+
+        /** The default before anyone had read a real access point name. */
+        private const val OLD_PREFIX = "SM"
         const val KEY_ELM_PORT = "elm_port"
         const val KEY_TREE = "recording_tree"
         const val KEY_GZIP = "compress_recordings"

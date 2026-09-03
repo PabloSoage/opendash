@@ -205,7 +205,7 @@
     <string name="wifi_leave">Desconectar</string>
     <string name="wifi_list">Ver redes</string>
     <string name="wifi_settings">Abrir ajustes de Wi-Fi</string>
-    <string name="wifi_hint">Conectando desde aquí, el socket de la interfaz queda fijado a esta red y los datos móviles pueden seguir encendidos. Deja la red en blanco para que Android ofrezca las que hay al alcance.</string>
+    <string name="wifi_hint">Conectando desde aquí, el socket de la interfaz queda fijado a esta red y los datos móviles pueden seguir encendidos. La interfaz se llama DIRECT-SCANMATIK-#serie, así que dejar el nombre en blanco y que Android ofrezca lo que hay al alcance es la manera de encontrarla la primera vez.</string>
     <string name="wifi_prefix">El nombre empieza por</string>
     <string name="wifi_why_permission">Para listar las redes al alcance hace falta permiso. Pulsa Ver redes para darlo, o deja el nombre en blanco y que lo haga el selector del sistema.</string>
     <string name="wifi_why_location">Android no devuelve ninguna red mientras la ubicación esté apagada, dé el permiso que dé la app. Enciéndela, o deja el nombre en blanco y que lo haga el selector del sistema.</string>

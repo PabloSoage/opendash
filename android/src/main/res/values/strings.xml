@@ -215,7 +215,7 @@
     <string name="wifi_leave">Leave</string>
     <string name="wifi_list">Show networks</string>
     <string name="wifi_settings">Open Wi-Fi settings</string>
-    <string name="wifi_hint">Joining from here pins the adapter socket to this network, so mobile data can stay on. Leave the network blank to let Android offer the ones in range.</string>
+    <string name="wifi_hint">Joining from here pins the adapter socket to this network, so mobile data can stay on. The adapter calls itself DIRECT-SCANMATIK-#serial, so leaving the name blank and letting Android offer what is in range is the way to find it the first time.</string>
     <string name="wifi_prefix">Name starts with</string>
     <string name="wifi_why_permission">Listing the networks in range needs permission. Tap Show networks to grant it, or leave the name blank and let the system picker do it.</string>
     <string name="wifi_why_location">Android returns no networks while location is switched off, whatever the app is allowed to do. Turn it on, or leave the name blank and let the system picker do it.</string>

@@ -406,9 +406,19 @@ class Sm3Client(
     }
 
     /**
-     * The greeting answer carries the serial at bytes 0..7 and the firmware
-     * version as a little-endian u32 at 28. On one device that reads DA4 and
-     * 17204, and the same offsets in the factory capture give the same pair.
+     * The greeting answer carries the serial as a little-endian u32 at 0 and
+     * the firmware version as another at 28.
+     *
+     * The serial is a number whose **hexadecimal is the string**: the four
+     * bytes `the four bytes` are 0x0-------, which written out is <serial>. This
+     * used to be read as ASCII, and by an unhappy coincidence those same bytes
+     * spell "DA4" followed by a newline, so the app showed a plausible-looking
+     * serial that was three characters of a seven-character number. What
+     * settles it is the adapter's own access point, which calls itself
+     * `DIRECT-SCANMATIK-#<serial>`.
+     *
+     * The firmware needed no change: 17204 on that device, and the same
+     * offset in the factory capture gives 17204 too.
      *
      * A short answer used to come out as two question marks. It now says so:
      * the greeting is 66 bytes and anything else means the read is wrong, which
@@ -417,8 +427,8 @@ class Sm3Client(
     private fun identity(reply: Frame.Message): Identity {
         val d = reply.data
         if (d.size < 32) throw IOException("the greeting answer was ${d.size} bytes, expected 66")
-        val raw = String(d.copyOfRange(0, 8), Charsets.US_ASCII).trim { it <= ' ' }
-        val serial = raw.trimStart('0').ifEmpty { raw }
+        val serial = (Frame.le32(d, 0).toLong() and 0xffffffffL)
+            .toString(16).uppercase().trimStart('0')
         return Identity(serial, Frame.le32(d, 28).toString())
     }
 

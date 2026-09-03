@@ -55,8 +55,14 @@ object WifiLink {
     var lastError by mutableStateOf<String?>(null)
         private set
 
-    /** Access points whose name starts with this are offered by the picker. */
-    const val DEFAULT_PREFIX = "SM"
+    /**
+     * Access points whose name starts with this are offered by the picker.
+     *
+     * One of these adapters calls itself `DIRECT-SCANMATIK-#<serial>`: a Wi-Fi
+     * Direct name, the make, and its serial number. Only the settings value is
+     * ever used; this is the fallback for a caller that passes nothing.
+     */
+    const val DEFAULT_PREFIX = "DIRECT-SCANMATIK"
 
     /** Long enough to read the picker and pick, short enough to give up. */
     private const val JOIN_TIMEOUT_MS = 60_000
