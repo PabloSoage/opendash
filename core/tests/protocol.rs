@@ -215,14 +215,9 @@ fn the_contribution_table_is_a_crc_chain() {
     const POLY: u32 = 0x9960_034C;
     for n in 0..159 {
         let next = opendash_core::H4_BITS[n + 1];
-        let want = (next >> 1) ^ if next & 1 != 0 { POLY } else { 0 };
-        assert_eq!(
-            opendash_core::H4_BITS[n],
-            want,
-            "the chain breaks between bit {} and bit {}",
-            n,
-            n + 1
-        );
+        let fold = if next & 1 != 0 { POLY } else { 0 };
+        let want = (next >> 1) ^ fold;
+        assert_eq!(opendash_core::H4_BITS[n], want, "chain breaks at bit {}", n);
     }
 }
 
@@ -231,10 +226,8 @@ fn a_rebuilt_frame_matches_the_one_the_factory_tool_sent() {
     // The request that used to kill the connection: read the VIN from the
     // engine module. This exact frame appears five times in the captures, so
     // there is a right answer to compare against, header and all.
-    let recorded =
-        hex("ffff0000d2f1e4e2811003ea1c13008460800208000000e0070000021a90000000000000");
-    let template =
-        hex("ffff0000c69b6d40688002e91c13008460800208000000df070000020100000000000000");
+    let recorded = hex("ffff0000d2f1e4e2811003ea1c13008460800208000000e0070000021a90000000000000");
+    let template = hex("ffff0000c69b6d40688002e91c13008460800208000000df070000020100000000000000");
 
     let mut data = template[frame::HEADER..].to_vec();
     data[7] = 0xe0; // CAN id 0x7e0, low byte
@@ -244,8 +237,5 @@ fn a_rebuilt_frame_matches_the_one_the_factory_tool_sent() {
     data[13] = 0x90;
 
     let built = h4::reframe(&template, &data).expect("rebuilds");
-    assert_eq!(
-        built, recorded,
-        "a frame built from the template must match the recorded one byte for byte"
-    );
+    assert_eq!(built, recorded, "must match the recorded frame byte for byte");
 }
