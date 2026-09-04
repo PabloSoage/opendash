@@ -84,6 +84,23 @@ object Stream {
             byteArrayOf(0xAA.toByte(), 0x04) + ByteArray(packets.size) { packets[it].number.toByte() }
     }
 
+    /**
+     * Both the declaration and the start command travel as ISO-TP single
+     * frames, and a single frame carries seven bytes.
+     *
+     * That is what caps a plan, and it was worth learning the hard way: an
+     * over-long payload came out with a PCI byte promising nine bytes and only
+     * seven behind it, the module dropped it, and from outside it looked
+     * exactly like a module that would not start emitting.
+     *
+     * * `2C <packet> <id16>…` leaves room for [MAX_IDENTIFIERS] identifiers.
+     *   GDS2's seven recorded declarations carry one or two, never three.
+     * * `AA 04 <packet>…` leaves room for [MAX_PACKETS] packets at a time.
+     *   GDS2 started four.
+     */
+    const val MAX_IDENTIFIERS = 2
+    const val MAX_PACKETS = 5
+
     class Packet(val number: Int, val identifiers: List<Int>, val width: Int)
 
     /**
@@ -116,11 +133,14 @@ object Stream {
             used = 0
         }
 
+        val lastPacket = minOf(LAST_PACKET, FIRST_PACKET + MAX_PACKETS - 1)
         for ((id, w) in width) {
-            if (number > LAST_PACKET) break
-            if (used + w > PACKET_BYTES) {
+            if (number > lastPacket) break
+            // A packet closes when its seven bytes are full, and also when it
+            // already holds as many identifiers as one declaration can name.
+            if (used + w > PACKET_BYTES || current.size >= MAX_IDENTIFIERS) {
                 close()
-                if (number > LAST_PACKET) break
+                if (number > lastPacket) break
             }
             where[id] = number to used
             current.add(id)

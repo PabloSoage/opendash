@@ -293,7 +293,7 @@ class Diagnostics(private val sm3: Sm3Client) {
      */
     fun readStream(plan: Stream.Plan, sliceMs: Long = 50): List<Pair<Catalogue.Parameter, Double>> {
         sm3.receive(sliceMs)
-        val rxId = responseIdFor(plan.module)
+        val rxId = streamIdFor(plan.module)
         val out = ArrayList<Pair<Catalogue.Parameter, Double>>()
         for (frame in sm3.drain()) {
             if (rxId != ANY && frame.id != rxId) continue
@@ -449,6 +449,27 @@ class Diagnostics(private val sm3: Sm3Client) {
             txId == FUNCTIONAL -> ANY
             txId in 0x7E0..0x7E7 -> txId + 8
             txId in 0x240..0x25F -> txId + 0x400
+            else -> ANY
+        }
+
+        /**
+         * Where a module's emitted packets arrive — which is not where its
+         * answers do.
+         *
+         * GMLAN keeps segmented diagnostic answers apart from unacknowledged
+         * periodic data: the engine answers a request on 0x7E8 and emits its
+         * packets on 0x5E8. In the recorded factory session 0x5E8 carried
+         * 167 422 packet frames covering all seven packets, while 0x7E8 carried
+         * 510 frames of which not one began with a packet number; against the
+         * car it behaves the same way. Filtering the stream on 0x7E8 therefore
+         * discards every frame and looks exactly like a module that refused to
+         * emit.
+         *
+         * Measured for the engine. The 0x241..0x25F modules have not been
+         * tried, so they keep listening on everything rather than on a guess.
+         */
+        fun streamIdFor(txId: Int): Int = when (txId) {
+            in 0x7E0..0x7E7 -> txId - 0x1F8
             else -> ANY
         }
     }
