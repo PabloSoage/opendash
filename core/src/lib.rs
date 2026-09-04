@@ -8,9 +8,7 @@
 pub mod elm327;
 pub mod frame;
 pub mod h4;
-mod h4_known;
 mod h4_table;
 pub mod isotp;
 
-pub use h4_known::H4_KNOWN;
 pub use h4_table::H4_BITS;

@@ -59,58 +59,31 @@ object Recorded {
 
     /**
      * A recorded write — mode 01 PID 00 to 0x7DF — used as the reference the
-     * h4 of every other write is derived from. Its seq, h8 and padding are
-     * reused unchanged; only the id and the payload move.
+     * h4 of every other write is derived from. Its seq and padding are reused
+     * unchanged; the id and the payload move, and h4 and h8 are recomputed to
+     * match — see [H4].
      *
      * This is the frame as it appears in the capture, and it did not used to
      * be. What was here carried the same four h4 bytes in the opposite order,
      * `40 6d 9b c6` for `c6 9b 6d 40`, paired with an h8 belonging to some
-     * other message. Nothing built on it could be right: h4 is a function of
-     * seq, h8 and data together, so every single write the app made carried a
-     * fingerprint the firmware rejects, and a rejected write is dropped in
-     * silence. That is why the greeting, the channel and the battery all
-     * worked — they are recorded messages replayed unchanged — while nothing
-     * ever asked of the car got an answer, whether asked by the identify
-     * button or by an ELM327 client through the bridge.
+     * other message. That was one of two faults, and fixing it alone was not
+     * enough: the fingerprint derived from this frame was still wrong, because
+     * the table it was derived with had holes in it, and h8 was not recomputed
+     * at all. Measured on the car, the write went out at 0.683 s and the
+     * adapter reset the connection at 0.686 s.
      *
-     * The check that catches it is in the other repository,
-     * `61-plantilla-escritura.mjs`: this frame has to appear verbatim in a
-     * capture, and it now does.
+     * That is why the greeting, the channel and the battery all worked — they
+     * are recorded messages replayed unchanged — while nothing ever asked of
+     * the car got an answer, whether asked by the identify button or by an
+     * ELM327 client through the bridge.
+     *
+     * Two checks in the other repository stand behind this frame:
+     * `61-plantilla-escritura.mjs` requires it to appear verbatim in a
+     * capture, and `69-huella-cerrada.mjs` rebuilds the requests this app
+     * sends from it and requires them to match the recorded frames byte for
+     * byte, header included.
      */
     val writeTemplate: ByteArray = "ffff0000c69b6d40688002e91c13008460800208000000df070000020100000000000000".hex()
-
-    /**
-     * Contribution of each data bit to h4, byte * 8 + bit. Recovered from a
-     * one-bit sweep of 228 chosen writes, 425 with random payloads, and 480
-     * from real captures.
-     */
-    val h4Bits: IntArray = intArrayOf(
-        0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0xcc0082c8.toInt(), 0x00000000.toInt(), 0x00000000.toInt(),
-        0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(),
-        0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(),
-        0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(),
-        0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(),
-        0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(),
-        0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(),
-        0xb631d15d.toInt(), 0x5ea3a423.toInt(), 0xbd474846.toInt(), 0x484e9615.toInt(), 0x909d2c2a.toInt(), 0x13fa5ecd.toInt(), 0x27f4bd9a.toInt(), 0x4fe97b34.toInt(),
-        0xc7158296.toInt(), 0x0d65ea49.toInt(), 0x1acbd492.toInt(), 0x00000000.toInt(), 0x856ab083.toInt(), 0x00000000.toInt(), 0x54c1a74e.toInt(), 0x00000000.toInt(),
-        0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(),
-        0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(), 0x00000000.toInt(),
-        0xa81d429a.toInt(), 0x62fa83ad.toInt(), 0xc5f5075a.toInt(), 0xb92a082d.toInt(), 0x409416c3.toInt(), 0x81282d86.toInt(), 0x30905d95.toInt(), 0x6120bb2a.toInt(),
-        0x9a8602aa.toInt(), 0xb642ea31.toInt(), 0x5e45d2fb.toInt(), 0xbc8ba5f6.toInt(), 0x4bd74d75.toInt(), 0x97ae9aea.toInt(), 0x1d9d334d.toInt(), 0x3b3a669a.toInt(),
-        0x7674cd34.toInt(), 0xece99a68.toInt(), 0xeb133249.toInt(), 0xe4e6620b.toInt(), 0xfb0cc28f.toInt(), 0xc4d98387.toInt(), 0xbb730197.toInt(), 0x442605b7.toInt(),
-        0x884c0b6e.toInt(), 0x22581045.toInt(), 0x44b0208a.toInt(), 0x89604114.toInt(), 0x200084b1.toInt(), 0x40010962.toInt(), 0x800212c4.toInt(), 0x32c42311.toInt(),
-        0x65884622.toInt(), 0xcb108c44.toInt(), 0xa4e11e11.toInt(), 0x7b023abb.toInt(), 0xf6047576.toInt(), 0xdec8ec75.toInt(), 0x8f51de73.toInt(), 0x2c63ba7f.toInt(),
-        0x00000000.toInt(), 0xb18ee9fc.toInt(), 0x51ddd561.toInt(), 0xa3bbaac2.toInt(), 0x75b7531d.toInt(), 0xeb6ea63a.toInt(), 0xe41d4aed.toInt(), 0xfafa9343.toInt(),
-        0xc735201f.toInt(), 0xbcaa46a7.toInt(), 0x4b948bd7.toInt(), 0x972917ae.toInt(), 0x1c9229c5.toInt(), 0x3924538a.toInt(), 0x7248a714.toInt(), 0xe4914e28.toInt(),
-        0xfbe29ac9.toInt(), 0xc505330b.toInt(), 0xb8ca608f.toInt(), 0x4354c787.toInt(), 0x86a98f0e.toInt(), 0x3f931885.toInt(), 0x7f26310a.toInt(), 0xfe4c6214.toInt(),
-        0xce58c2b1.toInt(), 0xae7183fb.toInt(), 0x6e23016f.toInt(), 0xdc4602de.toInt(), 0x8a4c0325.toInt(), 0x265800d3.toInt(), 0x4cb001a6.toInt(), 0x9960034c.toInt(),
-    )
-
-    /** Which of those the sweeps actually pinned down. */
-    val h4Known: IntArray = intArrayOf(
-        0b00100000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b11111111, 0b01010111, 0b00000000, 0b00000000, 0b11111111, 0b11111111, 0b11111111, 0b11111111, 0b11111111, 0b11111110, 0b11111111, 0b11111111, 0b11111111,
-    )
 
     private fun String.hex(): ByteArray =
         ByteArray(length / 2) { substring(it * 2, it * 2 + 2).toInt(16).toByte() }

@@ -179,7 +179,7 @@ class Diagnostics(private val sm3: Sm3Client) {
      * GM service 0x1A: how the car says what it is. This is what GDS2 asks,
      * and it beats any make-and-model menu — it works on a swapped engine.
      */
-    fun identify(txId: Int = ENGINE): VehicleId = withTesterPresent {
+    fun identify(txId: Int = ENGINE): VehicleId = withTesterPresent(txId) {
         fun read(localId: Int): String? {
             val r = request(txId, byteArrayOf(0x1A, localId.toByte())) ?: return null
             if (r.size < 3 || (r[0].toInt() and 0xff) != 0x5A) return null
@@ -195,21 +195,35 @@ class Diagnostics(private val sm3: Sm3Client) {
     }
 
     /**
-     * Run [block] while emitting TesterPresent (0x3E 0x00) heartbeats to the
-     * engine module every 2 seconds.
+     * Run [block] while sending TesterPresent to [module] every two seconds.
      *
-     * Long diagnostic operations (e.g. identification sweeps or multi-step
-     * queries) cause the ECU session to time out after ~5 seconds if the
-     * tester remains silent.
+     * A module that has been put into a non-default session drops back out of
+     * it after a few seconds of silence, and a sweep that walks a hundred
+     * identifiers is easily silent that long between two of them. This keeps
+     * the session alive underneath it.
+     *
+     * The heartbeat goes to the module being addressed, not always to the
+     * engine: telling the engine the tester is present says nothing about a
+     * session opened on the body module, and the sweep that most needs this is
+     * the one walking identifiers on something else.
+     *
+     * Each beat is one exchange under the client's lock, so it cannot land in
+     * the middle of another request — which is exactly the arrangement
+     * TesterPresent is designed for.
      */
-    private fun <T> withTesterPresent(block: () -> T): T {
+    private fun <T> withTesterPresent(module: Int = ENGINE, block: () -> T): T {
         val running = java.util.concurrent.atomic.AtomicBoolean(true)
         val hb = kotlin.concurrent.thread(name = "tester-present", isDaemon = true) {
             while (running.get()) {
                 try {
-                    Thread.sleep(2000)
-                    if (running.get()) sm3.send(0x7E0, byteArrayOf(0x3E, 0x00))
-                } catch (_: Exception) {}
+                    Thread.sleep(TESTER_PRESENT_MS)
+                    if (running.get()) sm3.send(module, byteArrayOf(0x3E, 0x00))
+                } catch (_: InterruptedException) {
+                    return@thread
+                } catch (_: Exception) {
+                    // A dead link is the caller's problem to report, not this
+                    // thread's; it will find out on its own next request.
+                }
             }
         }
         return try {
@@ -272,7 +286,7 @@ class Diagnostics(private val sm3: Sm3Client) {
         module: Int = ENGINE,
         stop: () -> Boolean = { false },
         onProgress: (Int, Int) -> Unit = { _, _ -> },
-    ): List<Identification> = withTesterPresent {
+    ): List<Identification> = withTesterPresent(module) {
         val out = ArrayList<Identification>()
         for ((index, entry) in Identifiers.all.withIndex()) {
             if (stop()) break
@@ -309,6 +323,9 @@ class Diagnostics(private val sm3: Sm3Client) {
          * twentieth of what this used to do.
          */
         private const val POLL_EVERY_MS = 250L
+
+        /** How often a long operation says the tester is still here. */
+        private const val TESTER_PRESENT_MS = 2000L
 
         /** OBD functional request: every module that listens answers. */
         const val FUNCTIONAL = 0x7DF

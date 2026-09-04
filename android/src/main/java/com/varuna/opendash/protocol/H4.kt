@@ -1,21 +1,50 @@
 package com.varuna.opendash.protocol
 
 /**
- * The h4 fingerprint.
+ * The two derived words every message carries: the `h4` fingerprint and the
+ * `h8` sum.
  *
- * The firmware checks it — a greeting with one bit flipped is answered with a
- * TCP reset — so anything sent has to carry the right one. It is affine over
- * GF(2), which means it can be used without being named: take a frame that was
- * actually recorded, change what you need, and XOR in the contribution of every
- * bit that differs.
+ * The firmware checks both. A frame with either one wrong is not answered and
+ * not refused — the adapter drops it and closes the connection, which from the
+ * outside looks like the link dying for no reason at all. This app spent a long
+ * time doing exactly that: every request it ever sent to the car carried a
+ * fingerprint computed from an incomplete table, and an `h8` copied unchanged
+ * from the reference frame. Measured on the car, the reset came three
+ * milliseconds after the write went out.
  *
- * Measured: 85 of 85 held-out writes with a random id and a random payload get
- * exactly the fingerprint the device put on the wire.
+ * ## `h8` is a sum
+ *
+ * Read the twenty data bytes as five little-endian 32-bit words and add them.
+ * That is `h8` for all 708 recorded writes, exactly. It moves with the payload,
+ * so a frame that is built rather than replayed has to recompute it.
+ *
+ * ## `h4` is a CRC
+ *
+ * It is affine over GF(2), so a new frame's fingerprint is the reference
+ * frame's fingerprint XOR the contribution of every data bit that differs.
+ * What used to be missing was the contributions: they were fitted, and a fit
+ * leaves holes wherever the recorded traffic never varied a bit. The old code
+ * had a companion mask meant to flag those holes, but it was built from which
+ * columns had been pivots in the elimination — not the same question — so it
+ * waved through 22 bits it could not vouch for, and `1A 90`, `3E 00` and
+ * `01 20` all landed on them.
+ *
+ * [H4Table.BITS] is not fitted any more. Each bit's contribution is the next
+ * one shifted down by one with the reflected polynomial `0x9960034C` folded in
+ * when a one falls off the bottom, which is the recurrence of a CRC, so the
+ * whole table follows from a single anchor and has no holes. Every entry the
+ * captures pin down independently agrees with it, and the requests this app
+ * sends come out byte for byte identical to the ones the manufacturer's own
+ * tool put on the wire.
  */
 object H4 {
 
-    /** Build a write frame for [canId] and [payload], with the right h4. */
+    /** How many data bytes take part in both derived words. */
+    private const val COVERED = 20
+
+    /** Build a write frame for [canId] and [payload], signed so it is accepted. */
     fun write(canId: Int, payload: ByteArray): ByteArray {
+        require(payload.size <= 8) { "a CAN frame carries at most eight bytes" }
         val frame = Recorded.writeTemplate.copyOf()
         val data = frame.copyOfRange(Frame.HEADER, frame.size)
 
@@ -29,56 +58,48 @@ object H4 {
             }
         }
 
-        // Refused rather than sent. A frame whose fingerprint cannot be
-        // computed from what the sweeps pinned down is one the device drops
-        // without a word, and a request that vanishes is far harder to chase
-        // than one that never left. For an eleven-bit id and eight payload
-        // bytes this never triggers, which is the shape everything here sends.
-        if (!isVerified(frame, data)) {
-            throw IllegalArgumentException(
-                "refusing to send a write whose h4 rests on bits the sweeps never pinned down"
-            )
-        }
-
         val h4 = derive(frame, data)
         System.arraycopy(data, 0, frame, Frame.HEADER, data.size)
         Frame.putLe32(frame, 4, h4)
+        Frame.putLe32(frame, 8, sum(data))
         return frame
     }
 
     /**
-     * h4 for [data] given a [reference] frame whose seq, h8 and padding are
+     * [h8] for a write record: the data as little-endian 32-bit words, added.
+     *
+     * Short data counts as zero-padded, which is what the wire carries — the
+     * frame is aligned to four bytes anyway.
+     */
+    fun sum(data: ByteArray): Int {
+        var total = 0
+        for (word in 0 until COVERED / 4) {
+            var v = 0
+            for (byte in 0 until 4) {
+                val b = data.getOrNull(word * 4 + byte)?.toInt()?.and(0xff) ?: 0
+                v = v or (b shl (byte * 8))
+            }
+            total += v
+        }
+        return total
+    }
+
+    /**
+     * `h4` for [data] given a [reference] frame whose seq and padding are
      * reused unchanged.
      */
     fun derive(reference: ByteArray, data: ByteArray): Int {
         var h4 = Frame.le32(reference, 4)
         val tail = reference.copyOfRange(Frame.HEADER, reference.size)
-        val n = minOf(20, maxOf(tail.size, data.size))
-        for (byte in 0 until n) {
-            val a = if (byte < tail.size) tail[byte].toInt() and 0xff else 0
-            val b = if (byte < data.size) data[byte].toInt() and 0xff else 0
+        for (byte in 0 until COVERED) {
+            val a = tail.getOrNull(byte)?.toInt()?.and(0xff) ?: 0
+            val b = data.getOrNull(byte)?.toInt()?.and(0xff) ?: 0
             val diff = a xor b
             if (diff == 0) continue
             for (bit in 0 until 8) {
-                if (diff and (1 shl bit) != 0) h4 = h4 xor Recorded.h4Bits[byte * 8 + bit]
+                if (diff and (1 shl bit) != 0) h4 = h4 xor H4Table.BITS[byte * 8 + bit]
             }
         }
         return h4
-    }
-
-    /**
-     * Does this change only touch bits the sweeps pinned down? A frame that
-     * fails this may get a fingerprint the device drops without a word, which
-     * is a much harder thing to debug than a refusal here.
-     */
-    fun isVerified(reference: ByteArray, data: ByteArray): Boolean {
-        val tail = reference.copyOfRange(Frame.HEADER, reference.size)
-        for (byte in 0 until 20) {
-            val a = if (byte < tail.size) tail[byte].toInt() and 0xff else 0
-            val b = if (byte < data.size) data[byte].toInt() and 0xff else 0
-            val unknown = Recorded.h4Known[byte].inv() and 0xff
-            if ((a xor b) and unknown != 0) return false
-        }
-        return true
     }
 }

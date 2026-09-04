@@ -6,6 +6,8 @@ import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 /**
  * A session with the SM3 over its own Wi-Fi.
@@ -47,7 +49,7 @@ class Sm3Client(
     private var output: OutputStream? = null
 
     /** Guards the socket. Every screen and the bridge share one link. */
-    private val lock = Any()
+    private val lock = ReentrantLock()
 
     /** Frames seen since the last drain, oldest first. */
     private val received = ConcurrentLinkedQueue<CanFrame>()
@@ -107,7 +109,7 @@ class Sm3Client(
      * Open the socket and greet. Returns what the device says it is, which
      * doubles as proof the link works before anything else is attempted.
      */
-    fun connect(timeoutMs: Int = 4000): Identity = synchronized(lock) {
+    fun connect(timeoutMs: Int = 4000): Identity = lock.withLock {
         closeLocked()
         lastFault = null
         val s = Socket()
@@ -142,7 +144,7 @@ class Sm3Client(
      * gone unanswered is what leaves the device in a state where it stops
      * talking to anything, its own application included, until it is unplugged.
      */
-    fun openChannel() = synchronized(lock) {
+    fun openChannel() = lock.withLock {
         for (i in 1 until Recorded.opening.size) {
             if (exchangeLocked(Recorded.opening[i], STEP_TIMEOUT_MS) == null) {
                 val at = "step $i of ${Recorded.opening.size}"
@@ -153,7 +155,7 @@ class Sm3Client(
     }
 
     /** Poll once; returns how many frames arrived. */
-    fun poll(): Int = synchronized(lock) {
+    fun poll(): Int = lock.withLock {
         val before = stashed
         exchangeLocked(Recorded.read, STEP_TIMEOUT_MS)
         stashed - before
@@ -179,7 +181,7 @@ class Sm3Client(
      * previous answer, and a battery that reads 0.640 V is what that looks
      * like from the outside.
      */
-    fun receive(timeoutMs: Long): Int = synchronized(lock) {
+    fun receive(timeoutMs: Long): Int = lock.withLock {
         if (output == null) return 0
         val before = stashed
         val deadline = System.currentTimeMillis() + timeoutMs
@@ -213,7 +215,7 @@ class Sm3Client(
      * A message with no data is the one case where h4 needs no table: it is
      * simply seq, so this frame can be built rather than replayed.
      */
-    fun voltages(): Voltages? = synchronized(lock) {
+    fun voltages(): Voltages? = lock.withLock {
         val frame = ByteArray(Frame.HEADER)
         Frame.putLe32(frame, 0, 0x0000ffff)          // seq 0xffff, token 0
         Frame.putLe32(frame, 4, 0x0000ffff)          // len = 0, so h4 == seq
@@ -236,7 +238,7 @@ class Sm3Client(
     class Voltages(val batteryMillivolts: Int, val second: Int, val flags: Int)
 
     /** Put a request on the bus. The h4 is computed, not guessed. */
-    fun send(canId: Int, payload: ByteArray) = synchronized(lock) {
+    fun send(canId: Int, payload: ByteArray) = lock.withLock {
         exchangeLocked(H4.write(canId, payload), STEP_TIMEOUT_MS)
         Unit
     }
@@ -261,15 +263,42 @@ class Sm3Client(
      * session, and the next application to try, its own included, finds the
      * adapter refusing everything until it is unplugged. A link that is really
      * dead has no output stream by this point and the loop is skipped anyway.
+     *
+     * If the link had already gone, one fresh connection is opened for the sole
+     * purpose of saying goodbye properly. That case used to be the normal one:
+     * the adapter reset the socket the moment the app asked the car anything,
+     * so by the time anyone pressed disconnect there was nothing left to send
+     * the closing sequence down, and the adapter kept the session until it was
+     * unplugged. Writes are signed correctly now and the link should not be
+     * dying at all, but a goodbye that only works when nothing went wrong is
+     * not much of a goodbye.
      */
-    fun close() = synchronized(lock) {
-        if (output != null) {
-            try {
-                for (message in Recorded.closing) exchangeLocked(message, CLOSE_TIMEOUT_MS)
-            } catch (_: Exception) {
-            }
-        }
+    fun close() = lock.withLock {
+        val saidGoodbye = releaseLocked()
         closeLocked()
+        if (!saidGoodbye) {
+            // Reentrant: connect and openChannel take this same lock.
+            try {
+                connect(RECONNECT_TO_RELEASE_MS)
+                openChannel()
+                releaseLocked()
+            } catch (_: Exception) {
+                // Nothing more to try. The adapter may need unplugging, and
+                // that is worth knowing rather than retrying forever.
+            }
+            closeLocked()
+        }
+    }
+
+    /** Send the closing sequence. False if there was no live link to send it on. */
+    private fun releaseLocked(): Boolean {
+        if (output == null) return false
+        return try {
+            for (message in Recorded.closing) exchangeLocked(message, CLOSE_TIMEOUT_MS)
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 
     // ── the wire ──────────────────────────────────────────────────────────
@@ -414,8 +443,8 @@ class Sm3Client(
     }
 
     /**
-     * The greeting answer carries the serial as a little-endian u32 at 0 and
-     * the firmware version as another at 28.
+     * The greeting answer carries the serial at 0 and the firmware version at
+     * 12, both as little-endian words shown in hexadecimal.
      *
      * The serial is a number whose **hexadecimal is the string**: the four
      * bytes `the four bytes` are 0x0-------, which written out is <serial>. This
@@ -425,8 +454,13 @@ class Sm3Client(
      * settles it is the adapter's own access point, which calls itself
      * `DIRECT-SCANMATIK-#<serial>`.
      *
-     * The firmware needed no change: 17204 on that device, and the same
-     * offset in the factory capture gives 17204 too.
+     * The firmware follows the same convention, and this app had it wrong in
+     * both directions at once. `98 11 00 00` at offset 12 is 0x1198, which is
+     * the 1198 the manufacturer's own J2534 driver reports for this adapter,
+     * alongside `HW:05` for the byte at 16 and the serial above. The 17204 the
+     * app used to show came from reading a word at offset 28 in decimal, and
+     * that word is not a version at all — it is the ASCII `4C` of the string
+     * `TH4C` that sits in the middle of the greeting.
      *
      * A short answer used to come out as two question marks. It now says so:
      * the greeting is 66 bytes and anything else means the read is wrong, which
@@ -434,23 +468,30 @@ class Sm3Client(
      */
     private fun identity(reply: Frame.Message): Identity {
         val d = reply.data
-        if (d.size < 32) throw IOException("the greeting answer was ${d.size} bytes, expected 66")
-        val serial = (Frame.le32(d, 0).toLong() and 0xffffffffL)
-            .toString(16).uppercase().trimStart('0')
-        return Identity(serial, Frame.le32(d, 28).toString())
+        if (d.size < 20) throw IOException("the greeting answer was ${d.size} bytes, expected 66")
+        fun word(at: Int) = (Frame.le32(d, at).toLong() and 0xffffffffL)
+            .toString(16).uppercase().trimStart('0').ifEmpty { "0" }
+        return Identity(word(0), word(12))
     }
 
     /**
-     * Drain the socket in the background between requests.
+     * Keep reading the socket while nothing else is.
      *
-     * The adapter streams CAN frame deliveries (op 0xfe) continuously at over
-     * 100 Hz. If the phone stops reading the socket between user requests, the
-     * kernel receive buffer fills up, triggering a TCP zero-window and causing
-     * the adapter to reset the connection (ECONNRESET).
+     * The adapter pushes frame deliveries whether or not anyone asked: 135
+     * blocks a second on average over the factory session. Nobody reading them
+     * means the kernel receive buffer fills, the window goes to zero and the
+     * link eventually dies — not the reset that used to end every attempt to
+     * identify the car (that was a write the firmware refused, three
+     * milliseconds after it went out), but a real way to lose a session that is
+     * merely sitting idle on a screen.
      *
-     * This daemon thread holds the lock for short slices to drain unrequested
-     * frames into [received] and drop stale replies into [unpaired], releasing
-     * the lock promptly so active requests are not blocked.
+     * The lock is taken with [ReentrantLock.tryLock] and never waited for. That
+     * is the whole design: if someone else holds it they are already reading
+     * the socket, so there is nothing here to do, and a drain that queued up
+     * behind every request would just halve the throughput of the thing it is
+     * supposed to protect. Answers with nobody waiting are counted and dropped;
+     * carrying one forward is how a request ends up reading the previous
+     * answer.
      */
     private fun startDrain() {
         drainRunning = true
@@ -458,20 +499,24 @@ class Sm3Client(
         drainThread = kotlin.concurrent.thread(name = "sm3-drain", isDaemon = true) {
             while (drainRunning) {
                 try {
-                    synchronized(lock) {
-                        if (output != null) {
-                            val deadline = System.currentTimeMillis() + 20L
-                            while (System.currentTimeMillis() < deadline) {
-                                val msg = nextMessage(deadline) ?: break
-                                if (msg.op == OP_FRAMES) {
-                                    for (f in framesIn(msg.data)) { received.add(f); stashed++ }
-                                } else {
-                                    unpaired++
+                    if (lock.tryLock()) {
+                        try {
+                            if (output != null) {
+                                val deadline = System.currentTimeMillis() + DRAIN_SLICE_MS
+                                while (System.currentTimeMillis() < deadline) {
+                                    val msg = nextMessage(deadline) ?: break
+                                    if (msg.op == OP_FRAMES) {
+                                        for (f in framesIn(msg.data)) { received.add(f); stashed++ }
+                                    } else {
+                                        unpaired++
+                                    }
                                 }
                             }
+                        } finally {
+                            lock.unlock()
                         }
                     }
-                    Thread.sleep(20)
+                    Thread.sleep(DRAIN_SLICE_MS)
                 } catch (_: InterruptedException) { drainRunning = false }
                 catch (_: Exception) { Thread.sleep(50) }
             }
@@ -486,6 +531,13 @@ class Sm3Client(
         private const val VOLTAGES_LENGTH = 6
 
         /** How long one socket read blocks before the deadline is rechecked. */
+        /**
+         * How long the background drain reads for, and how long it waits
+         * afterwards. Equal on purpose: the drain is meant to be present, not
+         * eager, and it only ever runs when nothing else holds the lock.
+         */
+        private const val DRAIN_SLICE_MS = 20L
+
         private const val READ_SLICE_MS = 10
 
         /** Long enough for a slow answer, short enough not to freeze a screen. */
@@ -493,5 +545,12 @@ class Sm3Client(
 
         /** Saying goodbye is worth a moment, not a wait. */
         private const val CLOSE_TIMEOUT_MS = 400L
+
+        /**
+         * How long the goodbye-only reconnection may take. Short: this runs
+         * while someone is leaving the screen, and failing to hand the adapter
+         * back is better than making them wait for it.
+         */
+        private const val RECONNECT_TO_RELEASE_MS = 1500
     }
 }

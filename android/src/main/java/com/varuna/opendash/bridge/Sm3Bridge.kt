@@ -22,10 +22,12 @@ class Sm3Bridge : Bridge {
         synchronized(lock) {
             val answer = Session.diagnostics.request(header, payload, timeoutMs, Diagnostics.ANY)
                 ?: return null
-            // The bridge reports the responding module as the engine unless the
-            // request was addressed elsewhere, which is what apps expect to see.
-            val id = if (header in 0x7E0..0x7E7) header + 8 else 0x7E8
-            return id to answer
+            // Which module the client is told answered. A request addressed to
+            // the body module comes back from the body module: 0x241 answers on
+            // 0x641, not on 0x7E8, and a client that set its receive filter to
+            // match would throw away an answer labelled with the wrong id.
+            val id = Diagnostics.responseIdFor(header)
+            return (if (id == Diagnostics.ANY) 0x7E8 else id) to answer
         }
     }
 }

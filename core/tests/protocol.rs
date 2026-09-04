@@ -70,8 +70,9 @@ struct Pair {
 
 #[test]
 fn h4_predicts_real_writes() {
-    // Pairs of writes from the captures that share seq and h8 and differ only
-    // in the CAN id and the payload.
+    // Pairs of recorded writes whose data differs. The fixture used to ask
+    // for pairs sharing an h8, which — h8 being the sum of the data — picked
+    // out near-identical frames and made the test answer itself.
     let raw = include_str!("fixtures/h4_pairs.json");
     let pairs: Vec<Pair> = serde_json::from_str(raw).expect("fixtures parse");
     assert!(
@@ -90,39 +91,6 @@ fn h4_predicts_real_writes() {
         checked += 1;
     }
     assert_eq!(checked, pairs.len());
-}
-
-#[test]
-fn h4_reports_the_bits_it_cannot_vouch_for() {
-    // Honest bookkeeping: the sweep did not exercise every bit, and the ones
-    // it missed are stored as a zero contribution.
-    let holes = h4::unverified_bits();
-    assert!(
-        !holes.is_empty(),
-        "if this is empty the table was regenerated"
-    );
-    // The subcommand and the record length never vary, so they are expected.
-    assert!(holes.iter().any(|&(b, _)| b < 7));
-}
-
-#[test]
-fn every_bit_a_bridge_varies_is_pinned_down() {
-    // What a bridge changes is the CAN id and the eight payload bytes. After
-    // the random sweep those are determined; the holes that remain are fields
-    // that never vary by construction.
-    let holes = h4::unverified_bits();
-    // payload bytes 0..7 live at offsets 11..18 of the write record
-    for byte in 11..19 {
-        let missing: Vec<_> = holes.iter().filter(|&&(b, _)| b == byte).collect();
-        assert!(
-            missing.len() <= 1,
-            "payload byte {} still has {} unpinned bits",
-            byte - 11,
-            missing.len()
-        );
-    }
-    // and the low byte of the id, which carries bits 0..7 of an 11-bit address
-    assert!(!holes.iter().any(|&(b, _)| b == 7));
 }
 
 // ── ISO-TP ────────────────────────────────────────────────────────────────
@@ -214,4 +182,70 @@ fn the_write_record_matches_what_the_official_tool_sends() {
     // Byte for byte the record inside the 0100 frame the Scanmatik app emitted.
     let record = elm327::write_record(0x7df, &[0x01, 0x00]);
     assert_eq!(record, hex("60800208000000df0700000201000000000000"));
+}
+
+// ── h4 and h8, the two derived words ──────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+struct H8Case {
+    datos: String,
+    h8: u32,
+}
+
+#[test]
+fn h8_is_the_sum_of_the_data_words() {
+    // h8 was long taken for a per-message stamp and copied unchanged from the
+    // reference frame. It is not: read the twenty data bytes as five
+    // little-endian words and add them, and every recorded write agrees.
+    let raw = include_str!("fixtures/h8.json");
+    let cases: Vec<H8Case> = serde_json::from_str(raw).expect("fixtures parse");
+    assert!(cases.len() >= 100, "expected a decent sample");
+    for c in &cases {
+        let data = hex(&c.datos);
+        assert_eq!(h4::h8(&data), c.h8, "h8 mismatch for {}", c.datos);
+    }
+}
+
+#[test]
+fn the_contribution_table_is_a_crc_chain() {
+    // Each bit's contribution is the next one shifted down, with the reflected
+    // polynomial folded in when a one falls off the bottom. This is what makes
+    // the table complete rather than fitted: hold it and there are no bits the
+    // captures failed to pin down, because none of them had to be guessed.
+    const POLY: u32 = 0x9960_034C;
+    for n in 0..159 {
+        let next = opendash_core::H4_BITS[n + 1];
+        let want = (next >> 1) ^ if next & 1 != 0 { POLY } else { 0 };
+        assert_eq!(
+            opendash_core::H4_BITS[n],
+            want,
+            "the chain breaks between bit {} and bit {}",
+            n,
+            n + 1
+        );
+    }
+}
+
+#[test]
+fn a_rebuilt_frame_matches_the_one_the_factory_tool_sent() {
+    // The request that used to kill the connection: read the VIN from the
+    // engine module. This exact frame appears five times in the captures, so
+    // there is a right answer to compare against, header and all.
+    let recorded =
+        hex("ffff0000d2f1e4e2811003ea1c13008460800208000000e0070000021a90000000000000");
+    let template =
+        hex("ffff0000c69b6d40688002e91c13008460800208000000df070000020100000000000000");
+
+    let mut data = template[frame::HEADER..].to_vec();
+    data[7] = 0xe0; // CAN id 0x7e0, low byte
+    data[8] = 0x07;
+    data[11] = 2; // two payload bytes
+    data[12] = 0x1a;
+    data[13] = 0x90;
+
+    let built = h4::reframe(&template, &data).expect("rebuilds");
+    assert_eq!(
+        built, recorded,
+        "a frame built from the template must match the recorded one byte for byte"
+    );
 }

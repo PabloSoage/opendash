@@ -134,8 +134,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private companion object {
-        /** Three short messages at 400 ms each, and then it goes either way. */
-        const val GOODBYE_MS = 1500L
+        /**
+         * Four short messages at 400 ms each, with room for the client to open
+         * one fresh link if the old one had already gone. Not long enough for
+         * that whole second attempt — this runs on the main thread while the
+         * app is closing, and holding it much longer is how a shutdown turns
+         * into "the app is not responding". The disconnect button, which is not
+         * on this path, gets as long as it needs.
+         */
+        const val GOODBYE_MS = 2500L
     }
 
     /**
