@@ -42,20 +42,27 @@ object H4 {
     /** How many data bytes take part in both derived words. */
     private const val COVERED = 20
 
-    /** Build a write frame for [canId] and [payload], signed so it is accepted. */
-    fun write(canId: Int, payload: ByteArray): ByteArray {
-        require(payload.size <= 8) { "a CAN frame carries at most eight bytes" }
+    /**
+     * Build a write message carrying [frameBytes] as the CAN frame for [canId],
+     * signed so the device accepts it.
+     *
+     * The eight bytes of the record are the CAN frame itself. That matters for
+     * anything that is not a single frame: flow control has to reach the module
+     * as `30 00 00`, and building it as a length plus seven payload bytes puts
+     * `08 30 00` on the wire, which reads as a single frame invoking service
+     * 0x30. Every one of the 480 writes in the recorded session carries 8 in the
+     * record's length field, and every one of them starts with a single-frame
+     * PCI, so the two readings only ever coincided there.
+     */
+    fun writeFrame(canId: Int, frameBytes: ByteArray): ByteArray {
+        require(frameBytes.size <= 8) { "a CAN frame carries at most eight bytes" }
         val frame = Recorded.writeTemplate.copyOf()
         val data = frame.copyOfRange(Frame.HEADER, frame.size)
 
         // record layout: 60 80 02 | len u32 | id u32 | 8 data bytes
         Frame.putLe32(data, 7, canId)
         for (i in 0 until 8) {
-            data[11 + i] = when {
-                i == 0 -> payload.size.toByte()
-                i - 1 < payload.size -> payload[i - 1]
-                else -> 0
-            }
+            data[11 + i] = if (i < frameBytes.size) frameBytes[i] else 0
         }
 
         val h4 = derive(frame, data)
@@ -63,6 +70,23 @@ object H4 {
         Frame.putLe32(frame, 4, h4)
         Frame.putLe32(frame, 8, sum(data))
         return frame
+    }
+
+    /**
+     * Build a write frame for [canId] carrying [payload] as an ISO-TP single
+     * frame — the length goes in the leading PCI byte.
+     */
+    fun write(canId: Int, payload: ByteArray): ByteArray {
+        require(payload.size <= 7) { "a single frame carries at most seven payload bytes" }
+        return writeFrame(canId, singleFrame(payload))
+    }
+
+    /** [payload] wrapped as an ISO-TP single frame: the PCI byte is the length. */
+    fun singleFrame(payload: ByteArray): ByteArray {
+        val out = ByteArray(8)
+        out[0] = payload.size.toByte()
+        payload.copyInto(out, 1)
+        return out
     }
 
     /**

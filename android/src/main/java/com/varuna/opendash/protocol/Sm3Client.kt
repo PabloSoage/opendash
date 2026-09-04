@@ -237,9 +237,21 @@ class Sm3Client(
     /** The second field is unidentified; the flags take a handful of values. */
     class Voltages(val batteryMillivolts: Int, val second: Int, val flags: Int)
 
-    /** Put a request on the bus. The h4 is computed, not guessed. */
+    /** Put a request on the bus as a single frame. The h4 is computed, not guessed. */
     fun send(canId: Int, payload: ByteArray) = lock.withLock {
         exchangeLocked(H4.write(canId, payload), STEP_TIMEOUT_MS)
+        Unit
+    }
+
+    /**
+     * Put a whole CAN frame on the bus, PCI byte included.
+     *
+     * Flow control needs this: the channel this app opens carries a pass filter
+     * rather than the factory tool's flow-control filters, so the device hands
+     * over raw frames and answering a first frame is the tester's job.
+     */
+    fun sendFrame(canId: Int, frameBytes: ByteArray) = lock.withLock {
+        exchangeLocked(H4.writeFrame(canId, frameBytes), STEP_TIMEOUT_MS)
         Unit
     }
 

@@ -98,7 +98,7 @@ class Diagnostics(private val sm3: Sm3Client) {
                 if (done != null) return done
                 // A multi-frame answer stalls until the tester says go ahead.
                 if (pci == 0x10 && !flowControlSent) {
-                    sm3.send(txId, IsoTp.FLOW_CONTROL)
+                    sm3.sendFrame(txId, IsoTp.FLOW_CONTROL)
                     flowControlSent = true
                 }
             }

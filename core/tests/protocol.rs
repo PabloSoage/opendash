@@ -184,6 +184,28 @@ fn the_write_record_matches_what_the_official_tool_sends() {
     assert_eq!(record, hex("60800208000000df0700000201000000000000"));
 }
 
+#[test]
+fn flow_control_reaches_the_module_as_a_flow_control_frame() {
+    // The eight data bytes are the CAN frame. Treating the first as a length
+    // and the rest as payload agrees with that only for single frames, where
+    // the PCI byte happens to be the length; flow control is where the two
+    // readings part company. Built the wrong way this record carries
+    // `08 30 00`, which a module reads as a single frame invoking service 0x30
+    // — so a multi-frame answer never gets its continuations and the request
+    // times out with the first frame sitting in the buffer.
+    let record = elm327::write_record_frame(0x7e0, &[0x30, 0x00, 0x00, 0, 0, 0, 0, 0]);
+    assert_eq!(&record[11..19], &[0x30, 0x00, 0x00, 0, 0, 0, 0, 0]);
+    assert_eq!(
+        record[3..7],
+        8u32.to_le_bytes(),
+        "the record always declares eight"
+    );
+
+    // And the single-frame path still puts the length in the PCI byte.
+    let single = elm327::write_record(0x7e0, &[0x1a, 0x90]);
+    assert_eq!(&single[11..19], &[0x02, 0x1a, 0x90, 0, 0, 0, 0, 0]);
+}
+
 // ── h4 and h8, the two derived words ──────────────────────────────────────
 
 #[derive(serde::Deserialize)]

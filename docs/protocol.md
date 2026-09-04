@@ -161,6 +161,39 @@ driver sees.
 Same opcode with subcommand `60 80 02`, followed by `len u32 | id u32 | 8
 bytes`.
 
+### The eight bytes are the CAN frame
+
+Not a length and seven bytes of payload. The length field of the record says 8
+in every one of the 480 writes the factory session contains, and every one of
+those frames begins with an ISO-TP single-frame PCI — which *is* the payload
+length, so the two readings agree there and nowhere else.
+
+Where they part company is flow control. A segmented answer stalls until the
+tester sends `30 00 00`; built as a length plus payload that reaches the module
+as `08 30 00`, a single frame invoking service 0x30, and the continuations never
+come. From outside it looks like a module that answered once and went quiet,
+with the first frame sitting in the buffer holding the first four bytes of the
+VIN.
+
+So the payload budget is the frame's: **seven bytes** behind the PCI. That caps
+two things that are easy to overrun without noticing, because an over-long
+payload goes out with a PCI promising more bytes than follow and the module
+simply drops it:
+
+* a packet declaration, `2C <dpid> <id16>…`, holds at most two identifiers;
+* a start command, `AA 04 <dpid>…`, starts at most five packets at a time.
+
+GDS2 stays inside both — one or two identifiers per declaration, four packets
+started at once.
+
+### Flow control is ours to send
+
+The factory tool never sends one: 0 of its 480 writes carry a flow-control PCI,
+because the channel it opens carries sixteen `FLOW_CONTROL` filters and the
+device answers first frames itself. The channel this app opens carries a single
+pass filter instead, so raw frames arrive and the tester does the acknowledging.
+Both arrangements work; they just have to match.
+
 Every write is derived from one recorded frame, so **that frame has to be a
 frame the device actually accepted**, byte for byte, and both derived words
 have to be recomputed for the payload that replaces it. Getting either wrong

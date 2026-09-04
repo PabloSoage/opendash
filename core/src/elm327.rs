@@ -174,15 +174,34 @@ fn decode_hex(s: &str) -> Option<Vec<u8>> {
         .collect()
 }
 
-/// The write record the SM3 expects: subcommand, length, id, eight data bytes.
-pub fn write_record(id: u32, payload: &[u8]) -> Vec<u8> {
-    let mut d = vec![0x60, 0x80, 0x02];
-    d.extend_from_slice(&8u32.to_le_bytes());
-    d.extend_from_slice(&id.to_le_bytes());
+/// [payload] wrapped as an ISO-TP single frame: the PCI byte is the length.
+pub fn single_frame(payload: &[u8]) -> [u8; 8] {
     let mut eight = [0u8; 8];
     eight[0] = payload.len() as u8;
     let n = payload.len().min(7);
     eight[1..1 + n].copy_from_slice(&payload[..n]);
+    eight
+}
+
+/// The write record the SM3 expects: subcommand, length, id, and the CAN frame.
+///
+/// The eight data bytes are the frame itself, not a length and seven bytes of
+/// payload. The two readings agree on a single frame, where the PCI byte is the
+/// length, and part company on everything else — flow control has to arrive as
+/// `30 00 00`, and length-prefixing it sends `08 30 00`, which the module reads
+/// as a single frame invoking service 0x30.
+pub fn write_record_frame(id: u32, frame: &[u8]) -> Vec<u8> {
+    let mut d = vec![0x60, 0x80, 0x02];
+    d.extend_from_slice(&8u32.to_le_bytes());
+    d.extend_from_slice(&id.to_le_bytes());
+    let mut eight = [0u8; 8];
+    let n = frame.len().min(8);
+    eight[..n].copy_from_slice(&frame[..n]);
     d.extend_from_slice(&eight);
     d
+}
+
+/// The write record for [payload] carried as an ISO-TP single frame.
+pub fn write_record(id: u32, payload: &[u8]) -> Vec<u8> {
+    write_record_frame(id, &single_frame(payload))
 }
