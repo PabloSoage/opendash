@@ -25,6 +25,16 @@ package com.varuna.opendash.obd
  * it Date Programmed. `0x90` is the VIN. `0x6D` came back `0x51`, and the
  * catalogue calls it Engine Oil Life Remaining: 81 %.
  *
+ * ## Checked against the tool itself
+ *
+ * A screenshot of the manufacturer's own Identification Information screen,
+ * taken while the capture was running, settles fourteen of these by value
+ * rather than by inference: the number the car returned is the number on the
+ * screen, so there is no doubt which identifier a row belongs to. Thirteen
+ * agreed. The fourteenth did not: `0x92` returns `DENSO0100`, and the tool
+ * calls that **System Identification**, not the supplier. `71-pantallas-gds2.mjs`
+ * in the analysis repository keeps that comparison honest.
+ *
  * ## What is deliberately missing
  *
  * The identifiers whose only catalogue match was a mode 01 PID that happens to
@@ -58,7 +68,7 @@ object Identifiers {
      */
     val known: List<Entry> = listOf(
         Entry(0x90, "Vehicle identification number", Shape.TEXT),
-        Entry(0x92, "Supplier identification", Shape.TEXT),
+        Entry(0x92, "System identification", Shape.TEXT),
         Entry(0x97, "System name or engine type", Shape.TEXT),
         Entry(0x98, "Subscriber ID", Shape.TEXT),
         Entry(0x99, "Date programmed", Shape.DATE),
