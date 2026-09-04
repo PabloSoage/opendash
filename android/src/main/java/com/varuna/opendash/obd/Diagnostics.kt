@@ -229,7 +229,7 @@ class Diagnostics(private val sm3: Sm3Client) {
             while (running.get()) {
                 try {
                     Thread.sleep(TESTER_PRESENT_MS)
-                    if (running.get()) sm3.send(module, byteArrayOf(0x3E, 0x00))
+                    if (running.get()) sm3.send(module, TESTER_PRESENT)
                 } catch (_: InterruptedException) {
                     return@thread
                 } catch (_: Exception) {
@@ -400,6 +400,18 @@ class Diagnostics(private val sm3: Sm3Client) {
 
         /** How often a long operation says the tester is still here. */
         private const val TESTER_PRESENT_MS = 2000L
+
+        /**
+         * TesterPresent, GMLAN style: the service byte on its own.
+         *
+         * The UDS habit of appending a 0x00 sub-function is wrong here. This
+         * engine answers `3E 00` with `7F 3E 12` — sub-function not supported —
+         * so the heartbeat never lands, the session lapses and any packet the
+         * module was streaming stops. The factory tool sends a bare `3E` 166
+         * times in the recorded session and gets `7E` back every time; it never
+         * sends a sub-function.
+         */
+        private val TESTER_PRESENT = byteArrayOf(0x3E)
 
         /** A packet declaration is a short exchange; it either lands or it does not. */
         private const val STREAM_SETUP_MS = 1000L
