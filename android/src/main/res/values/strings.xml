@@ -74,6 +74,9 @@
     <string name="live_selected">%1$d of %2$d selected</string>
     <string name="live_chart_limit">Charts shown at once: %1$d</string>
     <string name="live_rate">%1$d readings/s</string>
+    <string name="live_stream">Fast</string>
+    <string name="live_stream_hint">The module sends the packet on its own, about a hundred times a second, instead of answering one question at a time. Catalogue parameters from one module only.</string>
+    <string name="live_stream_left_out">%1$d selected do not fit in the packets and will not be in the stream.</string>
     <string name="live_record">Record this session</string>
     <string name="live_recording">%1$d rows · %2$s</string>
     <string name="live_catalogue_off">Standard OBD-II names</string>

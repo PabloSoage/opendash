@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import com.varuna.opendash.Session
 import com.varuna.opendash.obd.Diagnostics
 import com.varuna.opendash.obd.Pid
+import com.varuna.opendash.obd.Stream
 import kotlin.concurrent.thread
 
 /**
@@ -124,21 +125,90 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
         }
     }
 
-    fun start(targets: List<Target>, record: Boolean, label: String) {
-        if (isRunning || targets.isEmpty()) return
+    /**
+     * Let the module do the sending.
+     *
+     * The round-robin below asks for one parameter and waits for it, which
+     * costs a round trip each — twenty to forty milliseconds on this car, so
+     * ten parameters share five readings a second between them. Declaring a
+     * packet and letting the module emit it turns that into about a hundred
+     * frames a second with every parameter in each one, which is the difference
+     * between watching a coolant temperature and logging a rail pressure while
+     * driving.
+     *
+     * The rotation is still there and still the right thing for a handful of
+     * standard OBD PIDs, which are addressed functionally and have no packet to
+     * declare. This is for a catalogue module.
+     */
+    fun startStream(plan: Stream.Plan, record: Boolean, label: String) {
+        if (isRunning || plan.isEmpty) return
         lastError = null
+        openRecorder(record, label)
 
-        if (record) {
-            val compress = settings.compressRecordings
-            recorder = try {
-                Recorder(store.create(label, compress), compress).also {
-                    recordingName = it.name
+        isRunning = true
+        recordedRows = 0
+        worker = thread(name = "monitor-stream", isDaemon = true) {
+            var declared = false
+            try {
+                declared = Session.guarded { Session.diagnostics.beginStream(plan) } ?: false
+                if (declared) Session.nowStreaming(plan.module)
+                if (!declared) {
+                    lastError = "the module refused to declare the data packets"
+                    return@thread
+                }
+                var readings = 0
+                var since = System.currentTimeMillis()
+                while (isRunning) {
+                    val batch = Session.guarded {
+                        Session.diagnostics.readStream(plan, STREAM_SLICE_MS)
+                    } ?: break
+                    for ((parameter, value) in batch) {
+                        val key = "cat:" + parameter.key
+                        values[key] = value
+                        series.getOrPut(key) { Series() }.add(value)
+                        recorder?.add(parameter.name, parameter.unit, value)
+                        readings++
+                    }
+                    silent.clear()
+                    recordedRows = recorder?.rows ?: 0
+                    tick++
+                    val elapsed = System.currentTimeMillis() - since
+                    if (elapsed >= 1000) {
+                        rate = (readings * 1000L / elapsed).toInt()
+                        readings = 0
+                        since = System.currentTimeMillis()
+                    }
                 }
             } catch (e: Exception) {
                 lastError = e.message ?: e.javaClass.simpleName
-                null
+            } finally {
+                // Always, even after a failure: a module left emitting keeps a
+                // hundred frames a second coming at an adapter nobody is
+                // reading, and the next tool to connect finds the bus busy.
+                if (declared) {
+                    runCatching { Session.diagnostics.endStream(plan.module) }
+                    Session.stoppedStreaming(plan.module)
+                }
+                isRunning = false
             }
         }
+    }
+
+    private fun openRecorder(record: Boolean, label: String) {
+        if (!record) return
+        val compress = settings.compressRecordings
+        recorder = try {
+            Recorder(store.create(label, compress), compress).also { recordingName = it.name }
+        } catch (e: Exception) {
+            lastError = e.message ?: e.javaClass.simpleName
+            null
+        }
+    }
+
+    fun start(targets: List<Target>, record: Boolean, label: String) {
+        if (isRunning || targets.isEmpty()) return
+        lastError = null
+        openRecorder(record, label)
 
         isRunning = true
         recordedRows = 0
@@ -199,5 +269,8 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
 
     private companion object {
         const val GIVE_UP_AFTER = 3
+
+        /** How long one read of the emitted stream blocks before looping. */
+        const val STREAM_SLICE_MS = 50L
     }
 }

@@ -70,6 +70,9 @@
     <string name="live_selected">%1$d de %2$d seleccionados</string>
     <string name="live_chart_limit">Gráficas a la vez: %1$d</string>
     <string name="live_rate">%1$d lecturas/s</string>
+    <string name="live_stream">Rápido</string>
+    <string name="live_stream_hint">La centralita emite el paquete sola, unas cien veces por segundo, en vez de contestar a una pregunta cada vez. Solo con parámetros de catálogo de un mismo módulo.</string>
+    <string name="live_stream_left_out">%1$d de los marcados no caben en los paquetes y se quedan fuera de la emisión.</string>
     <string name="live_record">Grabar esta sesión</string>
     <string name="live_recording">%1$d filas · %2$s</string>
     <string name="live_catalogue_off">Nombres OBD-II estándar</string>

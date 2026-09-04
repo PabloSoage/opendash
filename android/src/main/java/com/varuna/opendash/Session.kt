@@ -192,12 +192,35 @@ object Session {
     }
 
     fun disconnect() {
+        // Tell whatever might still be emitting to stop, before the link goes.
+        // A module left streaming keeps sending a hundred frames a second at an
+        // adapter nobody is reading any more; the live screen already stops its
+        // own, and this is the case where somebody leaves without stopping it.
+        if (state == State.CHANNEL_OPEN) {
+            for (module in streaming) runCatching { diagnostics.endStream(module) }
+        }
+        streaming = emptySet()
         sm3.close()
         state = State.DISCONNECTED
         serial = ""
         firmware = ""
         vehicle = null
+        modulesPresent = emptyList()
     }
+
+    /**
+     * Modules that have been told to emit a packet and not yet told to stop.
+     *
+     * Kept here rather than in the screen that started it because the thing
+     * that has to undo it is the disconnect, and a screen that has been left
+     * is in no position to do anything about it.
+     */
+    var streaming: Set<Int> = emptySet()
+        private set
+
+    fun nowStreaming(module: Int) { streaming = streaming + module }
+
+    fun stoppedStreaming(module: Int) { streaming = streaming - module }
 
     /**
      * Battery millivolts, cached.

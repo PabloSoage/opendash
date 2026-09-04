@@ -339,9 +339,43 @@ Fields go **in the order they were asked for**, each the width the catalogue
 gives, big-endian, and the rest of the eight bytes is zero. No length header, no
 separators. The catalogue is what makes it sliceable.
 
-`0x2C` is still absent from the app's allowed services and streaming with it is
-still not implemented. That is now a decision about writing to a module rather
-than a gap in what is known.
+### The identifiers are the catalogue's
+
+The two-byte identifiers in a `0x2C` are exactly the `pid` column of the
+catalogue extracted from GDS2, so the catalogue is not just a source of names —
+it is the list of everything that can be put in a packet, with the width to
+slice and the formula to scale.
+
+Two screenshots taken while the capture was running make that checkable rather
+than assumed. GDS2's "Cruise Control, PTO and Traction Control Data" screen
+shows eighteen rows; all eighteen names are in the catalogue verbatim, and they
+come from **thirteen** identifiers, because `0x150C` is one byte holding seven
+switches and six of those rows are six of its bits. Eighteen bytes of payload,
+three packets of seven. The tool had seven declared.
+
+So a packet carries identifiers and a parameter reads a slice of one — which is
+what the catalogue's shift-and-mask formulas were always describing.
+
+### What this app does with it
+
+`0x2C` is on the allowed-services list, and it is the only one there that
+changes anything in a module rather than only reading it. What it changes is
+which parameters that module will emit: a packet declared in RAM, for the life
+of the session. Nothing is written to the car, nothing is calibrated, nothing
+moves; it is what the manufacturer's tool sends every time somebody opens a live
+data screen.
+
+Streaming is implemented on top of it. The live screen lays the chosen
+parameters out into packets, declares them, starts the emission and decodes the
+frames as they arrive; leaving the screen stops it, and so does disconnecting,
+because a module left emitting keeps a hundred frames a second coming at an
+adapter nobody is reading. Parameters that do not fit are reported rather than
+dropped in silence.
+
+The planner is checked against the wire in the analysis repository
+(`72-paquetes.mjs`): asked for engine speed and coolant it emits the same
+identifiers in the same order the factory tool did, and fed the frame the car
+sent it returns 735 rpm and 24 °C.
 
 ## Identifying the car
 

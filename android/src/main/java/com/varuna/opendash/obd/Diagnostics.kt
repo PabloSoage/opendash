@@ -1,5 +1,6 @@
 package com.varuna.opendash.obd
 
+import com.varuna.opendash.data.Catalogue
 import com.varuna.opendash.protocol.IsoTp
 import com.varuna.opendash.protocol.Sm3Client
 
@@ -46,8 +47,19 @@ class Diagnostics(private val sm3: Sm3Client) {
      * 0x2E WriteDataByIdentifier, 0x2F InputOutputControl, 0x31 RoutineControl,
      * 0x14 ClearDiagnosticInformation and 0x27 SecurityAccess are absent on
      * purpose. Adding one is a decision, not a patch.
+     *
+     * 0x2C is here, and it is the one that deserves its own sentence, because
+     * it is the only service on this list that changes anything in a module
+     * rather than only reading it. What it changes is which parameters that
+     * module will emit: it declares a packet, in RAM, that lasts as long as the
+     * session. Nothing is written to the car, nothing is calibrated, nothing
+     * moves. It is what the manufacturer's own tool sends every time somebody
+     * opens a live data screen — the captured session has seven of them — and
+     * without it there is no way to read more than a handful of parameters a
+     * second, which is not enough to watch a rail pressure while driving.
      */
-    private val readServices = setOf(0x01, 0x02, 0x03, 0x06, 0x07, 0x09, 0x19, 0x1A, 0x22, 0xAA, 0x3E)
+    private val readServices =
+        setOf(0x01, 0x02, 0x03, 0x06, 0x07, 0x09, 0x19, 0x1A, 0x22, 0x2C, 0xAA, 0x3E)
 
     private fun refuseIfNotRead(payload: ByteArray) {
         val service = payload.firstOrNull()?.toInt()?.and(0xff) ?: return
@@ -234,6 +246,68 @@ class Diagnostics(private val sm3: Sm3Client) {
         }
     }
 
+    // ── live data, the way the factory tool reads it ──────────────────────
+
+    /**
+     * Declare [plan]'s packets and set the module emitting them.
+     *
+     * Returns false if a declaration was refused, in which case nothing is
+     * emitting and there is nothing to stop. Each declaration is answered
+     * `6C <packet>`. The start is not answered at all in the captures — the
+     * emission is the answer — so it goes out without waiting, and whether it
+     * worked is answered by frames arriving, which is the only honest test.
+     */
+    fun beginStream(plan: Stream.Plan): Boolean {
+        if (plan.isEmpty) return false
+        for (declaration in plan.declarations()) {
+            val r = request(plan.module, declaration, timeoutMs = STREAM_SETUP_MS)
+            if (r == null || (r[0].toInt() and 0xff) != 0x6C) return false
+        }
+        fire(plan.module, plan.start())
+        return true
+    }
+
+    /**
+     * Stop a module emitting.
+     *
+     * Sent on the way out of live data and again in the session teardown. A
+     * module left emitting keeps a hundred frames a second coming at an adapter
+     * nobody is reading any more, and the next tool to connect finds a bus busy
+     * with somebody else's packets.
+     */
+    fun endStream(module: Int = ENGINE) {
+        try {
+            fire(module, Stream.STOP)
+        } catch (_: Exception) {
+            // A link already gone cannot be told to stop, and saying so here
+            // would replace a useful error with a useless one.
+        }
+    }
+
+    /**
+     * Collect whatever the module has emitted since the last call.
+     *
+     * Reads the socket for [sliceMs] and hands back the decoded values. The
+     * emitted frames are not ISO-TP: each is one packet, whole, so there is
+     * nothing to reassemble and nothing to acknowledge.
+     */
+    fun readStream(plan: Stream.Plan, sliceMs: Long = 50): List<Pair<Catalogue.Parameter, Double>> {
+        sm3.receive(sliceMs)
+        val rxId = responseIdFor(plan.module)
+        val out = ArrayList<Pair<Catalogue.Parameter, Double>>()
+        for (frame in sm3.drain()) {
+            if (rxId != ANY && frame.id != rxId) continue
+            out.addAll(Stream.decode(plan, frame.data))
+        }
+        return out
+    }
+
+    /** Send without waiting for an answer, still refusing anything that writes. */
+    private fun fire(txId: Int, payload: ByteArray) {
+        refuseIfNotRead(payload)
+        sm3.send(txId, payload)
+    }
+
     /** One identifier, as a module answered it. */
     class Identification(
         val module: Int,
@@ -327,6 +401,9 @@ class Diagnostics(private val sm3: Sm3Client) {
         /** How often a long operation says the tester is still here. */
         private const val TESTER_PRESENT_MS = 2000L
 
+        /** A packet declaration is a short exchange; it either lands or it does not. */
+        private const val STREAM_SETUP_MS = 1000L
+
         /** OBD functional request: every module that listens answers. */
         const val FUNCTIONAL = 0x7DF
         /** The engine, addressed directly. */
@@ -344,7 +421,16 @@ class Diagnostics(private val sm3: Sm3Client) {
          * asked. Neither is the whole list, so the whole range is swept: a
          * module that is not there costs one short timeout.
          */
-        val MODULES: List<Int> = listOf(ENGINE) + (0x241..0x25F).toList()
+        /**
+         * Where to look for modules.
+         *
+         * The report the factory tool produced for this car names eighteen
+         * modules and every one of them answered — its "No Communication"
+         * section is empty. Their addresses, taken from the catalogue, are
+         * 0x241 through 0x25F plus 0x7E0 and 0x7E5, so the powertrain range is
+         * swept whole rather than only its first address.
+         */
+        val MODULES: List<Int> = (0x7E0..0x7E7).toList() + (0x241..0x25F).toList()
 
         /** GM keeps request and response 0x400 apart; OBD uses 0x7E0/0x7E8. */
         fun responseIdFor(txId: Int): Int = when {

@@ -40,6 +40,7 @@ import com.varuna.opendash.data.Monitor
 import com.varuna.opendash.data.PluginRepository
 import com.varuna.opendash.data.Settings
 import com.varuna.opendash.obd.Diagnostics
+import com.varuna.opendash.obd.Stream
 import com.varuna.opendash.ui.theme.ValueStyle
 import java.util.Locale
 import kotlin.concurrent.thread
@@ -68,8 +69,31 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
     var filter by remember { mutableStateOf("") }
     var record by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
+    var streaming by remember { mutableStateOf(true) }
 
     val installed = remember(plugins.revision) { plugins.installed() }
+
+    // Where the chosen module answers. A module name can sit at more than one
+    // address across the marque, so prefer one this car actually answered on.
+    val moduleAddress = run {
+        val addresses = catalogue?.addressesByModule?.get(settings.catalogueModule).orEmpty()
+        addresses.firstOrNull { it in Session.modulesPresent }
+            ?: addresses.firstOrNull()
+            ?: Diagnostics.ENGINE
+    }
+
+    // The packets to declare, if the selection can be streamed at all. Only a
+    // catalogue module can: a standard OBD PID is addressed to whoever answers
+    // rather than to one module, so it has no packet to belong to.
+    val chosenParameters = rows
+        .filter { it.key in selected.keys }
+        .filterIsInstance<Item.FromCatalogue>()
+        .map { it.parameter }
+    val canStream = selected.isNotEmpty() &&
+        chosenParameters.size == selected.size &&
+        settings.catalogueModule.isNotEmpty()
+    val streamPlan =
+        if (canStream) Stream.plan(moduleAddress, chosenParameters) else null
 
     fun rebuild() {
         busy = true
@@ -263,8 +287,36 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                 Text(
                     stringResource(R.string.live_record),
                     style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f),
                 )
+                Spacer(Modifier.weight(1f))
+                // Only offered when every chosen row is a catalogue parameter.
+                // A standard OBD PID is addressed to whoever answers rather
+                // than to one module, so it has no packet to belong to.
+                Switch(
+                    checked = streaming && canStream,
+                    enabled = !monitor.isRunning && canStream,
+                    onCheckedChange = { streaming = it },
+                )
+                Text(
+                    stringResource(R.string.live_stream),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+
+            if (canStream && streaming) {
+                Hint(stringResource(R.string.live_stream_hint))
+                // Said rather than swallowed: a parameter that did not fit is a
+                // row that would sit there never moving, and there is no way to
+                // tell that from one the module refuses.
+                val left = streamPlan?.leftOut?.size ?: 0
+                if (left > 0) Hint(stringResource(R.string.live_stream_left_out, left))
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 if (monitor.isRunning) {
                     OutlinedButton(onClick = { monitor.stop() }) {
                         Text(stringResource(R.string.action_stop))
@@ -276,15 +328,12 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                         onClick = {
                             monitor.reset()
                             val chosen = rows.filter { it.key in selected.keys }
-                            // Where to ask. A module name can sit at more than
-                            // one address across the marque, so prefer one this
-                            // car actually answered on.
-                            val addresses =
-                                catalogue?.addressesByModule?.get(settings.catalogueModule).orEmpty()
-                            val address = addresses.firstOrNull { it in Session.modulesPresent }
-                                ?: addresses.firstOrNull()
-                                ?: Diagnostics.ENGINE
-                            monitor.start(targetsFor(monitor, chosen, address), record, "live")
+                            val plan = streamPlan
+                            if (streaming && plan != null && !plan.isEmpty) {
+                                monitor.startStream(plan, record, "live")
+                            } else {
+                                monitor.start(targetsFor(monitor, chosen, moduleAddress), record, "live")
+                            }
                         },
                     ) { Text(stringResource(R.string.action_start)) }
                 }

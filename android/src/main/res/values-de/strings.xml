@@ -70,6 +70,9 @@
     <string name="live_selected">%1$d von %2$d ausgewählt</string>
     <string name="live_chart_limit">Diagramme gleichzeitig: %1$d</string>
     <string name="live_rate">%1$d Messwerte/s</string>
+    <string name="live_stream">Schnell</string>
+    <string name="live_stream_hint">Das Steuergerät sendet das Paket von sich aus, etwa hundertmal pro Sekunde, statt einzeln zu antworten. Nur Katalogparameter eines Steuergeräts.</string>
+    <string name="live_stream_left_out">%1$d der ausgewählten passen nicht in die Pakete und bleiben draußen.</string>
     <string name="live_record">Diese Sitzung aufzeichnen</string>
     <string name="live_recording">%1$d Zeilen · %2$s</string>
     <string name="live_catalogue_off">Standard-OBD-II-Namen</string>
