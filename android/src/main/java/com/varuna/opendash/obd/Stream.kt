@@ -34,10 +34,13 @@ import com.varuna.opendash.data.Catalogue
  *
  * Checked against a screenshot of GDS2 taken while the capture was running: its
  * "Cruise Control, PTO and Traction Control Data" screen shows eighteen rows
- * that come from thirteen identifiers, because 0x150C is a single byte holding
- * seven switches and six of those rows are six of its bits. So a packet carries
- * *identifiers*, and a parameter reads a slice of one. The catalogue already
- * describes the slice, in the shift-and-mask form of its formula.
+ * that come from thirteen identifiers. 0x150C alone is one byte holding eight
+ * one-bit fields, which nineteen catalogue rows read from, and six of those rows
+ * were on that screen.
+ *
+ * So a packet carries *identifiers*, and a parameter reads a slice of one. The
+ * catalogue already describes the slice, in the shift-and-mask form of its
+ * formula.
  */
 object Stream {
 
