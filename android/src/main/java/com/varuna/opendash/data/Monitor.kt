@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.varuna.opendash.Session
+import com.varuna.opendash.obd.Diagnostics
 import com.varuna.opendash.obd.Pid
 import kotlin.concurrent.thread
 
@@ -91,17 +92,30 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
      * dropped from the rotation.
      */
     fun requestable(catalogue: Catalogue): List<Catalogue.Parameter> =
-        catalogue.parameters.filter { it.pid in 0..0xffff && it.bytes in 1..4 }
+        requestable(catalogue.parameters)
+
+    /** The same filter over any subset, which is how a module's list is built. */
+    fun requestable(parameters: List<Catalogue.Parameter>): List<Catalogue.Parameter> =
+        parameters.filter { it.pid in 0..0xffff && it.bytes in 1..4 }
 
     fun notRequestable(catalogue: Catalogue): Int =
         catalogue.parameters.size - requestable(catalogue).size
 
-    fun targetsForCatalogue(params: List<Catalogue.Parameter>): List<Target> = params.map { p ->
+    /**
+     * [module] is the CAN address the parameters belong to. It used to be
+     * assumed to be the engine for everything, so a body module parameter went
+     * to a module that had never heard of it and came back empty — which on
+     * screen is a row that never shows a number and no way to tell why.
+     */
+    fun targetsForCatalogue(
+        params: List<Catalogue.Parameter>,
+        module: Int = Diagnostics.ENGINE,
+    ): List<Target> = params.map { p ->
         Target("cat:" + p.key, p.name, p.unit) {
             val raw = if (p.pid <= 0xff) {
                 Session.diagnostics.mode01(p.pid)
             } else {
-                Session.diagnostics.readDataByIdentifier(p.pid)
+                Session.diagnostics.readDataByIdentifier(p.pid, txId = module)
             } ?: return@Target null
             if (raw.size < p.bytes) return@Target null
             var value = 0L

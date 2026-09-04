@@ -74,6 +74,7 @@ fun IdentificationScreen() {
                         fraction = 0f
                     }
                     modules = present.size
+                    Session.modulesPresent = present
                     present.forEachIndexed { index, module ->
                         if (cancel) return@forEachIndexed
                         val name = "0x" + module.toString(16).uppercase()

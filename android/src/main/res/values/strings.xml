@@ -77,6 +77,9 @@
     <string name="live_record">Record this session</string>
     <string name="live_recording">%1$d rows · %2$s</string>
     <string name="live_catalogue_off">Standard OBD-II names</string>
+    <string name="live_module">Module</string>
+    <string name="live_module_here">· on this car</string>
+    <string name="live_module_hint">Pick a module. The catalogue covers every one the marque fits; the ones marked are the ones this car answered on, which needs a module sweep on the identification screen first.</string>
     <string name="live_variant">Variant</string>
     <string name="live_variant_all">All variants</string>
     <string name="live_variant_hint">A brand catalogue is every module configuration the marque ever shipped. Narrowing to one variant is what turns a list of thousands into a list you can read.</string>
@@ -223,5 +226,6 @@
     <string name="wifi_why_permission">Listing the networks in range needs permission. Tap Show networks to grant it, or leave the name blank and let the system picker do it.</string>
     <string name="wifi_why_location">Android returns no networks while location is switched off, whatever the app is allowed to do. Turn it on, or leave the name blank and let the system picker do it.</string>
     <string name="wifi_why_off">Wi-Fi is off.</string>
-    <string name="wifi_why_nothing">Nothing in range yet. The adapter takes a few seconds to raise its access point after it is plugged in.</string>
+    <string name="wifi_why_nothing">Nothing in range yet. The adapter takes a few seconds to raise its access point after it is plugged in. Join with the name left blank and Android offers its own list instead.</string>
+    <string name="wifi_why_throttled">Android refused the scan: an app may only scan a few times a minute. Try again in a moment, or just join with the name left blank and pick from Android’s own list.</string>
 </resources>

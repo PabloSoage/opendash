@@ -73,6 +73,9 @@
     <string name="live_record">Diese Sitzung aufzeichnen</string>
     <string name="live_recording">%1$d Zeilen · %2$s</string>
     <string name="live_catalogue_off">Standard-OBD-II-Namen</string>
+    <string name="live_module">Steuergerät</string>
+    <string name="live_module_here">· in diesem Auto</string>
+    <string name="live_module_hint">Ein Steuergerät wählen. Der Katalog führt alle, die die Marke verbaut; markiert sind die, die in diesem Auto geantwortet haben — dafür muss vorher auf der Identifikationsseite gesucht werden.</string>
     <string name="live_variant">Variante</string>
     <string name="live_variant_all">Alle Varianten</string>
     <string name="live_variant_hint">Ein Markenkatalog enthält jede Steuergeräte-Konfiguration, die diese Marke je verbaut hat. Erst die Einschränkung auf eine Variante macht aus einer Liste von Tausenden eine lesbare.</string>
@@ -213,5 +216,6 @@
     <string name="wifi_why_permission">Das Auflisten der Netze in Reichweite braucht eine Berechtigung. Auf Netze anzeigen tippen, um sie zu erteilen, oder den Namen leer lassen und die Systemauswahl nutzen.</string>
     <string name="wifi_why_location">Android liefert keine Netze, solange die Ortung aus ist, unabhängig von den Rechten der App. Ortung einschalten, oder den Namen leer lassen und die Systemauswahl nutzen.</string>
     <string name="wifi_why_off">WLAN ist aus.</string>
-    <string name="wifi_why_nothing">Noch nichts in Reichweite. Der Adapter braucht nach dem Einstecken ein paar Sekunden, bis sein Zugangspunkt steht.</string>
+    <string name="wifi_why_nothing">Noch nichts in Reichweite. Der Adapter braucht nach dem Einstecken ein paar Sekunden, bis sein Zugangspunkt steht. Ohne Namen verbinden, dann zeigt Android seine eigene Liste.</string>
+    <string name="wifi_why_throttled">Android hat den Suchlauf abgelehnt: eine App darf nur ein paar Mal pro Minute suchen. Gleich noch einmal versuchen, oder ohne Namen verbinden und aus Androids eigener Liste wählen.</string>
 </resources>

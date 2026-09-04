@@ -40,6 +40,20 @@ object Session {
 
     var vehicle by mutableStateOf<Diagnostics.VehicleId?>(null)
 
+    /**
+     * CAN addresses that answered the last time modules were swept for.
+     *
+     * Remembered because it is the one piece of evidence that tells a brand
+     * catalogue apart from this car. The catalogue gives every module an
+     * address, so intersecting the two turns 21 382 parameters for the marque
+     * into the few thousand belonging to modules that are actually fitted, and
+     * lets a screen say which of the names on offer this vehicle answered on.
+     *
+     * Empty means nobody has looked, which is not the same as nothing being
+     * there, so a screen must not read it as a denial.
+     */
+    var modulesPresent by mutableStateOf<List<Int>>(emptyList())
+
     enum class State { DISCONNECTED, CONNECTING, CONNECTED, CHANNEL_OPEN }
 
     // ── the bridge, as the service actually found it ──────────────────────

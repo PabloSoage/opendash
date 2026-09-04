@@ -131,6 +131,7 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
                             WifiLink.Why.NO_PERMISSION -> R.string.wifi_why_permission
                             WifiLink.Why.LOCATION_OFF -> R.string.wifi_why_location
                             WifiLink.Why.WIFI_OFF -> R.string.wifi_why_off
+                            WifiLink.Why.THROTTLED -> R.string.wifi_why_throttled
                             else -> R.string.wifi_why_nothing
                         }
                     )

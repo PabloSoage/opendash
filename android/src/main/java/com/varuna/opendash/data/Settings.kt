@@ -109,6 +109,13 @@ class Settings(context: Context) {
      */
     var catalogueVariant: String by pref(KEY_VARIANT, prefs.getString(KEY_VARIANT, null) ?: "") { it }
 
+    /**
+     * Which module the live screen is looking at. A brand catalogue covers every
+     * module the marque fits, and without one of them chosen the parameter list
+     * is the whole marque rather than this car.
+     */
+    var catalogueModule: String by pref(KEY_MODULE, prefs.getString(KEY_MODULE, null) ?: "") { it }
+
     var catalogueLanguage: String by pref(
         KEY_CATALOGUE_LANG,
         prefs.getString(KEY_CATALOGUE_LANG, null) ?: "en",
@@ -154,6 +161,7 @@ class Settings(context: Context) {
         private const val OLD_PREFIX = "SM"
         const val KEY_ELM_PORT = "elm_port"
         const val KEY_ELM_HOST = "elm_host"
+        const val KEY_MODULE = "catalogue_module"
         const val KEY_TREE = "recording_tree"
         const val KEY_GZIP = "compress_recordings"
         const val KEY_CHARTS = "chart_count"

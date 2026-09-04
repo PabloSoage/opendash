@@ -73,6 +73,9 @@
     <string name="live_record">Grabar esta sesión</string>
     <string name="live_recording">%1$d filas · %2$s</string>
     <string name="live_catalogue_off">Nombres OBD-II estándar</string>
+    <string name="live_module">Módulo</string>
+    <string name="live_module_here">· en este coche</string>
+    <string name="live_module_hint">Elige un módulo. El catálogo trae todos los que monta la marca; los marcados son los que han contestado en este coche, para lo cual hay que barrer módulos antes en la pantalla de identificación.</string>
     <string name="live_variant">Variante</string>
     <string name="live_variant_all">Todas las variantes</string>
     <string name="live_variant_hint">Un catálogo de marca es toda configuración de centralita que esa marca haya montado. Elegir una variante es lo que convierte una lista de miles en una que se puede leer.</string>
@@ -213,5 +216,6 @@
     <string name="wifi_why_permission">Para listar las redes al alcance hace falta permiso. Pulsa Ver redes para darlo, o deja el nombre en blanco y que lo haga el selector del sistema.</string>
     <string name="wifi_why_location">Android no devuelve ninguna red mientras la ubicación esté apagada, dé el permiso que dé la app. Enciéndela, o deja el nombre en blanco y que lo haga el selector del sistema.</string>
     <string name="wifi_why_off">El Wi-Fi está apagado.</string>
-    <string name="wifi_why_nothing">Todavía no hay nada al alcance. La interfaz tarda unos segundos en levantar su punto de acceso desde que se enchufa.</string>
+    <string name="wifi_why_nothing">Todavía no hay nada al alcance. La interfaz tarda unos segundos en levantar su punto de acceso desde que se enchufa. Si te unes con el nombre en blanco, Android enseña su propia lista.</string>
+    <string name="wifi_why_throttled">Android no ha dejado escanear: una app solo puede hacerlo unas pocas veces por minuto. Prueba otra vez en un momento, o únete con el nombre en blanco y elige en la lista del propio Android.</string>
 </resources>

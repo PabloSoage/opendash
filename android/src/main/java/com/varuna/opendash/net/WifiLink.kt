@@ -92,7 +92,7 @@ object WifiLink {
      * it, three of them fixable by the person holding the phone, and a button
      * that appears to do nothing is what they all looked like.
      */
-    enum class Why { OK, NO_PERMISSION, LOCATION_OFF, WIFI_OFF, NOTHING_IN_RANGE }
+    enum class Why { OK, NO_PERMISSION, LOCATION_OFF, WIFI_OFF, THROTTLED, NOTHING_IN_RANGE }
 
     class Scan(val names: List<String>, val why: Why) {
         val isEmpty: Boolean get() = names.isEmpty()
@@ -143,9 +143,13 @@ object WifiLink {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && !locationOn(context)) {
             return Scan(emptyList(), Why.LOCATION_OFF)
         }
-        val names = try {
-            @Suppress("DEPRECATION")
+        @Suppress("DEPRECATION")
+        val started = try {
             wifi.startScan()
+        } catch (_: Exception) {
+            false
+        }
+        val names = try {
             wifi.scanResults
                 .mapNotNull { nameOf(it) }
                 .filter { it.isNotBlank() }
@@ -157,7 +161,14 @@ object WifiLink {
         } catch (_: SecurityException) {
             return Scan(emptyList(), Why.NO_PERMISSION)
         }
-        return Scan(names, if (names.isEmpty()) Why.NOTHING_IN_RANGE else Why.OK)
+        if (names.isNotEmpty()) return Scan(names, Why.OK)
+        // An empty list because the system would not scan is a different thing
+        // from an empty list because nothing is there, and the first one is not
+        // the user's fault: Android allows an app four scans in two minutes and
+        // refuses the rest without a word. Pressing the button again in a
+        // moment fixes it, and telling someone that beats a button that looks
+        // broken.
+        return Scan(emptyList(), if (started) Why.NOTHING_IN_RANGE else Why.THROTTLED)
     }
 
     private fun locationOn(context: Context): Boolean {

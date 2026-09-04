@@ -16,7 +16,7 @@ are identical**, which is why a capture from either side is worth the same.
 0..1   seq    u16 LE   USB: a counter · TCP: always 0xffff
 2..3   token  u16 LE   USB: the driver's echo · TCP: always 0
 4..7   h4     u32 LE   fingerprint (see below)
-8..11  h8     u32 LE   context / handle
+8..11  h8     u32 LE   sum of the data words (see below)
 12     op
 13..14 len    u16 LE
 15     chk    (op + len_lo + len_hi + 0x55) & 0xff
@@ -52,44 +52,86 @@ sequence completes and the bus can be read.
 The padding bytes are stale buffer content, not zeros. Their value does not
 appear to matter for acceptance, but they are covered by `h4`.
 
-## `h4`
+## `h4` and `h8`, the two derived words
 
-The firmware checks it. Over a raw socket, a greeting whose `h4` differs by one
-bit is answered with a TCP reset — three values, three samples each, nine out
-of nine. It is the only error signal the firmware has ever produced.
+Every message carries two words the firmware computes rather than carries: `h4`
+at offset 4 and `h8` at offset 8. Both are checked. Over a raw socket, a
+greeting whose `h4` differs by one bit is answered with a TCP reset — three
+values, three samples each, nine out of nine — and that reset is the only error
+signal the firmware has ever produced.
+
+### `h8` is a sum
+
+Read the twenty data bytes as five little-endian 32-bit words and add them,
+discarding the carry:
+
+```
+h8 = data[0..3] + data[4..7] + data[8..11] + data[12..15] + data[16..19]
+```
+
+**708 of 708** recorded writes agree, exactly. This was taken for a per-message
+stamp or a channel handle for a long time, and it is neither: it moves with the
+payload and nothing else, which is why the same request always carries the same
+`h8` and why a frame built by changing a payload has to recompute it.
+
+### `h4` is a CRC
 
 It is affine over GF(2): 717 checks of "same input difference gives the same
-output difference" with no contradiction. It depends on `seq`, `h8`, the data
-**and the padding** — dropping any one of those from the model collapses
-leave-one-out accuracy from 40/40 to 2/40 or worse. It is not a textbook
-CRC-32: 2688 combinations of region, seed, polynomial, reflection, xorout and
-byte order all fail, and recovering a polynomial by GCD gives degree zero.
-
-Being affine is enough to use it without naming it:
+output difference" with no contradiction. Being affine is enough to use it
+without naming it:
 
 ```
 h4(new) = h4(reference) XOR contributions(bits that changed)
 ```
 
-The contributions came from three sources: a one-bit sweep of 228 chosen
-writes, 425 writes with a random id and a random payload, and 480 writes from
-real captures. What that buys:
+and for a long time that was as far as this went — the contributions were
+*fitted*, from a one-bit sweep plus writes with random payloads plus real
+captures. Fitting was the mistake. The recorded traffic never varies some bits,
+so the system is underdetermined (rank 118 of 209 unknowns with `seq` and `h8`
+carried as free variables), and an underdetermined solve hands back one of many
+answers with no warning attached.
 
-* **85 of 85** held-out writes with a random id and a random payload — messages
-  the model had never seen — get exactly the `h4` the device put on the wire;
-* **4000 of 4000** pairs of recorded writes differing only in id and payload;
-* a `0100` request assembled from scratch reproduces the recorded `h4`.
+The contributions are not fitted any more. Laid out in order they satisfy
 
-The one-bit sweep alone was not enough, and it is worth saying why: changing a
-single bit per message leaves the `seq`, `h8` and padding varying alongside it,
-so the directions stay entangled and the rank stalls at 118. Random payloads
-separate them — each message added exactly one to the rank until it saturated.
+```
+contribution(n) = (contribution(n+1) >> 1) XOR (0x9960034C if odd)
+```
 
-**What is still not determined.** Rank 129 of 209. The rest are fields that
-never vary by construction: the `60 80 02` subcommand, the record length, and
-the id bytes above eleven bits. A bridge does not vary them either.
-`h4::unverified_bits` still reports them and `h4::is_verified` answers for a
-given frame.
+which is the recurrence of a CRC with reflected polynomial `0x9960034C` — not
+one from any catalogue, which is why the earlier search over 2688 standard
+combinations of region, seed, polynomial, reflection and byte order found
+nothing. The whole 160-entry table therefore follows from a single anchor, with
+no holes anywhere in it.
+
+What that buys, all of it checkable without a car:
+
+* every contribution the captures pin down independently — 52 of them, spread
+  over nine different data bytes — agrees with the chain, and so do **45 of 45**
+  consecutive pairs, including across byte boundaries;
+* from the reference frame this app ships, the chain reproduces the `h4` of all
+  **135** other recorded payloads;
+* the requests the app sends — `1A 90`, `1A 92`, `1A 97`, `1A 98`, `01 00`,
+  `09 02` — rebuild **byte for byte identical** to the frames the manufacturer's
+  own tool put on the wire, headers included.
+
+### Why the old table was worse than it looked
+
+The fitted table shipped with a companion mask meant to say which bits it could
+vouch for, and the mask answered a different question from the one it was asked.
+It reported which **columns had been pivots** in the Gaussian elimination. A
+pivot column is not a determined variable: back-substitution sets the free
+variables to zero and solves the pivots *in terms of that choice*, so a pivot
+whose row touches a free column takes whichever value the arbitrary choice gives
+it. The test that belongs here is whether the change vector lies in the **row
+space** of the training data, and by that test 22 of the 74 bits the mask called
+known were not.
+
+They were not harmless bits either. `1A 90` — read the VIN from the engine, the
+first thing any diagnostic tool asks — needs two of them, and so do `3E 00` and
+`01 20`. So identification, the tester-present heartbeat and the second half of
+the supported-PID scan each produced a confident, wrong fingerprint, and the
+adapter answered the only way it knows: on the car, the write went out at
+0.683 s and the reset arrived at 0.686 s.
 
 ## Reading the bus
 
@@ -120,38 +162,40 @@ Same opcode with subcommand `60 80 02`, followed by `len u32 | id u32 | 8
 bytes`.
 
 Every write is derived from one recorded frame, so **that frame has to be a
-frame the device actually accepted**, byte for byte. It is worth saying why in
-its own paragraph, because getting it wrong costs more than it looks.
+frame the device actually accepted**, byte for byte, and both derived words
+have to be recomputed for the payload that replaces it. Getting either wrong
+costs more than it looks, and this app got both wrong in turn.
 
-`h4` is a function of `seq`, `h8` and the data together. Derivation reuses the
-reference's `seq` and `h8` unchanged and XORs in the contribution of the data
-bits that moved, so a reference whose `h4` does not belong to its own `seq`,
-`h8` and data poisons every write built from it. The app shipped exactly that
-for a while: a template carrying the right four `h4` bytes in the wrong order,
-`40 6d 9b c6` where the capture says `c6 9b 6d 40`, paired with an `h8` taken
-from some other message. The frame does not appear in any capture.
+The first was the reference frame. A template carrying the right four `h4`
+bytes in the wrong order, `40 6d 9b c6` where the capture says `c6 9b 6d 40`,
+paired with an `h8` taken from some other message; the frame appears in no
+capture. The check that catches that one is external, in the analysis
+repository: the template must appear verbatim in a capture, and it now does.
+
+Fixing it was not enough, which is the more useful half of the story. With a
+genuine reference in place the writes were still refused, because the
+contribution table used to derive `h4` had holes the code believed were not
+there — see [`h4` and `h8`](#h4-and-h8-the-two-derived-words) — and because
+`h8` was copied from the reference rather than recomputed, when it is the sum of
+the data and moves with every payload.
 
 What that looks like from outside is worth recording, because it looks like
 almost anything except a bad fingerprint. The greeting, the channel setup and
-the battery all work — they are recorded messages replayed unchanged, with no
-`h4` to compute. The link comes up, the serial and the firmware are right, the
-voltage is right. But a write with a bad fingerprint is dropped in silence, so
-**nothing ever asked of the car is answered**: identification times out, a PID
-scan times out, and an ELM327 client on the bridge sits at "identifying
-vehicle" for ever, with no error to report because nothing failed — an answer
-simply never came.
+the battery all work — they are recorded messages replayed unchanged, with
+nothing to compute. The link comes up, the serial and the firmware are right,
+the voltage is right and stable. But a write the firmware refuses gets no
+answer and no error: the adapter drops the connection. Identification "loses
+the link", a PID scan "loses the link", and an ELM327 client on the bridge sits
+at "identifying vehicle" for ever, because the bridge's own link died under it
+and it had nothing to report.
 
-The check that catches it is external, in the analysis repository: the template
-must appear verbatim in a capture. Two independent routes agree on the frame
-that does — searching the captures for one with identical data, and deriving
-what `h4` the model says belongs to that `(seq, h8, data)` triple. As
-confirmation, deriving a `09 02` request from the corrected template reproduces
-`58 a4 0f 10`, which is the fingerprint the device accepted for that request on
-the wire.
-
-`H4.write` now refuses a frame whose changed bits fall outside what the sweeps
-pinned down, rather than sending something the device will drop without a word.
-For an eleven-bit id and eight payload bytes it never triggers.
+Two things follow from that, both of them now true of this app. A request has to
+be signed correctly rather than optimistically — `1A 90`, `1A 92`, `1A 97`,
+`1A 98`, `01 00` and `09 02` all rebuild byte for byte identical to the recorded
+frames, which is the strongest check available without a car. And the adapter
+has to be handed back even when the link has already gone, or the session stays
+held and the next application to try, the manufacturer's own included, finds it
+refusing everything until it is unplugged.
 
 ## Channel setup
 

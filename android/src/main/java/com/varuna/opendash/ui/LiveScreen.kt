@@ -24,7 +24,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -39,6 +39,7 @@ import com.varuna.opendash.data.Catalogue
 import com.varuna.opendash.data.Monitor
 import com.varuna.opendash.data.PluginRepository
 import com.varuna.opendash.data.Settings
+import com.varuna.opendash.obd.Diagnostics
 import com.varuna.opendash.ui.theme.ValueStyle
 import java.util.Locale
 import kotlin.concurrent.thread
@@ -56,7 +57,12 @@ import kotlin.concurrent.thread
  */
 @Composable
 fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) {
-    val selected = remember { mutableStateListOf<String>() }
+    // A map rather than a list. Membership is tested once per visible row
+    // and again for every row when the selection is collected, and a list makes
+    // each of those a scan: with a few thousand parameters on screen that is
+    // millions of comparisons on the main thread, which is a frozen app and
+    // then a dead one.
+    val selected = remember { mutableStateMapOf<String, Unit>() }
     var rows by remember { mutableStateOf<List<Item>>(emptyList()) }
     var catalogue by remember { mutableStateOf<Catalogue?>(null) }
     var filter by remember { mutableStateOf("") }
@@ -83,16 +89,18 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                         // adds the two-byte ones the vehicle never advertises. The
                         // standard list stays, so nothing is lost by turning it on.
                         //
-                        // The variant is what makes it usable. A brand catalogue is
-                        // every module configuration the marque ever shipped — 21 382
-                        // parameters for Opel, 14 117 of them two-byte — and one
-                        // vehicle is a handful of them. Narrowed to a variant, an
-                        // engine module is a few hundred.
-                        val keys = settings.catalogueVariant
-                            .takeIf { it.isNotEmpty() }
-                            ?.let { c.variants[it]?.toSet() }
-                        val pool = monitor.requestable(c)
-                            .let { all -> if (keys == null) all else all.filter { it.key in keys } }
+                        // The module is what makes it usable. A brand catalogue is
+                        // every configuration the marque ever shipped — 21 382
+                        // parameters for Opel — and one vehicle is a fraction of
+                        // them: the four modules that answer on this car account
+                        // for 5 941, the engine alone for 4 080, and one variant of
+                        // the engine for a few hundred. Without a module chosen
+                        // this listed all 21 382, which is not a list, it is a
+                        // reason to close the screen.
+                        val module = settings.catalogueModule
+                        val pool = if (module.isEmpty()) emptyList() else {
+                            monitor.requestable(c.parametersFor(module, settings.catalogueVariant))
+                        }
 
                         val byPid = pool.groupBy { it.pid }
                         val named = standard.map { pid ->
@@ -166,32 +174,79 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                     }
                 }
                 catalogue?.let { c ->
-                    if (c.variants.isNotEmpty()) {
+                    // Module first, variant second. A brand catalogue is every
+                    // configuration the marque ever shipped, and offered as one
+                    // flat list of variant names it is 221 entries of things
+                    // like "Amplifier - NGI" with no way to tell which of them
+                    // has anything to do with this car. Grouped by module it is
+                    // a dozen readable names, and the ones this car answered on
+                    // come first.
+                    val answered = Session.modulesPresent
+                    val modules = remember(c, answered) {
+                        c.namedModules.sortedWith(
+                            compareByDescending<String> { name ->
+                                c.addressesByModule[name].orEmpty().any { it in answered }
+                            }.thenBy { it }
+                        )
+                    }
+                    if (modules.isNotEmpty()) {
+                        val here = stringResource(R.string.live_module_here)
+                        Combo(
+                            label = stringResource(R.string.live_module),
+                            value = settings.catalogueModule.takeIf { it in modules }.orEmpty(),
+                            options = modules,
+                            render = { name ->
+                                val onThisCar = c.addressesByModule[name].orEmpty().any { it in answered }
+                                name + (if (onThisCar) "  $here" else "")
+                            },
+                            onSelect = {
+                                settings.catalogueModule = it
+                                settings.catalogueVariant = ""
+                                selected.clear()
+                                rows = emptyList()
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    val module = settings.catalogueModule.takeIf { it in modules }.orEmpty()
+                    val variants = remember(c, module) { c.variantsOf(module) }
+                    if (variants.size > 1) {
                         val allVariants = stringResource(R.string.live_variant_all)
-                        val names = remember(c) { listOf("") + c.variants.keys.sorted() }
                         Combo(
                             label = stringResource(R.string.live_variant),
                             value = settings.catalogueVariant,
-                            options = names,
+                            options = listOf("") + variants.map { it.name },
                             render = { name ->
-                                if (name.isEmpty()) allVariants
-                                else name + "  (" + (c.variants[name]?.size ?: 0) + ")"
+                                if (name.isEmpty()) {
+                                    allVariants + "  (" + c.parametersFor(module).size + ")"
+                                } else {
+                                    // The module name is repeated at the front
+                                    // of every one of its variants; saying it
+                                    // twice on one screen helps nobody.
+                                    name.removePrefix(module).trim(' ', '-') +
+                                        "  (" + (variants.firstOrNull { it.name == name }?.keys?.size ?: 0) + ")"
+                                }
                             },
                             onSelect = {
                                 settings.catalogueVariant = it
                                 selected.clear()
                                 rows = emptyList()
                             },
+                            modifier = Modifier.fillMaxWidth(),
                         )
                         Hint(stringResource(R.string.live_variant_hint))
                     }
-                    Hint(
-                        stringResource(
-                            R.string.live_coverage,
-                            monitor.requestable(c).size,
-                            monitor.notRequestable(c),
+                    if (module.isEmpty()) {
+                        Hint(stringResource(R.string.live_module_hint))
+                    } else {
+                        val pool = remember(c, module, settings.catalogueVariant) {
+                            c.parametersFor(module, settings.catalogueVariant)
+                        }
+                        val askable = remember(pool) { pool.count { it.pid in 0..0xffff && it.bytes in 1..4 } }
+                        Hint(
+                            stringResource(R.string.live_coverage, askable, pool.size - askable)
                         )
-                    )
+                    }
                 }
             }
 
@@ -220,8 +275,16 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                             Session.state == Session.State.CHANNEL_OPEN,
                         onClick = {
                             monitor.reset()
-                            val chosen = rows.filter { it.key in selected }
-                            monitor.start(targetsFor(monitor, chosen), record, "live")
+                            val chosen = rows.filter { it.key in selected.keys }
+                            // Where to ask. A module name can sit at more than
+                            // one address across the marque, so prefer one this
+                            // car actually answered on.
+                            val addresses =
+                                catalogue?.addressesByModule?.get(settings.catalogueModule).orEmpty()
+                            val address = addresses.firstOrNull { it in Session.modulesPresent }
+                                ?: addresses.firstOrNull()
+                                ?: Diagnostics.ENGINE
+                            monitor.start(targetsFor(monitor, chosen, address), record, "live")
                         },
                     ) { Text(stringResource(R.string.action_start)) }
                 }
@@ -248,7 +311,7 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
             ErrorLine(monitor.lastError)
         }
 
-        val charted = rows.filter { it.key in selected }.take(settings.chartCount)
+        val charted = rows.filter { it.key in selected.keys }.take(settings.chartCount)
 
         LazyColumn(modifier = Modifier.fillMaxSize()) {
             if (monitor.isRunning) {
@@ -277,7 +340,7 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                         )
                     }
                 }
-                items(rows.filter { it.key in selected }, key = { "value:" + it.key }) { row ->
+                items(rows.filter { it.key in selected.keys }, key = { "value:" + it.key }) { row ->
                     ValueRow(row, monitor)
                 }
             }
@@ -315,8 +378,8 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                 val visible = if (filter.isBlank()) rows
                 else rows.filter { it.name.contains(filter, ignoreCase = true) }
                 items(visible, key = { "pick:" + it.key }) { row ->
-                    PickRow(row, row.key in selected) { on ->
-                        if (on) selected.add(row.key) else selected.remove(row.key)
+                    PickRow(row, row.key in selected.keys) { on ->
+                        if (on) selected[row.key] = Unit else selected.remove(row.key)
                     }
                 }
             }
@@ -426,8 +489,13 @@ private sealed class Item {
     }
 }
 
-private fun targetsFor(monitor: Monitor, rows: List<Item>): List<Monitor.Target> {
+/**
+ * [module] is where the catalogue parameters are asked: they belong to one
+ * module, and asking the engine about a body module parameter gets silence.
+ * The standard OBD list is unaffected, being addressed functionally.
+ */
+private fun targetsFor(monitor: Monitor, rows: List<Item>, module: Int): List<Monitor.Target> {
     val standard = rows.filterIsInstance<Item.Standard>().map { it.pid }
     val catalogue = rows.filterIsInstance<Item.FromCatalogue>().map { it.parameter }
-    return monitor.targetsFor(standard) + monitor.targetsForCatalogue(catalogue)
+    return monitor.targetsFor(standard) + monitor.targetsForCatalogue(catalogue, module)
 }
