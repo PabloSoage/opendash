@@ -237,5 +237,8 @@ fn a_rebuilt_frame_matches_the_one_the_factory_tool_sent() {
     data[13] = 0x90;
 
     let built = h4::reframe(&template, &data).expect("rebuilds");
-    assert_eq!(built, recorded, "must match the recorded frame byte for byte");
+    assert_eq!(
+        built, recorded,
+        "must match the recorded frame byte for byte"
+    );
 }
