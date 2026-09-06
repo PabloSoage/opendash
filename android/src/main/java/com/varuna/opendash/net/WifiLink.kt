@@ -143,6 +143,12 @@ object WifiLink {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && !locationOn(context)) {
             return Scan(emptyList(), Why.LOCATION_OFF)
         }
+        // Ask for a fresh scan, but do not wait for it here: a scan takes
+        // seconds and `scanResults` hands back the cache from the last one.
+        // Reading it in the same breath as starting one is why this list came
+        // back empty on a phone that had been sitting still — it was answering
+        // with a cache nobody had filled. [watch] is what collects the results
+        // when they actually turn up; this returns what is already known.
         @Suppress("DEPRECATION")
         val started = try {
             wifi.startScan()
@@ -169,6 +175,62 @@ object WifiLink {
         // moment fixes it, and telling someone that beats a button that looks
         // broken.
         return Scan(emptyList(), if (started) Why.NOTHING_IN_RANGE else Why.THROTTLED)
+    }
+
+    /**
+     * Call [onResults] every time the system finishes a scan, until the
+     * returned handle is closed.
+     *
+     * Without this the screen shows the cache from whenever something last
+     * scanned, which on a phone that has been sitting still — or is already
+     * joined to the adapter, which is exactly when this screen gets used — is
+     * nothing at all. The button then looks broken when what happened is that
+     * nobody had looked yet.
+     *
+     * The receiver is registered as not exported: it listens to a system
+     * broadcast and nothing else should be able to feed it.
+     */
+    fun watch(context: Context, prefix: String, onResults: (Scan) -> Unit): AutoCloseable {
+        val app = context.applicationContext
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: Context?, i: android.content.Intent?) {
+                onResults(visible(app, prefix))
+            }
+        }
+        val filter = android.content.IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)
+        androidx.core.content.ContextCompat.registerReceiver(
+            app,
+            receiver,
+            filter,
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        return AutoCloseable {
+            try {
+                app.unregisterReceiver(receiver)
+            } catch (_: Exception) {
+                // Already gone. Nothing to undo and nothing worth reporting.
+            }
+        }
+    }
+
+    /**
+     * Whether the adapter can be reached on whatever network the phone is
+     * already using.
+     *
+     * Worth asking before asking to join anything. A phone left joined to the
+     * adapter's access point from an earlier session is already where it needs
+     * to be, and requesting the same network again in that state is how you end
+     * up having to disconnect by hand before the app will connect. This answers
+     * the question that actually matters — can the socket be opened — instead of
+     * the one about names, and it needs no permission to ask.
+     */
+    fun reachableAsIs(host: String, port: Int, timeoutMs: Int = 700): Boolean = try {
+        Socket().use {
+            it.connect(java.net.InetSocketAddress(host, port), timeoutMs)
+            true
+        }
+    } catch (_: Exception) {
+        false
     }
 
     private fun locationOn(context: Context): Boolean {

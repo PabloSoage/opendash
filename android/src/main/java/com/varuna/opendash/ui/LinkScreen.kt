@@ -23,6 +23,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,6 +63,14 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
     val askToScan = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { nearby = WifiLink.visible(context, settings.wifiPrefix) }
+
+    // A scan takes seconds and finishes long after the button that asked for
+    // it has returned, so the list has to be told when the results land rather
+    // than read once and left. Reading it once is why the list stayed empty.
+    DisposableEffect(settings.wifiPrefix) {
+        val watch = WifiLink.watch(context, settings.wifiPrefix) { nearby = it }
+        onDispose { watch.close() }
+    }
 
     // The voltage comes off the adapter, not the bus, so it is readable the
     // moment the socket is up. Polled here rather than during composition,
