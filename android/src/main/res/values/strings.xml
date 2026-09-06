@@ -80,8 +80,8 @@
     <string name="live_selected">%1$d of %2$d selected</string>
     <string name="live_chart_limit">Charts shown at once: %1$d</string>
     <string name="live_rate">%1$d readings/s</string>
-    <string name="live_stream">Fast</string>
-    <string name="live_stream_hint">The module sends the packet on its own, about a hundred times a second, instead of answering one question at a time. Catalogue parameters from one module only.</string>
+    <string name="live_stream">Fast (module sends)</string>
+    <string name="live_stream_hint">Instead of asking for one parameter and waiting, the module is told to send a packet of them on its own — about a hundred times a second, against four or five a second between all of them by asking. Catalogue parameters from a single module only: a standard OBD PID is addressed to whoever answers, so it has no packet to belong to.</string>
     <string name="live_stream_left_out">%1$d selected do not fit in the packets and will not be in the stream.</string>
     <string name="live_record">Record this session</string>
     <string name="live_recording">%1$d rows · %2$s</string>
@@ -90,9 +90,9 @@
     <string name="live_module_here">· on this car</string>
     <string name="live_module_hint">Pick a module. The catalogue covers every one the marque fits; the ones marked are the ones this car answered on, which needs a module sweep on the identification screen first.</string>
     <string name="live_variant">Variant</string>
-    <string name="live_variant_all">All variants</string>
+    <string name="live_variant_all">All variants of this module</string>
     <string name="live_variant_hint">A brand catalogue is every module configuration the marque ever shipped. Narrowing to one variant is what turns a list of thousands into a list you can read.</string>
-    <string name="live_coverage">%1$d parameters can be requested, %2$d cannot yet</string>
+    <string name="live_coverage">%1$d readable here, %2$d not: those carry an identifier or a width this tool has no request for — composite rows the factory tool builds a whole screen from, not parameters it is refusing you.</string>
     <string name="live_search">Filter</string>
     <string name="live_clear_selection">Clear selection</string>
 

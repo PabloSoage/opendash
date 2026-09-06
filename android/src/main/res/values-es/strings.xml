@@ -76,8 +76,8 @@
     <string name="live_selected">%1$d de %2$d seleccionados</string>
     <string name="live_chart_limit">Gráficas a la vez: %1$d</string>
     <string name="live_rate">%1$d lecturas/s</string>
-    <string name="live_stream">Rápido</string>
-    <string name="live_stream_hint">La centralita emite el paquete sola, unas cien veces por segundo, en vez de contestar a una pregunta cada vez. Solo con parámetros de catálogo de un mismo módulo.</string>
+    <string name="live_stream">Rápido (emite el módulo)</string>
+    <string name="live_stream_hint">En vez de pedir un parámetro y esperar la respuesta, se le dice al módulo que emita un paquete de ellos por su cuenta: unas cien veces por segundo, frente a cuatro o cinco por segundo entre todos preguntando. Sólo parámetros de catálogo de un mismo módulo: un PID estándar de OBD va dirigido a quien quiera contestar, así que no pertenece a ningún paquete.</string>
     <string name="live_stream_left_out">%1$d de los marcados no caben en los paquetes y se quedan fuera de la emisión.</string>
     <string name="live_record">Grabar esta sesión</string>
     <string name="live_recording">%1$d filas · %2$s</string>
@@ -86,9 +86,9 @@
     <string name="live_module_here">· en este coche</string>
     <string name="live_module_hint">Elige un módulo. El catálogo trae todos los que monta la marca; los marcados son los que han contestado en este coche, para lo cual hay que barrer módulos antes en la pantalla de identificación.</string>
     <string name="live_variant">Variante</string>
-    <string name="live_variant_all">Todas las variantes</string>
+    <string name="live_variant_all">Todas las variantes de este módulo</string>
     <string name="live_variant_hint">Un catálogo de marca es toda configuración de centralita que esa marca haya montado. Elegir una variante es lo que convierte una lista de miles en una que se puede leer.</string>
-    <string name="live_coverage">%1$d parámetros se pueden pedir, %2$d todavía no</string>
+    <string name="live_coverage">%1$d se pueden leer aquí, %2$d no: ésos llevan un identificador o una anchura para los que esta herramienta no tiene petición — filas compuestas con las que la herramienta de fábrica monta una pantalla entera, no parámetros que te esté negando.</string>
     <string name="live_search">Filtrar</string>
     <string name="live_clear_selection">Quitar selección</string>
 
