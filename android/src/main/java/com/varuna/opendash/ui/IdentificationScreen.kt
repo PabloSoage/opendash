@@ -56,12 +56,17 @@ fun IdentificationScreen() {
     var progress by remember { mutableStateOf<String?>(null) }
     var fraction by remember { mutableStateOf(0f) }
     var modules by remember { mutableStateOf(0) }
+    // Which module of how many, for the progress line. This used to show the
+    // number of rows collected so far against the number of modules found —
+    // "74 of 3" — which is two different things counted against each other.
+    var moduleIndex by remember { mutableStateOf(0) }
 
     fun scan() {
         busy = true
         cancel = false
         results.clear()
         modules = 0
+        moduleIndex = 0
         thread {
             try {
                 // A sweep is minutes of questions and the link can go at any
@@ -83,6 +88,7 @@ fun IdentificationScreen() {
                             stop = { cancel },
                             onProgress = { done, total ->
                                 progress = name
+                                moduleIndex = index + 1
                                 fraction = (index + done.toFloat() / total) / present.size
                             },
                         )
@@ -120,7 +126,7 @@ fun IdentificationScreen() {
                         stringResource(
                             R.string.ident_reading,
                             progress ?: "",
-                            results.size,
+                            moduleIndex,
                             modules,
                         )
                     },
