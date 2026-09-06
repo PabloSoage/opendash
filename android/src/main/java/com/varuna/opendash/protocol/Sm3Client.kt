@@ -449,10 +449,39 @@ class Sm3Client(
             if (o + 16 > data.size) break
             val len = Frame.le32(data, o)
             if (len !in 0..8) continue
-            out.add(CanFrame(Frame.le32(data, o + 4), data.copyOfRange(o + 8, o + 8 + len)))
+            val id = Frame.le32(data, o + 4)
+            if (!keepAll && !worthKeeping(id)) continue
+            out.add(CanFrame(id, data.copyOfRange(o + 8, o + 8 + len)))
         }
         return out
     }
+
+    /**
+     * Whether a frame is worth putting in the queue at all.
+     *
+     * The channel this app opens carries a pass-everything filter, so the
+     * adapter forwards the whole bus: measured on this car, 51 addresses and
+     * about 1340 frames a second, of which four addresses matter. The factory
+     * tool never sees any of it, because it installs real filters — 9 addresses
+     * across a 29-minute session, 99.6 % of them the stream it asked for.
+     *
+     * Until the app installs filters of its own, throwing the rest away here is
+     * where it costs least: one comparison instead of an allocation, a queue
+     * entry and a copy per frame, on a phone, a thousand times a second.
+     *
+     * The four that matter are answers on 0x7E8..0x7EF and 0x640..0x65F, and
+     * emitted packets on 0x5E8 and 0x540..0x55F.
+     */
+    private fun worthKeeping(id: Int): Boolean =
+        id in 0x7E8..0x7EF || id in 0x640..0x65F || id == 0x5E8 || id in 0x540..0x55F
+
+    /**
+     * Hand over every frame instead, for a tool that wants to watch the bus.
+     *
+     * Nothing sets this today. It exists so that dropping frames is a decision
+     * with a switch next to it rather than a silent floor.
+     */
+    var keepAll: Boolean = false
 
     /**
      * The greeting answer carries the serial at 0 and the firmware version at

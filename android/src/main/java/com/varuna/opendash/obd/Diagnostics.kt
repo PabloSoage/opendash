@@ -83,7 +83,23 @@ class Diagnostics(private val sm3: Sm3Client) {
 
         val deadline = System.currentTimeMillis() + timeoutMs
         var flowControlSent = false
+        var answering = NONE
         var nextPoll = System.currentTimeMillis() + POLL_EVERY_MS
+        // [ANY] means any address a module can answer on — not any frame that
+        // turns up. The channel this app opens passes the whole bus, which on
+        // this car is about 1340 frames a second, and roughly 173 of those a
+        // second begin with a byte in 0x01..0x07: the exact shape of a complete
+        // ISO-TP single frame. Accepting the first frame that parses therefore
+        // means accepting a broadcast frame, essentially always, before the
+        // module has had time to answer.
+        //
+        // That is why the standard-PID scan came back empty, why the readiness
+        // monitors never appeared and why live data would not start even with a
+        // single parameter selected: everything addressed functionally goes
+        // through here, and every one of those requests was being answered by a
+        // wheel speed frame.
+        val accepts: (Int) -> Boolean =
+            if (rxId != ANY) ({ it == rxId }) else ({ isDiagnosticReply(it) })
         while (System.currentTimeMillis() < deadline) {
             // Blocks for the slice, so this is a read and not a spin.
             sm3.receive(minOf(SLICE_MS, deadline - System.currentTimeMillis()))
@@ -92,7 +108,11 @@ class Diagnostics(private val sm3: Sm3Client) {
                 nextPoll = System.currentTimeMillis() + POLL_EVERY_MS
             }
             for (frame in sm3.drain()) {
-                if (frame.id != rxId && rxId != ANY) continue
+                if (!accepts(frame.id)) continue
+                // Once somebody has answered, only that somebody is listened to.
+                // Without this a functional request can interleave two modules'
+                // frames into one reassembly and hand back a spliced answer.
+                if (answering == NONE) answering = frame.id else if (frame.id != answering) continue
                 val pci = (frame.data.getOrNull(0)?.toInt() ?: 0) and 0xf0
                 val done = isotp.push(frame.id, frame.data)
                 if (done != null) return done
@@ -423,6 +443,20 @@ class Diagnostics(private val sm3: Sm3Client) {
         /** Accept whichever module replies. */
         const val ANY = -1
 
+        /** No module has answered yet in this exchange. */
+        private const val NONE = -2
+
+        /**
+         * Addresses a module can answer a diagnostic request on.
+         *
+         * 0x7E8..0x7EF is the powertrain range; 0x640..0x65F is where the GMLAN
+         * modules at 0x240..0x25F reply. Nothing else on this bus is an answer
+         * to anything, and the rest of what arrives — 51 addresses of it — is
+         * the car talking to itself.
+         */
+        fun isDiagnosticReply(id: Int): Boolean =
+            id in 0x7E8..0x7EF || id in 0x640..0x65F
+
         /**
          * Modules worth asking, request-side.
          *
@@ -465,11 +499,16 @@ class Diagnostics(private val sm3: Sm3Client) {
          * discards every frame and looks exactly like a module that refused to
          * emit.
          *
-         * Measured for the engine. The 0x241..0x25F modules have not been
-         * tried, so they keep listening on everything rather than on a guess.
+         * The other modules follow the same shape, and the capture says so
+         * rather than the specification: the tool that talked to 0x242 set a
+         * flow-control filter on 0x642 and a pass filter on 0x542 in the same
+         * channel block, and did the same for 0x641/0x541, 0x643/0x543 and
+         * 0x549/0x554. So a module at 0x24X answers on 0x64X and emits on
+         * 0x54X — a hundred lower, where the engine's pair is 0x7E8/0x5E8.
          */
         fun streamIdFor(txId: Int): Int = when (txId) {
             in 0x7E0..0x7E7 -> txId - 0x1F8
+            in 0x240..0x25F -> txId + 0x300
             else -> ANY
         }
     }
