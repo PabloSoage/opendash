@@ -38,8 +38,24 @@ class CarProfile(context: Context) {
     private val prefs = context.getSharedPreferences("opendash", Context.MODE_PRIVATE)
 
     /** The identifiers [module] answered on the car with this [vin]. */
-    fun answered(vin: String, module: Int): Set<Int>? {
-        val raw = prefs.getString(key(vin, module), null) ?: return null
+    fun answered(vin: String, module: Int): Set<Int>? = read(key(vin, module))
+
+    /**
+     * The identifiers that were *asked*, answered or not.
+     *
+     * Kept because the answers alone do not say which configuration a module
+     * is. Scoring the catalogue's variants by how many of their identifiers
+     * answered rewards the big ones, which contain the small ones: on this car
+     * twelve answers put three variants in a dead heat, the right one among
+     * them but not above them. What separates them is the other half — how many
+     * of a variant's identifiers were asked and came back refused — and that
+     * cannot be recovered later, because a missing identifier is otherwise
+     * indistinguishable from one nobody ever asked about.
+     */
+    fun asked(vin: String, module: Int): Set<Int>? = read(key(vin, module) + ".asked")
+
+    private fun read(k: String): Set<Int>? {
+        val raw = prefs.getString(k, null) ?: return null
         if (raw.isEmpty()) return emptySet()
         return raw.split(',').mapNotNullTo(LinkedHashSet()) { it.toIntOrNull() }
     }
@@ -48,9 +64,10 @@ class CarProfile(context: Context) {
     fun taken(vin: String, module: Int): Long? =
         prefs.getLong(key(vin, module) + ".when", 0L).takeIf { it > 0L }
 
-    fun save(vin: String, module: Int, answered: Set<Int>) {
+    fun save(vin: String, module: Int, asked: Set<Int>, answered: Set<Int>) {
         prefs.edit()
             .putString(key(vin, module), answered.joinToString(","))
+            .putString(key(vin, module) + ".asked", asked.joinToString(","))
             .putLong(key(vin, module) + ".when", System.currentTimeMillis())
             .apply()
     }
@@ -58,6 +75,7 @@ class CarProfile(context: Context) {
     fun forget(vin: String, module: Int) {
         prefs.edit()
             .remove(key(vin, module))
+            .remove(key(vin, module) + ".asked")
             .remove(key(vin, module) + ".when")
             .apply()
     }

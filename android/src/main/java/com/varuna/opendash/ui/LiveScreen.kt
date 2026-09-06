@@ -150,7 +150,7 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                         module = moduleAddress,
                         onProgress = { done, total -> probeDone = done; probeTotal = total },
                     )
-                    profiles.save(vin, moduleAddress, found)
+                    profiles.save(vin, moduleAddress, ids.toSet(), found)
                     answered = found
                 }
             } finally {
