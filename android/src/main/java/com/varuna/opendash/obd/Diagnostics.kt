@@ -161,6 +161,44 @@ class Diagnostics(private val sm3: Sm3Client) {
         return r.copyOfRange(3, r.size)
     }
 
+    /**
+     * Which of [ids] this [module] will actually answer.
+     *
+     * The catalogue cannot say. A brand package describes every configuration
+     * the marque ever shipped and carries no table from model to variant — the
+     * factory tool asks the car and matches at run time, and this is that.
+     *
+     * It is affordable because a module refuses politely. Asking this engine
+     * for an identifier it does not have comes back `7F 22 31`,
+     * requestOutOfRange, not silence: 130 of 157 identifiers in one measured
+     * run, at a median of 62 ms each including the poll cadence. So the whole
+     * engine catalogue — 2 653 distinct identifiers across its 29 variants — is
+     * a few minutes once, not a timeout apiece.
+     *
+     * [timeoutMs] is short on purpose and only bounds the ones that do go
+     * quiet; a refusal returns as soon as it arrives.
+     */
+    fun probe(
+        ids: List<Int>,
+        module: Int = ENGINE,
+        timeoutMs: Long = 400,
+        stop: () -> Boolean = { false },
+        onProgress: (Int, Int) -> Unit = { _, _ -> },
+    ): Set<Int> = withTesterPresent(module) {
+        val answered = LinkedHashSet<Int>()
+        for ((index, id) in ids.withIndex()) {
+            if (stop()) break
+            onProgress(index, ids.size)
+            val got = if (id <= 0xff) {
+                mode01(id, txId = module)
+            } else {
+                readDataByIdentifier(id, txId = module, timeoutMs = timeoutMs)
+            }
+            if (got != null) answered.add(id)
+        }
+        answered
+    }
+
     /** The supported-PID bitmasks, four requests instead of ninety-six. */
     fun supportedPids(): Set<Int> = withTesterPresent {
         val masks = HashMap<Int, ByteArray>()

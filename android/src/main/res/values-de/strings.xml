@@ -48,7 +48,7 @@
     <string name="ident_scan">Alle Steuergeräte lesen</string>
     <string name="ident_stop">Stoppen</string>
     <string name="ident_probing">Suche Steuergeräte… %1$s</string>
-    <string name="ident_reading">%1$s · %2$d von %3$d</string>
+    <string name="ident_reading">%1$s · Modul %2$d von %3$d</string>
     <string name="ident_found">%1$d Steuergeräte haben geantwortet</string>
     <string name="ident_none">Noch nichts gelesen.</string>
     <string name="ident_unlabelled">kein Name im Katalog</string>
@@ -67,6 +67,12 @@
     <string name="live_scan">Unterstützte Parameter suchen</string>
     <string name="live_rescan">Erneut suchen</string>
     <string name="live_empty">Adapter verbinden, Kanal öffnen, dann suchen. Es werden nur Parameter angezeigt, die das Fahrzeug als unterstützt meldet.</string>
+    <string name="live_profile">Das Auto fragen</string>
+    <string name="live_profile_busy">Frage… %1$d von %2$d</string>
+    <string name="live_profile_only">Nur von diesem Auto (%1$d)</string>
+    <string name="live_profile_hint">Der Katalog beschreibt jede Konfiguration, die die Marke je gebaut hat, und kann nicht sagen, welche hier steht: die GDS2-Pakete enthalten keine Zuordnung von Modell zu Variante. Das Modul zu fragen, welche Kennungen es hat, dauert einmalig ein paar Minuten und wird je Fahrzeug gemerkt.</string>
+    <string name="live_setup_hide">Einrichtung ausblenden</string>
+    <string name="live_setup_show">Einrichtung</string>
     <string name="live_selected">%1$d von %2$d ausgewählt</string>
     <string name="live_chart_limit">Diagramme gleichzeitig: %1$d</string>
     <string name="live_rate">%1$d Messwerte/s</string>

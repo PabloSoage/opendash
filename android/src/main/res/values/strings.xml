@@ -51,7 +51,7 @@
     <string name="ident_scan">Read all modules</string>
     <string name="ident_stop">Stop</string>
     <string name="ident_probing">Looking for modules… %1$s</string>
-    <string name="ident_reading">%1$s · %2$d of %3$d</string>
+    <string name="ident_reading">%1$s · module %2$d of %3$d</string>
     <string name="ident_found">%1$d modules answered</string>
     <string name="ident_none">Nothing read yet.</string>
     <string name="ident_unlabelled">no name in the catalogue</string>
@@ -71,6 +71,12 @@
     <string name="live_scan">Scan supported parameters</string>
     <string name="live_rescan">Scan again</string>
     <string name="live_empty">Connect the adapter and open a channel, then scan. Only parameters the vehicle reports as supported are listed.</string>
+    <string name="live_profile">Ask this car</string>
+    <string name="live_profile_busy">Asking… %1$d of %2$d</string>
+    <string name="live_profile_only">Only what this car has (%1$d)</string>
+    <string name="live_profile_hint">The catalogue describes every configuration the marque ever shipped and cannot say which one this is — the GDS2 packages carry no model-to-variant table. Asking the module which identifiers it has takes a few minutes once and is remembered per vehicle.</string>
+    <string name="live_setup_hide">Hide setup</string>
+    <string name="live_setup_show">Setup</string>
     <string name="live_selected">%1$d of %2$d selected</string>
     <string name="live_chart_limit">Charts shown at once: %1$d</string>
     <string name="live_rate">%1$d readings/s</string>

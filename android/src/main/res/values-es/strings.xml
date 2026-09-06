@@ -48,7 +48,7 @@
     <string name="ident_scan">Leer todas las centralitas</string>
     <string name="ident_stop">Parar</string>
     <string name="ident_probing">Buscando centralitas… %1$s</string>
-    <string name="ident_reading">%1$s · %2$d de %3$d</string>
+    <string name="ident_reading">%1$s · módulo %2$d de %3$d</string>
     <string name="ident_found">%1$d centralitas han contestado</string>
     <string name="ident_none">Todavía no se ha leído nada.</string>
     <string name="ident_unlabelled">sin nombre en el catálogo</string>
@@ -67,6 +67,12 @@
     <string name="live_scan">Buscar parámetros soportados</string>
     <string name="live_rescan">Buscar de nuevo</string>
     <string name="live_empty">Conecta la interfaz y abre un canal; después busca. Solo se listan los parámetros que el vehículo declara soportados.</string>
+    <string name="live_profile">Preguntar al coche</string>
+    <string name="live_profile_busy">Preguntando… %1$d de %2$d</string>
+    <string name="live_profile_only">Solo lo de este coche (%1$d)</string>
+    <string name="live_profile_hint">El catálogo describe todas las configuraciones que la marca llegó a montar y no puede decir cuál es ésta: los paquetes de GDS2 no traen tabla de modelo a variante. Preguntarle al módulo qué identificadores tiene cuesta unos minutos una vez y se recuerda por vehículo.</string>
+    <string name="live_setup_hide">Ocultar ajustes</string>
+    <string name="live_setup_show">Ajustes</string>
     <string name="live_selected">%1$d de %2$d seleccionados</string>
     <string name="live_chart_limit">Gráficas a la vez: %1$d</string>
     <string name="live_rate">%1$d lecturas/s</string>

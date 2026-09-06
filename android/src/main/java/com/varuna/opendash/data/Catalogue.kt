@@ -77,7 +77,22 @@ class Catalogue(
         val reachable: Boolean get() = bus.contains("HS_PRIMARY")
     }
 
-    private val byKey: Map<String, Parameter> = parameters.associateBy { it.key }
+    /**
+     * A key names a *quantity*, not a row, and several rows can carry it.
+     *
+     * `parameters.tsv` holds 21 382 rows under 11 480 distinct keys: 3 879 keys
+     * appear more than once, because the same quantity is read differently by
+     * different configurations of a module — a different identifier, a
+     * different width, a different scale, sometimes a different unit for the
+     * same sensor (`MAF Sensor` comes in g/s and in Hz).
+     *
+     * This used to be an `associateBy`, which keeps the last row for each key
+     * and drops the rest without a word. That is not a smaller list, it is an
+     * arbitrary one: the surviving row can carry the identifier or the width of
+     * a configuration this car does not have, and reading two bytes where the
+     * module sends one shifts every value after it in a streamed packet.
+     */
+    private val byKey: Map<String, List<Parameter>> = parameters.groupBy { it.key }
 
     /** Where each module answers. A name can appear at more than one address. */
     val addressesByModule: Map<String, List<Int>> =
@@ -106,8 +121,42 @@ class Catalogue(
         val chosen = if (variant.isEmpty()) pool else pool.filter { it.name == variant }
         val keys = LinkedHashSet<String>()
         for (v in chosen) keys.addAll(v.keys)
-        return keys.mapNotNull { byKey[it] }
+        // Every row for those keys, then one row per thing a person could tell
+        // apart on screen. Twenty-nine engine variants between them name 4 080
+        // keys carrying 9 844 rows, of which 2 606 are exact repeats — the same
+        // name, identifier, width, formula and unit, listed once per variant
+        // that happens to include it. Showing those is what made the list look
+        // like it was full of duplicates, because it was.
+        val seen = HashSet<String>()
+        val out = ArrayList<Parameter>()
+        for (k in keys) {
+            for (p in byKey[k].orEmpty()) {
+                if (seen.add(p.name + "|" + p.pid + "|" + p.bytes + "|" + p.formula + "|" + p.unit)) {
+                    out.add(p)
+                }
+            }
+        }
+        return out
     }
+
+    /**
+     * The same list, kept to the identifiers [answered] by the car in front of
+     * you.
+     *
+     * This is the only filter in this class that is not a fact about the
+     * catalogue. A brand catalogue describes every configuration the marque
+     * ever shipped, and no amount of reading it will say which one is parked
+     * outside: the GDS2 packages carry no model-to-variant table, which is why
+     * the factory tool asks the car and matches at run time. So does this.
+     *
+     * What that removes is not cosmetic. Without it an Astra with a four
+     * cylinder A17DTJ is offered cylinders five to eight, actuator commands its
+     * engine has no actuator for, and quantities from twenty-eight other
+     * engines — all of them rows that would sit on screen never moving, with
+     * nothing to say whether that means zero or means nobody answered.
+     */
+    fun keptTo(parameters: List<Parameter>, answered: Set<Int>): List<Parameter> =
+        parameters.filter { it.pid in answered }
 
     companion object {
         /** Load a brand directory: parameters, variants and modules. */

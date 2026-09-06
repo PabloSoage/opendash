@@ -21,8 +21,11 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -30,11 +33,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.varuna.opendash.R
 import com.varuna.opendash.Session
+import com.varuna.opendash.data.CarProfile
 import com.varuna.opendash.data.Catalogue
 import com.varuna.opendash.data.Monitor
 import com.varuna.opendash.data.PluginRepository
@@ -44,6 +49,8 @@ import com.varuna.opendash.obd.Stream
 import com.varuna.opendash.ui.theme.ValueStyle
 import java.util.Locale
 import kotlin.concurrent.thread
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Live values, as numbers and as lines.
@@ -69,7 +76,29 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
     var filter by remember { mutableStateOf("") }
     var record by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
+    // The setup panel, folded away.
+    //
+    // Open, it runs from the scan button to Start and takes three quarters of
+    // the screen; with the filter field above the list that left about an
+    // eighth of it to read parameters in and scroll through, which is where the
+    // work happens. Setup is chosen once and the list is watched for a long
+    // time, so it folds itself away as soon as there is something to watch.
+    var setupOpen by remember { mutableStateOf(true) }
+
     var streaming by remember { mutableStateOf(true) }
+
+    // What this car answered when it was asked, and whether the list is being
+    // kept to it. See CarProfile: the catalogue cannot say which of a marque's
+    // configurations is parked outside, so the car is asked once and the answer
+    // is remembered.
+    val context = LocalContext.current
+    val profiles = remember { CarProfile(context) }
+    var profileVin by remember { mutableStateOf("") }
+    var answered by remember { mutableStateOf<Set<Int>?>(null) }
+    var probing by remember { mutableStateOf(false) }
+    var probeDone by remember { mutableIntStateOf(0) }
+    var probeTotal by remember { mutableIntStateOf(0) }
+    var keepToCar by remember { mutableStateOf(true) }
 
     val installed = remember(plugins.revision) { plugins.installed() }
 
@@ -94,6 +123,42 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
         settings.catalogueModule.isNotEmpty()
     val streamPlan =
         if (canStream) Stream.plan(moduleAddress, chosenParameters) else null
+
+    // The stored profile for this module, if this car has one.
+    LaunchedEffect(settings.catalogueModule, Session.state) {
+        if (Session.state != Session.State.CHANNEL_OPEN) return@LaunchedEffect
+        val vin = withContext(Dispatchers.IO) { Session.guarded { Session.diagnostics.vin() } }.orEmpty()
+        profileVin = vin
+        answered = profiles.answered(vin, moduleAddress)
+    }
+
+    fun profileCar() {
+        probing = true
+        thread {
+            try {
+                Session.guarded {
+                    val vin = Session.diagnostics.vin().orEmpty()
+                    profileVin = vin
+                    val c = catalogue ?: return@guarded
+                    val ids = c.parametersFor(settings.catalogueModule, settings.catalogueVariant)
+                        .map { it.pid }
+                        .filter { it in 0..0xffff }
+                        .distinct()
+                    probeTotal = ids.size
+                    val found = Session.diagnostics.probe(
+                        ids = ids,
+                        module = moduleAddress,
+                        onProgress = { done, total -> probeDone = done; probeTotal = total },
+                    )
+                    profiles.save(vin, moduleAddress, found)
+                    answered = found
+                }
+            } finally {
+                probing = false
+                probeDone = 0
+            }
+        }
+    }
 
     fun rebuild() {
         busy = true
@@ -122,9 +187,13 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                         // this listed all 21 382, which is not a list, it is a
                         // reason to close the screen.
                         val module = settings.catalogueModule
-                        val pool = if (module.isEmpty()) emptyList() else {
-                            monitor.requestable(c.parametersFor(module, settings.catalogueVariant))
+                        val all = if (module.isEmpty()) emptyList() else {
+                            c.parametersFor(module, settings.catalogueVariant)
                         }
+                        val known = answered
+                        val pool = monitor.requestable(
+                            if (keepToCar && known != null) c.keptTo(all, known) else all
+                        )
 
                         val byPid = pool.groupBy { it.pid }
                         val named = standard.map { pid ->
@@ -137,6 +206,8 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                         named + extra
                     }
                 }
+                // Once there is something to look at, the panel is in the way.
+                if (rows.isNotEmpty()) setupOpen = false
             } finally {
                 busy = false
             }
@@ -170,8 +241,28 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                TextButton(onClick = { setupOpen = !setupOpen }) {
+                    Text(
+                        stringResource(
+                            if (setupOpen) R.string.live_setup_hide else R.string.live_setup_show
+                        )
+                    )
+                }
+            }
+            // What was chosen, in one line, while the panel is folded away.
+            // Without it, folding the panel hides which module the list is even
+            // about.
+            if (!setupOpen && settings.catalogueModule.isNotEmpty()) {
+                Text(
+                    settings.catalogueModule,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
 
+            if (setupOpen) {
             if (installed.isNotEmpty()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
@@ -270,6 +361,39 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                         Hint(
                             stringResource(R.string.live_coverage, askable, pool.size - askable)
                         )
+                        // Asking the car which of them it has. The catalogue
+                        // cannot say, so this is the only honest filter there
+                        // is — and it is affordable because a module refuses
+                        // politely: 7F 22 31 comes back in tens of
+                        // milliseconds, not as a timeout.
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            OutlinedButton(
+                                enabled = !probing && !busy && !monitor.isRunning &&
+                                    Session.state == Session.State.CHANNEL_OPEN,
+                                onClick = { profileCar() },
+                            ) {
+                                Text(
+                                    if (probing) {
+                                        stringResource(R.string.live_profile_busy, probeDone, probeTotal)
+                                    } else {
+                                        stringResource(R.string.live_profile)
+                                    }
+                                )
+                            }
+                            answered?.let { known ->
+                                FilterChip(
+                                    selected = keepToCar,
+                                    enabled = !monitor.isRunning,
+                                    onClick = { keepToCar = !keepToCar },
+                                    label = { Text(stringResource(R.string.live_profile_only, known.size)) },
+                                )
+                            }
+                        }
+                        if (answered == null) Hint(stringResource(R.string.live_profile_hint))
                     }
                 }
             }
@@ -310,6 +434,7 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                 // tell that from one the module refuses.
                 val left = streamPlan?.leftOut?.size ?: 0
                 if (left > 0) Hint(stringResource(R.string.live_stream_left_out, left))
+            }
             }
 
             Row(
