@@ -2,7 +2,7 @@
 # Kept in step with the Rustify project, which builds on the same machine with
 # the same toolchain. Bumping one and not the other is how a Gradle sync starts
 # failing for reasons that have nothing to do with the app.
-agp = "9.3.2"
+agp = "9.4.0"
 kotlin = "2.2.10"
 composeBom = "2026.06.01"
 coreKtx = "1.19.0"

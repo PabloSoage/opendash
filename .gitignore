@@ -17,3 +17,6 @@ local.properties
 
 # APK builds
 *.apk
+
+# Native debug symbols, produced by every release build
+*/release/native-debug-symbols.zip
