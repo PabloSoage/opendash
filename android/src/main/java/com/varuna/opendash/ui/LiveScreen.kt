@@ -296,11 +296,11 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                     // has anything to do with this car. Grouped by module it is
                     // a dozen readable names, and the ones this car answered on
                     // come first.
-                    val answered = Session.modulesPresent
-                    val modules = remember(c, answered) {
+                    val present = Session.modulesPresent
+                    val modules = remember(c, present) {
                         c.namedModules.sortedWith(
                             compareByDescending<String> { name ->
-                                c.addressesByModule[name].orEmpty().any { it in answered }
+                                c.addressesByModule[name].orEmpty().any { it in present }
                             }.thenBy { it }
                         )
                     }
@@ -311,7 +311,7 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                             value = settings.catalogueModule.takeIf { it in modules }.orEmpty(),
                             options = modules,
                             render = { name ->
-                                val onThisCar = c.addressesByModule[name].orEmpty().any { it in answered }
+                                val onThisCar = c.addressesByModule[name].orEmpty().any { it in present }
                                 name + (if (onThisCar) "  $here" else "")
                             },
                             onSelect = {
