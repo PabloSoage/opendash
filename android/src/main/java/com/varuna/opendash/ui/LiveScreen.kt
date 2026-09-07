@@ -3,7 +3,6 @@ package com.varuna.opendash.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -35,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.varuna.opendash.R
@@ -214,353 +214,360 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)) {
+    // One scrolling surface, with the setup panel as the list's first item.
+    // Side by side in a Column, the panel is measured first and takes every
+    // pixel it asks for; the list gets what is left, which on a phone held
+    // upright is nothing at all — the panel runs off the bottom of the screen
+    // and there is no way to scroll down to the rest of it.
+    val charted = rows.filter { it.key in selected.keys }.take(settings.chartCount)
 
-        Panel {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Button(
-                    enabled = !busy && !monitor.isRunning &&
-                        Session.state == Session.State.CHANNEL_OPEN,
-                    onClick = { rebuild() },
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+
+        item {
+            Panel {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(
-                        when {
-                            busy -> stringResource(R.string.state_working)
-                            rows.isEmpty() -> stringResource(R.string.live_scan)
-                            else -> stringResource(R.string.live_rescan)
-                        }
-                    )
-                }
-                Spacer(Modifier.weight(1f))
-                Text(
-                    stringResource(R.string.live_selected, selected.size, rows.size),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                TextButton(onClick = { setupOpen = !setupOpen }) {
-                    Text(
-                        stringResource(
-                            if (setupOpen) R.string.live_setup_hide else R.string.live_setup_show
+                    Button(
+                        enabled = !busy && !monitor.isRunning &&
+                            Session.state == Session.State.CHANNEL_OPEN,
+                        onClick = { rebuild() },
+                    ) {
+                        Text(
+                            when {
+                                busy -> stringResource(R.string.state_working)
+                                rows.isEmpty() -> stringResource(R.string.live_scan)
+                                else -> stringResource(R.string.live_rescan)
+                            }
                         )
+                    }
+                    // Weighted rather than pushed by a spacer. A Row measures
+                    // the children without a weight first, at whatever width
+                    // they ask for, and the last one gets what is left over —
+                    // which on a phone held upright was nothing, so the control
+                    // that folds this panel away was itself off the screen.
+                    Text(
+                        stringResource(R.string.live_selected, selected.size, rows.size),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.End,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { setupOpen = !setupOpen }) {
+                        Text(
+                            stringResource(
+                                if (setupOpen) R.string.live_setup_hide else R.string.live_setup_show
+                            )
+                        )
+                    }
+                }
+                // What was chosen, in one line, while the panel is folded away.
+                // Without it, folding the panel hides which module the list is even
+                // about.
+                if (!setupOpen && settings.catalogueModule.isNotEmpty()) {
+                    Text(
+                        settings.catalogueModule,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-            }
-            // What was chosen, in one line, while the panel is folded away.
-            // Without it, folding the panel hides which module the list is even
-            // about.
-            if (!setupOpen && settings.catalogueModule.isNotEmpty()) {
-                Text(
-                    settings.catalogueModule,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
 
-            if (setupOpen) {
-            if (installed.isNotEmpty()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = catalogue == null,
-                        enabled = !monitor.isRunning,
-                        onClick = {
-                            catalogue = null
-                            selected.clear()
-                            rows = emptyList()
-                        },
-                        label = { Text(stringResource(R.string.live_catalogue_off)) },
-                    )
-                    installed.forEach { brand ->
+                if (setupOpen) {
+                if (installed.isNotEmpty()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(
-                            selected = catalogue?.brand == brand,
+                            selected = catalogue == null,
                             enabled = !monitor.isRunning,
                             onClick = {
-                                catalogue = plugins.load(brand, settings.catalogueLanguage)
+                                catalogue = null
                                 selected.clear()
                                 rows = emptyList()
                             },
-                            label = { Text(brand) },
+                            label = { Text(stringResource(R.string.live_catalogue_off)) },
                         )
-                    }
-                }
-                catalogue?.let { c ->
-                    // Module first, variant second. A brand catalogue is every
-                    // configuration the marque ever shipped, and offered as one
-                    // flat list of variant names it is 221 entries of things
-                    // like "Amplifier - NGI" with no way to tell which of them
-                    // has anything to do with this car. Grouped by module it is
-                    // a dozen readable names, and the ones this car answered on
-                    // come first.
-                    val present = Session.modulesPresent
-                    val modules = remember(c, present) {
-                        c.namedModules.sortedWith(
-                            compareByDescending<String> { name ->
-                                c.addressesByModule[name].orEmpty().any { it in present }
-                            }.thenBy { it }
-                        )
-                    }
-                    if (modules.isNotEmpty()) {
-                        val here = stringResource(R.string.live_module_here)
-                        Combo(
-                            label = stringResource(R.string.live_module),
-                            value = settings.catalogueModule.takeIf { it in modules }.orEmpty(),
-                            options = modules,
-                            render = { name ->
-                                val onThisCar = c.addressesByModule[name].orEmpty().any { it in present }
-                                name + (if (onThisCar) "  $here" else "")
-                            },
-                            onSelect = {
-                                settings.catalogueModule = it
-                                settings.catalogueVariant = ""
-                                selected.clear()
-                                rows = emptyList()
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                    val module = settings.catalogueModule.takeIf { it in modules }.orEmpty()
-                    val variants = remember(c, module) { c.variantsOf(module) }
-                    if (variants.size > 1) {
-                        val allVariants = stringResource(R.string.live_variant_all)
-                        Combo(
-                            label = stringResource(R.string.live_variant),
-                            value = settings.catalogueVariant,
-                            options = listOf("") + variants.map { it.name },
-                            render = { name ->
-                                if (name.isEmpty()) {
-                                    allVariants + "  (" + c.parametersFor(module).size + ")"
-                                } else {
-                                    // The module name is repeated at the front
-                                    // of every one of its variants; saying it
-                                    // twice on one screen helps nobody.
-                                    name.removePrefix(module).trim(' ', '-') +
-                                        "  (" + (variants.firstOrNull { it.name == name }?.keys?.size ?: 0) + ")"
-                                }
-                            },
-                            onSelect = {
-                                settings.catalogueVariant = it
-                                selected.clear()
-                                rows = emptyList()
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        Hint(stringResource(R.string.live_variant_hint))
-                    }
-                    if (module.isEmpty()) {
-                        Hint(stringResource(R.string.live_module_hint))
-                    } else {
-                        val pool = remember(c, module, settings.catalogueVariant) {
-                            c.parametersFor(module, settings.catalogueVariant)
+                        installed.forEach { brand ->
+                            FilterChip(
+                                selected = catalogue?.brand == brand,
+                                enabled = !monitor.isRunning,
+                                onClick = {
+                                    catalogue = plugins.load(brand, settings.catalogueLanguage)
+                                    selected.clear()
+                                    rows = emptyList()
+                                },
+                                label = { Text(brand) },
+                            )
                         }
-                        val askable = remember(pool) { pool.count { it.pid in 0..0xffff && it.bytes in 1..4 } }
-                        Hint(
-                            stringResource(R.string.live_coverage, askable, pool.size - askable)
-                        )
-                        // Asking the car which of them it has. The catalogue
-                        // cannot say, so this is the only honest filter there
-                        // is — and it is affordable because a module refuses
-                        // politely: 7F 22 31 comes back in tens of
-                        // milliseconds, not as a timeout.
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            OutlinedButton(
-                                enabled = !probing && !busy && !monitor.isRunning &&
-                                    Session.state == Session.State.CHANNEL_OPEN,
-                                onClick = { profileCar() },
-                            ) {
-                                Text(
-                                    if (probing) {
-                                        stringResource(R.string.live_profile_busy, probeDone, probeTotal)
+                    }
+                    catalogue?.let { c ->
+                        // Module first, variant second. A brand catalogue is every
+                        // configuration the marque ever shipped, and offered as one
+                        // flat list of variant names it is 221 entries of things
+                        // like "Amplifier - NGI" with no way to tell which of them
+                        // has anything to do with this car. Grouped by module it is
+                        // a dozen readable names, and the ones this car answered on
+                        // come first.
+                        val present = Session.modulesPresent
+                        val modules = remember(c, present) {
+                            c.namedModules.sortedWith(
+                                compareByDescending<String> { name ->
+                                    c.addressesByModule[name].orEmpty().any { it in present }
+                                }.thenBy { it }
+                            )
+                        }
+                        if (modules.isNotEmpty()) {
+                            val here = stringResource(R.string.live_module_here)
+                            Combo(
+                                label = stringResource(R.string.live_module),
+                                value = settings.catalogueModule.takeIf { it in modules }.orEmpty(),
+                                options = modules,
+                                render = { name ->
+                                    val onThisCar = c.addressesByModule[name].orEmpty().any { it in present }
+                                    name + (if (onThisCar) "  $here" else "")
+                                },
+                                onSelect = {
+                                    settings.catalogueModule = it
+                                    settings.catalogueVariant = ""
+                                    selected.clear()
+                                    rows = emptyList()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        val module = settings.catalogueModule.takeIf { it in modules }.orEmpty()
+                        val variants = remember(c, module) { c.variantsOf(module) }
+                        if (variants.size > 1) {
+                            val allVariants = stringResource(R.string.live_variant_all)
+                            Combo(
+                                label = stringResource(R.string.live_variant),
+                                value = settings.catalogueVariant,
+                                options = listOf("") + variants.map { it.name },
+                                render = { name ->
+                                    if (name.isEmpty()) {
+                                        allVariants + "  (" + c.parametersFor(module).size + ")"
                                     } else {
-                                        stringResource(R.string.live_profile)
+                                        // The module name is repeated at the front
+                                        // of every one of its variants; saying it
+                                        // twice on one screen helps nobody.
+                                        name.removePrefix(module).trim(' ', '-') +
+                                            "  (" + (variants.firstOrNull { it.name == name }?.keys?.size ?: 0) + ")"
                                     }
-                                )
-                            }
-                            answered?.let { known ->
-                                FilterChip(
-                                    selected = keepToCar,
-                                    enabled = !monitor.isRunning,
-                                    onClick = { keepToCar = !keepToCar },
-                                    label = { Text(stringResource(R.string.live_profile_only, known.size)) },
-                                )
-                            }
+                                },
+                                onSelect = {
+                                    settings.catalogueVariant = it
+                                    selected.clear()
+                                    rows = emptyList()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Hint(stringResource(R.string.live_variant_hint))
                         }
-                        if (answered == null) Hint(stringResource(R.string.live_profile_hint))
+                        if (module.isEmpty()) {
+                            Hint(stringResource(R.string.live_module_hint))
+                        } else {
+                            val pool = remember(c, module, settings.catalogueVariant) {
+                                c.parametersFor(module, settings.catalogueVariant)
+                            }
+                            val askable = remember(pool) { pool.count { it.pid in 0..0xffff && it.bytes in 1..4 } }
+                            Hint(
+                                stringResource(R.string.live_coverage, askable, pool.size - askable)
+                            )
+                            // Asking the car which of them it has. The catalogue
+                            // cannot say, so this is the only honest filter there
+                            // is — and it is affordable because a module refuses
+                            // politely: 7F 22 31 comes back in tens of
+                            // milliseconds, not as a timeout.
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                OutlinedButton(
+                                    enabled = !probing && !busy && !monitor.isRunning &&
+                                        Session.state == Session.State.CHANNEL_OPEN,
+                                    onClick = { profileCar() },
+                                ) {
+                                    Text(
+                                        if (probing) {
+                                            stringResource(R.string.live_profile_busy, probeDone, probeTotal)
+                                        } else {
+                                            stringResource(R.string.live_profile)
+                                        }
+                                    )
+                                }
+                                answered?.let { known ->
+                                    FilterChip(
+                                        selected = keepToCar,
+                                        enabled = !monitor.isRunning,
+                                        onClick = { keepToCar = !keepToCar },
+                                        label = { Text(stringResource(R.string.live_profile_only, known.size)) },
+                                    )
+                                }
+                            }
+                            if (answered == null) Hint(stringResource(R.string.live_profile_hint))
+                        }
                     }
                 }
-            }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Switch(
+                // One switch per line. Two of them side by side needs about
+                // 380dp between the switches themselves and two labels that
+                // are sentences, and a phone held upright has 360dp: the
+                // second label was squeezed to nothing, leaving a switch
+                // captioning itself. A line each always fits, and now that the
+                // panel scrolls the extra height costs nothing.
+                Toggle(
                     checked = record,
                     enabled = !monitor.isRunning,
-                    onCheckedChange = { record = it },
+                    onChange = { record = it },
+                    label = stringResource(R.string.live_record),
                 )
-                Text(
-                    stringResource(R.string.live_record),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Spacer(Modifier.weight(1f))
                 // Only offered when every chosen row is a catalogue parameter.
                 // A standard OBD PID is addressed to whoever answers rather
                 // than to one module, so it has no packet to belong to.
-                Switch(
+                Toggle(
                     checked = streaming && canStream,
                     enabled = !monitor.isRunning && canStream,
-                    onCheckedChange = { streaming = it },
+                    onChange = { streaming = it },
+                    label = stringResource(R.string.live_stream),
                 )
-                Text(
-                    stringResource(R.string.live_stream),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
 
-            if (canStream && streaming) {
-                Hint(stringResource(R.string.live_stream_hint))
-                // Said rather than swallowed: a parameter that did not fit is a
-                // row that would sit there never moving, and there is no way to
-                // tell that from one the module refuses.
-                val left = streamPlan?.leftOut?.size ?: 0
-                if (left > 0) Hint(stringResource(R.string.live_stream_left_out, left))
-            }
-            }
+                if (canStream && streaming) {
+                    Hint(stringResource(R.string.live_stream_hint))
+                    // Said rather than swallowed: a parameter that did not fit is a
+                    // row that would sit there never moving, and there is no way to
+                    // tell that from one the module refuses.
+                    val left = streamPlan?.leftOut?.size ?: 0
+                    if (left > 0) Hint(stringResource(R.string.live_stream_left_out, left))
+                }
+                }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (monitor.isRunning) {
+                        OutlinedButton(onClick = { monitor.stop() }) {
+                            Text(stringResource(R.string.action_stop))
+                        }
+                    } else {
+                        Button(
+                            enabled = selected.isNotEmpty() &&
+                                Session.state == Session.State.CHANNEL_OPEN,
+                            onClick = {
+                                monitor.reset()
+                                val chosen = rows.filter { it.key in selected.keys }
+                                val plan = streamPlan
+                                if (streaming && plan != null && !plan.isEmpty) {
+                                    monitor.startStream(plan, record, "live")
+                                } else {
+                                    monitor.start(targetsFor(monitor, chosen, moduleAddress), record, "live")
+                                }
+                            },
+                        ) { Text(stringResource(R.string.action_start)) }
+                    }
+                }
+
                 if (monitor.isRunning) {
-                    OutlinedButton(onClick = { monitor.stop() }) {
-                        Text(stringResource(R.string.action_stop))
-                    }
-                } else {
-                    Button(
-                        enabled = selected.isNotEmpty() &&
-                            Session.state == Session.State.CHANNEL_OPEN,
-                        onClick = {
-                            monitor.reset()
-                            val chosen = rows.filter { it.key in selected.keys }
-                            val plan = streamPlan
-                            if (streaming && plan != null && !plan.isEmpty) {
-                                monitor.startStream(plan, record, "live")
-                            } else {
-                                monitor.start(targetsFor(monitor, chosen, moduleAddress), record, "live")
-                            }
-                        },
-                    ) { Text(stringResource(R.string.action_start)) }
-                }
-            }
-
-            if (monitor.isRunning) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        stringResource(R.string.live_rate, monitor.rate),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    monitor.recordingName?.let {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            stringResource(R.string.live_recording, monitor.recordedRows, it),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
-            ErrorLine(monitor.lastError)
-        }
-
-        val charted = rows.filter { it.key in selected.keys }.take(settings.chartCount)
-
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            if (monitor.isRunning) {
-                items(charted, key = { "chart:" + it.key }) { row ->
-                    val series = monitor.series[row.key]
-                    if (series != null && series.size > 1) {
-                        ParameterChart(row.name, row.unit, series, monitor.tick)
-                    }
-                }
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            stringResource(R.string.live_chart_limit, settings.chartCount),
+                            stringResource(R.string.live_rate, monitor.rate),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Slider(
-                            value = settings.chartCount.toFloat(),
-                            onValueChange = { settings.chartCount = it.toInt().coerceIn(0, 12) },
-                            valueRange = 0f..12f,
-                            steps = 11,
-                            modifier = Modifier.padding(start = 12.dp),
-                        )
-                    }
-                }
-                items(rows.filter { it.key in selected.keys }, key = { "value:" + it.key }) { row ->
-                    ValueRow(row, monitor)
-                }
-            }
-
-            if (rows.isEmpty()) {
-                item {
-                    Hint(
-                        stringResource(R.string.live_empty),
-                        modifier = Modifier.padding(vertical = 24.dp),
-                    )
-                }
-            } else if (!monitor.isRunning) {
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        OutlinedTextField(
-                            value = filter,
-                            onValueChange = { filter = it },
-                            label = { Text(stringResource(R.string.live_search)) },
-                            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f),
-                        )
-                        if (selected.isNotEmpty()) {
-                            AssistChip(
-                                onClick = { selected.clear() },
-                                label = { Text(stringResource(R.string.live_clear_selection)) },
+                        monitor.recordingName?.let {
+                            Text(
+                                stringResource(R.string.live_recording, monitor.recordedRows, it),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
                 }
-                val visible = if (filter.isBlank()) rows
-                else rows.filter { it.name.contains(filter, ignoreCase = true) }
-                items(visible, key = { "pick:" + it.key }) { row ->
-                    PickRow(row, row.key in selected.keys) { on ->
-                        if (on) selected[row.key] = Unit else selected.remove(row.key)
+                ErrorLine(monitor.lastError)
+            }
+        }
+
+        if (monitor.isRunning) {
+            items(charted, key = { "chart:" + it.key }) { row ->
+                val series = monitor.series[row.key]
+                if (series != null && series.size > 1) {
+                    ParameterChart(row.name, row.unit, series, monitor.tick)
+                }
+            }
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        stringResource(R.string.live_chart_limit, settings.chartCount),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Slider(
+                        value = settings.chartCount.toFloat(),
+                        onValueChange = { settings.chartCount = it.toInt().coerceIn(0, 12) },
+                        valueRange = 0f..12f,
+                        steps = 11,
+                        modifier = Modifier.padding(start = 12.dp),
+                    )
+                }
+            }
+            items(rows.filter { it.key in selected.keys }, key = { "value:" + it.key }) { row ->
+                ValueRow(row, monitor)
+            }
+        }
+
+        if (rows.isEmpty()) {
+            item {
+                Hint(
+                    stringResource(R.string.live_empty),
+                    modifier = Modifier.padding(vertical = 24.dp),
+                )
+            }
+        } else if (!monitor.isRunning) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedTextField(
+                        value = filter,
+                        onValueChange = { filter = it },
+                        label = { Text(stringResource(R.string.live_search)) },
+                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (selected.isNotEmpty()) {
+                        AssistChip(
+                            onClick = { selected.clear() },
+                            label = { Text(stringResource(R.string.live_clear_selection)) },
+                        )
                     }
+                }
+            }
+            val visible = if (filter.isBlank()) rows
+            else rows.filter { it.name.contains(filter, ignoreCase = true) }
+            items(visible, key = { "pick:" + it.key }) { row ->
+                PickRow(row, row.key in selected.keys) { on ->
+                    if (on) selected[row.key] = Unit else selected.remove(row.key)
                 }
             }
         }
     }
 }
-
 /**
  * One line of the selection list.
  *
@@ -672,4 +679,31 @@ private fun targetsFor(monitor: Monitor, rows: List<Item>, module: Int): List<Mo
     val standard = rows.filterIsInstance<Item.Standard>().map { it.pid }
     val catalogue = rows.filterIsInstance<Item.FromCatalogue>().map { it.parameter }
     return monitor.targetsFor(standard) + monitor.targetsForCatalogue(catalogue, module)
+}
+
+/**
+ * A switch with its caption, on a line of its own.
+ *
+ * The caption takes the leftover width and wraps rather than being clipped, so
+ * a switch is never left standing there captioning itself.
+ */
+@Composable
+private fun Toggle(
+    checked: Boolean,
+    enabled: Boolean,
+    onChange: (Boolean) -> Unit,
+    label: String,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+    ) {
+        Switch(checked = checked, enabled = enabled, onCheckedChange = onChange)
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+    }
 }
