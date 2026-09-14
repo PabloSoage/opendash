@@ -416,15 +416,18 @@ Not from make and model. GM service `0x1A` with a local identifier. The engine
 answers directly to what it is:
 
 ```
-1A 90  ->  W0LP-------------   VIN
+1A 90  ->  W0LP………………   VIN
 1A 92  ->  DENSO0100           supplier identification
 1A 97  ->  A17DTJ              system name or engine type
-1A 98  ->  O100------          subscriber ID
+1A 98  ->  O100……………          subscriber ID
 1A 99  ->  20 11 10 25         date programmed, BCD
-1A B4  ->  86AAS-----------    manufacturer's traceability number
+1A B4  ->  86AAS…………………    manufacturer's traceability number
 ```
 
 The VIN answered consistently from eight different modules on one car.
+
+The three identifiers that name one particular vehicle rather than a model
+are masked above; the shape is what matters here, not the value.
 
 That is the readable end of a block of 58 identifiers the factory tool reads to
 fill its ECU ID screen, and the answers carry no labels of their own. The names

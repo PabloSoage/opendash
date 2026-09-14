@@ -487,13 +487,13 @@ class Sm3Client(
      * The greeting answer carries the serial at 0 and the firmware version at
      * 12, both as little-endian words shown in hexadecimal.
      *
-     * The serial is a number whose **hexadecimal is the string**: the four
-     * bytes `the four bytes` are 0x0-------, which written out is <serial>. This
-     * used to be read as ASCII, and by an unhappy coincidence those same bytes
-     * spell "DA4" followed by a newline, so the app showed a plausible-looking
-     * serial that was three characters of a seven-character number. What
-     * settles it is the adapter's own access point, which calls itself
-     * `DIRECT-SCANMATIK-#<serial>`.
+     * The serial is a number whose **hexadecimal is the string**: read the four
+     * bytes as a little-endian word, print it in hex, and that is the serial.
+     * This used to be read as ASCII instead, and by an unhappy coincidence
+     * those bytes can spell three printable characters followed by a newline,
+     * so the app showed a plausible-looking serial that was three characters of
+     * a seven-character number. What settles it is the adapter's own access
+     * point, which calls itself `DIRECT-SCANMATIK-#<serial>`.
      *
      * The firmware follows the same convention, and this app had it wrong in
      * both directions at once. `98 11 00 00` at offset 12 is 0x1198, which is
