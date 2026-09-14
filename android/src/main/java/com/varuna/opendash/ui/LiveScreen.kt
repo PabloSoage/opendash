@@ -668,7 +668,7 @@ private sealed class Item {
         // throws, which takes the app down a second or two after the scan
         // finishes. It also meant ticking one row ticked all its namesakes,
         // since the selection is held by this same key.
-        override val key = "cat:" + parameter.signature
+        override val key = parameter.rowKey
         override val name = parameter.name
         override val unit = parameter.unit
         override val identifier =

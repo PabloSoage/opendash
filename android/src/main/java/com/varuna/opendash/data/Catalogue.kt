@@ -58,6 +58,17 @@ class Catalogue(
             get() = "$name|$pid|$bytes|$formula|$unit"
 
         /**
+         * How a parameter is named in every map that holds one — the selection,
+         * the live values, the chart series, the list itself.
+         *
+         * Written once because it has to agree in all of them: the screen looks
+         * up a row's value by this, and if the monitor spells it any other way
+         * the numbers simply never arrive, with nothing on screen to say why.
+         */
+        val rowKey: String
+            get() = "cat:$signature"
+
+        /**
          * Apply the catalogue's own scaling. The grammar is small — a factor
          * and an offset, or a shift and a mask for status bits — and anything
          * outside it returns the raw value rather than a wrong one.

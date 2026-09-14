@@ -112,7 +112,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
         params: List<Catalogue.Parameter>,
         module: Int = Diagnostics.ENGINE,
     ): List<Target> = params.map { p ->
-        Target("cat:" + p.key, p.name, p.unit) {
+        Target(p.rowKey, p.name, p.unit) {
             val raw = if (p.pid <= 0xff) {
                 Session.diagnostics.mode01(p.pid)
             } else {
@@ -163,7 +163,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                         Session.diagnostics.readStream(plan, STREAM_SLICE_MS)
                     } ?: break
                     for ((parameter, value) in batch) {
-                        val key = "cat:" + parameter.key
+                        val key = parameter.rowKey
                         values[key] = value
                         series.getOrPut(key) { Series() }.add(value)
                         recorder?.add(parameter.name, parameter.unit, value)
