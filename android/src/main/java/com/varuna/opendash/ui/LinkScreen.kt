@@ -32,12 +32,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.varuna.opendash.R
 import com.varuna.opendash.Session
 import com.varuna.opendash.bridge.BridgeService
 import com.varuna.opendash.data.Settings
 import com.varuna.opendash.net.WifiLink
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.util.Locale
 import kotlin.concurrent.thread
 import kotlinx.coroutines.Dispatchers
@@ -339,6 +342,8 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
             // Read from the service, not from the button: starting it can fail
             // and the label has to follow what actually happened.
             val running = Session.bridgePort > 0
+            var probe by remember { mutableStateOf("") }
+            var probing by remember { mutableStateOf(false) }
             Text(
                 if (running) {
                     stringResource(R.string.bridge_listening, settings.elmHost, Session.bridgePort)
@@ -367,6 +372,34 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
                     enabled = running,
                     onClick = { BridgeService.stop(context) },
                 ) { Text(stringResource(R.string.action_stop)) }
+                // The bridge is the one part of this app with no screen of its
+                // own: it is a socket another app talks to, so when it does not
+                // work there is nothing to look at. This connects to it exactly
+                // as that other app would and shows what came back, which says
+                // in one line whether the fault is here or over there.
+                OutlinedButton(
+                    enabled = running && !probing,
+                    onClick = {
+                        probing = true
+                        probe = ""
+                        thread {
+                            probe = try {
+                                askBridge(settings.elmHost, settings.elmPort)
+                            } catch (e: Exception) {
+                                e.message ?: e.javaClass.simpleName
+                            } finally {
+                                probing = false
+                            }
+                        }
+                    },
+                ) { Text(stringResource(R.string.bridge_test)) }
+            }
+            if (probe.isNotEmpty()) {
+                Text(
+                    probe,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                )
             }
             Hint(stringResource(R.string.bridge_hint))
         }
@@ -391,4 +424,45 @@ private fun copyThenOpenWifi(context: Context, password: String) {
     }
     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     runCatching { context.startActivity(intent) }
+}
+
+/**
+ * Talk to the bridge the way an OBD app would, and report what happened.
+ *
+ * Bound to all interfaces the socket still answers on the loopback, so the
+ * test connects there either way: what is being checked is that the server is
+ * up and the car answers through it, not which interface it is reachable on.
+ */
+private fun askBridge(host: String, port: Int): String {
+    val to = if (host == "0.0.0.0") "127.0.0.1" else host
+    Socket().use { s ->
+        s.connect(InetSocketAddress(to, port), 2000)
+        s.soTimeout = 5000
+        val out = s.getOutputStream()
+        val input = s.getInputStream()
+
+        // Everything an ELM327 says ends at the prompt. Reading up to it is the
+        // whole framing, and a read that times out before it arrives is itself
+        // the answer: the server took the connection and then said nothing.
+        fun untilPrompt(): String {
+            val sb = StringBuilder()
+            while (true) {
+                val c = input.read()
+                if (c < 0 || c == '>'.code) return sb.toString().trim()
+                sb.append(c.toChar())
+                if (sb.length > 512) return sb.toString().trim()
+            }
+        }
+        fun ask(command: String): String {
+            out.write((command + "\r").toByteArray(Charsets.US_ASCII))
+            out.flush()
+            return untilPrompt().replace("\r", " ").trim()
+        }
+
+        untilPrompt()                                   // the greeting prompt
+        val version = ask("ATZ")
+        val volts = ask("ATRV")
+        val pids = ask("0100")
+        return "ATZ $version · ATRV $volts · 0100 $pids"
+    }
 }

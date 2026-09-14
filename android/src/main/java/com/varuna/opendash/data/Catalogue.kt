@@ -46,6 +46,18 @@ class Catalogue(
         val max: Double,
     ) {
         /**
+         * What makes this row different from every other one on screen.
+         *
+         * Not the key: a catalogue key is nowhere near unique. Of this marque's
+         * 11 480 keys, 2 859 carry more than one distinct parameter — key
+         * 8483_6763 is twenty-eight different "Vehicle Speed" rows, each with
+         * its own identifier and its own scaling, and 5857_51909 is thirty-seven
+         * "Dummy EPID". A key names a concept; this names a row.
+         */
+        val signature: String
+            get() = "$name|$pid|$bytes|$formula|$unit"
+
+        /**
          * Apply the catalogue's own scaling. The grammar is small — a factor
          * and an offset, or a shift and a mask for status bits — and anything
          * outside it returns the raw value rather than a wrong one.
@@ -131,7 +143,7 @@ class Catalogue(
         val out = ArrayList<Parameter>()
         for (k in keys) {
             for (p in byKey[k].orEmpty()) {
-                if (seen.add(p.name + "|" + p.pid + "|" + p.bytes + "|" + p.formula + "|" + p.unit)) {
+                if (seen.add(p.signature)) {
                     out.add(p)
                 }
             }

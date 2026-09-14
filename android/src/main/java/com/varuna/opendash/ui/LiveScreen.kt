@@ -662,7 +662,13 @@ private sealed class Item {
         val parameter: Catalogue.Parameter,
         override val certain: Boolean,
     ) : Item() {
-        override val key = "cat:" + parameter.key
+        // The signature, not the key. A list keyed by the catalogue key repeats
+        // itself — 641 repeats in this car's engine list, one of them thirty-
+        // seven times — and a LazyColumn handed a key it has already seen
+        // throws, which takes the app down a second or two after the scan
+        // finishes. It also meant ticking one row ticked all its namesakes,
+        // since the selection is held by this same key.
+        override val key = "cat:" + parameter.signature
         override val name = parameter.name
         override val unit = parameter.unit
         override val identifier =
