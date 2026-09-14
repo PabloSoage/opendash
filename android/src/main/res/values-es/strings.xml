@@ -58,6 +58,7 @@
     <string name="bridge_stopped">Parado</string>
     <string name="bridge_listening">Escuchando en %1$s:%2$d</string>
     <string name="bridge_hint">Apunta una app OBD a esta dirección y puerto. Corre como servicio en primer plano, así que el enlace aguanta con la pantalla bloqueada.</string>
+    <string name="bridge_test">Probar</string>
     <string name="bridge_host_label">Interfaz ELM327</string>
     <string name="bridge_host_all">Todas las interfaces (Wi-Fi)</string>
     <string name="bridge_host_local">Solo localhost</string>
@@ -69,7 +70,7 @@
     <string name="live_empty">Conecta la interfaz y abre un canal; después busca. Solo se listan los parámetros que el vehículo declara soportados.</string>
     <string name="live_profile">Preguntar al coche</string>
     <string name="live_profile_busy">Preguntando… %1$d de %2$d</string>
-    <string name="live_profile_only">Solo lo de este coche (%1$d)</string>
+    <string name="live_profile_only">Solo lo de este coche (%1$d de %2$d)</string>
     <string name="live_profile_hint">El catálogo describe todas las configuraciones que la marca llegó a montar y no puede decir cuál es ésta: los paquetes de GDS2 no traen tabla de modelo a variante. Preguntarle al módulo qué identificadores tiene cuesta unos minutos una vez y se recuerda por vehículo.</string>
     <string name="live_setup_hide">Ocultar ajustes</string>
     <string name="live_setup_show">Ajustes</string>
