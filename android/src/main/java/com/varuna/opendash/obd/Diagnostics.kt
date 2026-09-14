@@ -281,6 +281,22 @@ class Diagnostics(private val sm3: Sm3Client) {
      * the middle of another request — which is exactly the arrangement
      * TesterPresent is designed for.
      */
+    /**
+     * The same, for a stream, which needs it more than a sweep does.
+     *
+     * A sweep is a conversation: every identifier it asks for is traffic, and
+     * traffic is what resets the session timer. A stream is the opposite — the
+     * module is told once to emit and then nothing more is said to it, so from
+     * its side the tester went quiet the moment the emission started, and about
+     * five seconds later it stops sending.
+     *
+     * Measured, not guessed: the bench has beaten a 3E every two seconds
+     * through every stream since the first one, with a comment saying why. The
+     * app never sent one, which is why the numbers arrived and then froze two
+     * or three seconds in.
+     */
+    fun <T> whileStreaming(module: Int, block: () -> T): T = withTesterPresent(module, block)
+
     private fun <T> withTesterPresent(module: Int = ENGINE, block: () -> T): T {
         val running = java.util.concurrent.atomic.AtomicBoolean(true)
         val hb = kotlin.concurrent.thread(name = "tester-present", isDaemon = true) {

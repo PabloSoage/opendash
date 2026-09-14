@@ -158,25 +158,40 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                 }
                 var readings = 0
                 var since = System.currentTimeMillis()
-                while (isRunning) {
-                    val batch = Session.guarded {
-                        Session.diagnostics.readStream(plan, STREAM_SLICE_MS)
-                    } ?: break
-                    for ((parameter, value) in batch) {
-                        val key = parameter.rowKey
-                        values[key] = value
-                        series.getOrPut(key) { Series() }.add(value)
-                        recorder?.add(parameter.name, parameter.unit, value)
-                        readings++
-                    }
-                    silent.clear()
-                    recordedRows = recorder?.rows ?: 0
-                    tick++
-                    val elapsed = System.currentTimeMillis() - since
-                    if (elapsed >= 1000) {
-                        rate = (readings * 1000L / elapsed).toInt()
-                        readings = 0
-                        since = System.currentTimeMillis()
+                // The session has to be held open for as long as the module is
+                // emitting — see Diagnostics.whileStreaming. Without it the
+                // module gives up on its own a few seconds in and every batch
+                // from then on is empty, which on screen is numbers that arrive
+                // and then freeze.
+                Session.diagnostics.whileStreaming(plan.module) {
+                    while (isRunning) {
+                        val batch = Session.guarded {
+                            Session.diagnostics.readStream(plan, STREAM_SLICE_MS)
+                        }
+                        if (batch == null) {
+                            // Said rather than swallowed. This is the link going
+                            // out from under a screenful of numbers, and left
+                            // silent it looks identical to a module that simply
+                            // stopped having anything to say.
+                            lastError = "the link went away while the module was emitting"
+                            break
+                        }
+                        for ((parameter, value) in batch) {
+                            val key = parameter.rowKey
+                            values[key] = value
+                            series.getOrPut(key) { Series() }.add(value)
+                            recorder?.add(parameter.name, parameter.unit, value)
+                            readings++
+                        }
+                        silent.clear()
+                        recordedRows = recorder?.rows ?: 0
+                        tick++
+                        val elapsed = System.currentTimeMillis() - since
+                        if (elapsed >= 1000) {
+                            rate = (readings * 1000L / elapsed).toInt()
+                            readings = 0
+                            since = System.currentTimeMillis()
+                        }
                     }
                 }
             } catch (e: Exception) {

@@ -74,7 +74,7 @@
     <string name="live_empty">Connect the adapter and open a channel, then scan. Only parameters the vehicle reports as supported are listed.</string>
     <string name="live_profile">Ask this car</string>
     <string name="live_profile_busy">Asking… %1$d of %2$d</string>
-    <string name="live_profile_only">Only what this car has (%1$d)</string>
+    <string name="live_profile_only">Only what this car has (%1$d of %2$d)</string>
     <string name="live_profile_hint">The catalogue describes every configuration the marque ever shipped and cannot say which one this is — the GDS2 packages carry no model-to-variant table. Asking the module which identifiers it has takes a few minutes once and is remembered per vehicle.</string>
     <string name="live_setup_hide">Hide setup</string>
     <string name="live_setup_show">Setup</string>

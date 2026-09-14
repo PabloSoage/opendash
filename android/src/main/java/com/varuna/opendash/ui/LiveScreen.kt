@@ -379,6 +379,16 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                             Hint(
                                 stringResource(R.string.live_coverage, askable, pool.size - askable)
                             )
+                            // How much the car's own answers actually cut, as
+                            // both numbers. On its own a count of what is kept
+                            // says nothing: 204 is either a filter working or a
+                            // filter throwing away most of what this module has,
+                            // and there is no telling which without the total.
+                            val kept = remember(pool, answered) {
+                                answered?.let { known ->
+                                    c.keptTo(pool, known).count { it.pid in 0..0xffff && it.bytes in 1..4 }
+                                }
+                            }
                             // Asking the car which of them it has. The catalogue
                             // cannot say, so this is the only honest filter there
                             // is — and it is affordable because a module refuses
@@ -407,7 +417,15 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                                         selected = keepToCar,
                                         enabled = !monitor.isRunning,
                                         onClick = { keepToCar = !keepToCar },
-                                        label = { Text(stringResource(R.string.live_profile_only, known.size)) },
+                                        label = {
+                                        Text(
+                                            stringResource(
+                                                R.string.live_profile_only,
+                                                kept ?: known.size,
+                                                askable,
+                                            )
+                                        )
+                                    },
                                     )
                                 }
                             }
