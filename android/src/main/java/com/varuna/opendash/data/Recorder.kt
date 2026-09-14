@@ -30,45 +30,79 @@ import java.util.zip.GZIPOutputStream
  * The stream is opened with sync flushing so the bytes are in the file as they
  * happen: an interrupted session is short, not corrupt.
  */
-class Recorder(private val sink: RecordingStore.Sink, compress: Boolean = true) {
+class Recorder(private val open: () -> RecordingStore.Sink, private val compress: Boolean = true) {
 
-    private val writer: BufferedWriter = BufferedWriter(
-        OutputStreamWriter(
-            if (compress) GZIPOutputStream(sink.stream, true) else sink.stream,
-            Charsets.UTF_8,
-        )
-    ).also {
-        it.write("ms,parameter,unit,value")
-        it.newLine()
-    }
+    private var sink: RecordingStore.Sink? = null
+    private var writer: BufferedWriter? = null
 
     private var count = 0
     private val started = System.currentTimeMillis()
     private var closed = false
 
     val rows: Int get() = count
-    val name: String get() = sink.name
+    val name: String? get() = sink?.name
 
-    fun add(parameter: String, unit: String, value: Double) {
+    /**
+     * The file is not created until there is a row to put in it.
+     *
+     * A run that records nothing used to leave a file behind anyway: ten bytes,
+     * a gzip header and not even the column names, because nothing was ever
+     * written and nothing closed it either. A folder of those is what a bad
+     * afternoon at the car looks like afterwards, and none of them can be told
+     * from a recording that failed halfway.
+     */
+    private fun ready(): BufferedWriter? {
+        writer?.let { return it }
+        if (closed) return null
+        val s = open()
+        sink = s
+        val w = BufferedWriter(
+            OutputStreamWriter(
+                if (compress) GZIPOutputStream(s.stream, true) else s.stream,
+                Charsets.UTF_8,
+            )
+        )
+        w.write("ms,parameter,identifier,unit,value")
+        w.newLine()
+        writer = w
+        return w
+    }
+
+    /**
+     * [identifier] is what tells two rows of the same name apart.
+     *
+     * A marque catalogue names the same thing in several engine variants, each
+     * reading its own identifier with its own scaling: nine rows called
+     * "Exhaust Gas Temperature Sensor 1" is normal. Watch two of them at once
+     * and, written by name alone, both land in one column — which reads back as
+     * a single sensor flipping between 102 °C and 128 °C every few
+     * milliseconds. They are two different sensors, and the file has to say so.
+     */
+    fun add(parameter: String, identifier: String, unit: String, value: Double) {
         if (closed) return
+        val w = ready() ?: return
         val ms = System.currentTimeMillis() - started
-        writer.write(ms.toString())
-        writer.write(",\"")
-        writer.write(parameter.replace("\"", ""))
-        writer.write("\",")
-        writer.write(unit)
-        writer.write(",")
-        writer.write(value.toString())
-        writer.newLine()
-        writer.flush()
+        w.write(ms.toString())
+        w.write(",\"")
+        w.write(parameter.replace("\"", ""))
+        w.write("\",")
+        w.write(identifier)
+        w.write(",")
+        w.write(unit)
+        w.write(",")
+        w.write(value.toString())
+        w.newLine()
+        w.flush()
         count++
     }
 
     fun close() {
         if (closed) return
         closed = true
-        runCatching { writer.flush() }
-        runCatching { writer.close() }
+        writer?.let {
+            runCatching { it.flush() }
+            runCatching { it.close() }
+        }
     }
 
     companion object {

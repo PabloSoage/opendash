@@ -102,7 +102,11 @@ class RecordingStore(private val context: Context, private val settings: Setting
     }
 
     private fun fileName(label: String, compressed: Boolean): String {
-        val stamp = SimpleDateFormat("yyMMdd_HHmm", Locale.ROOT).format(Date())
+        // To the second. At minute resolution two runs a minute apart share a
+        // name, and the document tree then makes "live.csv (1).gz",
+        // "live.csv (2).gz" and so on out of them — which is where a folder of
+        // numbered near-duplicates comes from.
+        val stamp = SimpleDateFormat("yyMMdd_HHmmss", Locale.ROOT).format(Date())
         val safe = label.replace(Regex("[^A-Za-z0-9_-]"), "_").take(24)
         return stamp + "_" + safe + if (compressed) ".csv.gz" else ".csv"
     }

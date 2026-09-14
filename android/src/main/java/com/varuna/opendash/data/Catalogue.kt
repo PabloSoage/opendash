@@ -68,6 +68,10 @@ class Catalogue(
         val rowKey: String
             get() = "cat:$signature"
 
+        /** How the identifier is written wherever a row has to name it. */
+        val identifierText: String
+            get() = String.format(java.util.Locale.ROOT, "0x%04X", pid)
+
         /**
          * Apply the catalogue's own scaling. The grammar is small — a factor
          * and an offset, or a shift and a mask for status bits — and anything

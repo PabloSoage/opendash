@@ -69,11 +69,18 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
         val key: String,
         val name: String,
         val unit: String,
+        /** What it was asked for by, so a recording can tell namesakes apart. */
+        val identifier: String,
         val request: () -> Double?,
     )
 
     fun targetsFor(pids: List<Pid>): List<Target> = pids.map { pid ->
-        Target("obd:" + pid.id, pid.name, pid.unit) {
+        Target(
+            "obd:" + pid.id,
+            pid.name,
+            pid.unit,
+            String.format(java.util.Locale.ROOT, "PID %02X", pid.id),
+        ) {
             Session.diagnostics.mode01(pid.id)?.let { pid.value(it) }
         }
     }
@@ -112,7 +119,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
         params: List<Catalogue.Parameter>,
         module: Int = Diagnostics.ENGINE,
     ): List<Target> = params.map { p ->
-        Target(p.rowKey, p.name, p.unit) {
+        Target(p.rowKey, p.name, p.unit, p.identifierText) {
             val raw = if (p.pid <= 0xff) {
                 Session.diagnostics.mode01(p.pid)
             } else {
@@ -180,11 +187,13 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                             val key = parameter.rowKey
                             values[key] = value
                             series.getOrPut(key) { Series() }.add(value)
-                            recorder?.add(parameter.name, parameter.unit, value)
+                            recorder?.add(parameter.name, parameter.identifierText, parameter.unit, value)
                             readings++
                         }
                         silent.clear()
                         recordedRows = recorder?.rows ?: 0
+                recordingName = recorder?.name
+                        recordingName = recorder?.name
                         tick++
                         val elapsed = System.currentTimeMillis() - since
                         if (elapsed >= 1000) {
@@ -204,6 +213,10 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                     runCatching { Session.diagnostics.endStream(plan.module) }
                     Session.stoppedStreaming(plan.module)
                 }
+                // A run that ends by itself has to close its file too. Only
+                // stop() used to, so a stream that died on its own left the
+                // recording open and unterminated.
+                closeRecorder()
                 isRunning = false
             }
         }
@@ -213,7 +226,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
         if (!record) return
         val compress = settings.compressRecordings
         recorder = try {
-            Recorder(store.create(label, compress), compress).also { recordingName = it.name }
+            Recorder({ store.create(label, compress) }, compress)
         } catch (e: Exception) {
             lastError = e.message ?: e.javaClass.simpleName
             null
@@ -249,7 +262,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                         silent.remove(t.key)
                         values[t.key] = v
                         series.getOrPut(t.key) { Series() }.add(v)
-                        recorder?.add(t.name, t.unit, v)
+                        recorder?.add(t.name, t.identifier, t.unit, v)
                         readings++
                     }
                     val gap = settings.pollIntervalMs.toLong()
@@ -262,6 +275,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                 // Everything in the rotation went quiet: stop hammering the bus.
                 if (readings == 0 && targets.all { (misses[it.key] ?: 0) >= GIVE_UP_AFTER }) break
             }
+            closeRecorder()
             isRunning = false
         }
     }
@@ -269,6 +283,10 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
     fun stop() {
         isRunning = false
         worker = null
+        closeRecorder()
+    }
+
+    private fun closeRecorder() {
         recorder?.close()
         recorder = null
     }

@@ -519,7 +519,10 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
             items(charted, key = { "chart:" + it.key }) { row ->
                 val series = monitor.series[row.key]
                 if (series != null && series.size > 1) {
-                    ParameterChart(row.name, row.unit, series, monitor.tick)
+                    // Two charts titled the same thing, one at 102 and one at
+                    // 128, is not a reading anybody can use.
+                    val title = if (row.certain) row.name else row.name + "  " + row.identifier
+                    ParameterChart(title, row.unit, series, monitor.tick)
                 }
             }
             item {
@@ -631,15 +634,29 @@ private fun ValueRow(row: Item, monitor: Monitor) {
         modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            row.name,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (quiet) MaterialTheme.colorScheme.onSurfaceVariant
-            else MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        // The identifier under the name, for the same reason the picker shows
+        // it: a marque catalogue names the same thing once per engine variant,
+        // each reading its own identifier with its own scaling. Watch two of
+        // them and without this they are two identical rows disagreeing with
+        // each other — 102 °C against 128 °C, both called Exhaust Gas
+        // Temperature Sensor 1.
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                row.name,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (quiet) MaterialTheme.colorScheme.onSurfaceVariant
+                else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (!row.certain) {
+                Text(
+                    row.identifier,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         Text(
             when {
                 quiet -> "—"
