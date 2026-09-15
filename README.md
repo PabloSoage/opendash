@@ -23,6 +23,18 @@ what is still open.
   to get wrong and a swapped engine identifies itself correctly.
 - Reads standard OBD-II live data. It first asks which PIDs the engine answers,
   so nothing offered can be refused. Values and charts, any number at once.
+- Reads a module's **own** parameters, from the manufacturer's catalogue, with
+  service `0x22`. Chosen by module first and variant second, because a marque
+  catalogue is every configuration ever shipped and a flat list of it is not a
+  list.
+- **Asks the car which of them it actually has.** The catalogue cannot say — the
+  factory packages carry no model-to-variant table — so the module is asked,
+  once, and the answer is kept against the VIN. On the test vehicle that is
+  2 638 identifiers asked and 204 rows kept of the engine's 5 249.
+- **Lets the module do the sending.** Declares a data packet with `2C` and starts
+  it with `AA 04`, which is how the factory tool reads live data: about a hundred
+  frames a second with every selected parameter in each one, against the four or
+  five a second that polling shares between all of them.
 - Reads readiness monitors and fault codes, stored and pending.
 - Reads the whole identification block out of every module that answers: part
   numbers, alpha codes, programming date, traceability number, broadcast code.
@@ -30,7 +42,8 @@ what is still open.
   the system picker.
 - Opens recordings back up: its own `.csv`/`.csv.gz`, and `.sm2` files written by
   the Scanmatik Windows software.
-- Serves ELM327 on `127.0.0.1:35000` for other apps on the same phone.
+- Serves ELM327 on `127.0.0.1:35000` for other apps on the same phone, with a
+  self-test that connects to it the way such an app would and shows the answer.
 - Installs richer parameter catalogues as plugins, from several sources, over
   HTTPS with a token or over SFTP with an SSH key.
 - English, Spanish and German; light and dark.
@@ -41,26 +54,19 @@ It never writes to a module. See [Only reading](#only-reading).
 
 - **Command anything.** The gate and the device-lock prompt exist; there is
   nothing behind them.
-- **Reach the whole catalogue with confidence.** A brand catalogue lists 4 993
-  distinct identifiers and 4 775 of them do not fit in a byte, so mode 01 cannot
-  ask for them. The request form is known — the factory capture contains one
-  `22 F8 02`, which the catalogue lists as the VIN — so the app asks with
-  service `0x22` and marks those parameters as unconfirmed, dropping any that
-  does not answer three times running. What is not known is how many of the
-  other 4 774 answer at all; that is a measurement to make on a car, not a claim
-  to put in a README.
-- **Stream.** Both halves of it are settled from the capture: `2C <dpid> <id16>…`
-  defines a packet, `AA 04 <dpid>…` starts it, and the module then puts out raw
-  eight-byte frames on `0x5E8` instead of one round trip per value. It is not
-  implemented because `0x2C` is the one piece that is not a read — it writes a
-  definition into the module. The factory tool did it seven times on this car,
-  redefined the same packet mid-session with different contents, and needed no
-  session change to do it, which is good evidence that it is scratch space. Good
-  evidence is not the same as a decision, and the decision has not been taken.
-  What is still unknown either way is how the seven data bytes divide between
-  the fields of a multi-field packet; the earlier claim that this was confirmed
-  did not hold, because every frame on `0x5E8` is eight bytes whatever the
-  definition says.
+- **Tell one row of a name from another on its own.** A catalogue key names a
+  quantity, not a row: 2 859 of this marque's 11 480 keys carry more than one
+  parameter, and fifteen rows are called "Exhaust Gas Temperature Sensor 1",
+  each reading its own identifier with its own scaling. Choosing the variant
+  does not thin them out, because a variant names keys and one key carries all
+  fifteen. The only discriminator is which identifier the car answers to, which
+  is what asking the car produces — but picking between two that both answer is
+  still the reader's job, so every row shows its identifier.
+- **Choose a module's configuration by itself.** The factory tool resolves it by
+  reading attributes off the bus and evaluating conditions held in its own
+  vehicle database. The condition language and the database format are both
+  understood; what is not settled is which identifier each attribute check
+  requests, so for now the variant is a dropdown.
 - **Share one implementation.** `bridge/ElmSession.kt` mirrors
   `core/src/elm327.rs` in Kotlin so the socket could be exercised before a JNI
   bridge exists. Two implementations of one command set will drift. The Rust one
@@ -101,20 +107,45 @@ that never come, the stream desynchronises, and the connection resets. Measured
 across 4066 messages from two independent sessions: the gap between one message
 and the next is always exactly that padding.
 
-**h4.** A 32-bit fingerprint the firmware checks — a greeting with one bit
-flipped is answered with a TCP reset, nine times out of nine. It is affine over
-GF(2), which means it can be used without being identified: take a recorded
-frame, change the CAN id and payload, and XOR in the contribution of every bit
-that differs. Those contributions came from a one-bit sweep of 228 chosen
-writes, 425 writes with random ids and payloads, and 480 from real captures. The
-result computes the right value for **85 of 85** held-out writes the model had
-never seen, and for 4000 of 4000 recorded pairs.
+**h4 and h8.** Two words the firmware checks — a greeting with one bit flipped
+is answered with a TCP reset, nine times out of nine.
+
+`h8` is the sum of the data as little-endian 32-bit words, **including the
+padding**, which is not zero: a 305-byte block ends in `1e a1 f1`, and zeroing
+it changes the answer.
+
+`h4` is a CRC with reflected polynomial `0x9960034C`. It was first fitted as an
+affine function over GF(2) — which is true, and enough to alter a recorded
+message, and quietly wrong the moment a message of a different length is
+wanted. Identifying the polynomial closed it: the chain for a message of any
+length is anchored at the last bit of the padded data. That is the difference
+between replaying the manufacturer's messages and writing one's own, and
+everything below depends on it.
 
 **Reading.** Opcode `0x1c` with subcommand `40 80 02`; replies are `0xfe` blocks
 of 16-byte records. A client built on this read 33 054 frames covering all 59
 CAN ids of a live car, with no resynchronisation.
 
-**Writing.** Same opcode, subcommand `60 80 02`, followed by the record.
+**Writing.** Same opcode, subcommand `60 80 02`, followed by the record. The
+eight bytes of that record are **the CAN frame itself**, not a length and seven
+bytes of payload. Sent the other way, a flow-control frame goes out as
+`08 30 00`, the module never continues a multi-frame answer, and a VIN comes
+back as its first four characters.
+
+**The channel.** Opening the bus is opcode `0x50`: the speed at data+134, the
+filter count at 142, 59-byte filter records from 305. Opened with a single
+`PASS mask=0 pattern=0` — send me everything — the app saw 1 340 frames a second
+across 51 addresses, 173 a second of them belonging to nobody it had asked;
+the factory tool saw 9 addresses. Four pass filters fix that, and building one
+means signing a 560-byte message, which is what `h4` above is for.
+
+**This bus is GMLAN, not UDS.** TesterPresent is a bare `3E`: `3E 00` comes back
+`7F 3E 12`. A module answering on `0x64X` **emits** on `0x54X`, and the engine
+answers on `0x7E8` but emits on `0x5E8` — which is why streaming looked dead
+while the frames were arriving the whole time on an address nothing was
+listening to. A module told to emit then hears nothing from the tester and
+stops after about five seconds, so a stream needs the same heartbeat a sweep
+does.
 
 **Battery.** Opcode `0x20` takes no payload and answers six bytes; the first
 little-endian u16 is the battery in millivolts. Over one session it ran from
@@ -350,23 +381,30 @@ Gradle sync does not fail for reasons that have nothing to do with the app.
 
 ## What is not proven
 
-h4 was the one place this could be wrong in a way that matters, and it is now
-the best-tested part. The linear system stops at rank 129 of 209, but what it
-misses are fields that never vary by construction — the subcommand, the record
-length, the id bytes above eleven bits — which a bridge does not vary either.
-`h4::unverified_bits` reports them and `h4::is_verified` answers for a given
-frame, so a caller can refuse rather than have the device drop a frame in
-silence.
+Most of what used to be here has since been settled at the car, over three
+sessions with a vehicle in front of it: the session and the channel, the
+identification block, mode 01, service `0x22` against 2 638 catalogue
+identifiers, streaming end to end at about a hundred frames a second, a channel
+with real filters built and signed here rather than replayed, and the ELM327
+bridge answering a client through all of it. What is left:
 
-Everything in `core` is exercised against real captures. The Kotlin port of the
-same protocol is not: it has been read carefully, but the only thing that proves
-a port is a car.
+**The bridge, from the phone.** Its protocol half is proven against the car —
+every command a scan tool sends first, answered correctly. That the foreground
+service starts and an outside app reaches the socket is not. The Test button on
+the Link screen exists for exactly this question.
 
-Service `0x22` is the other open edge. One request of that shape appears in the
-factory capture and was answered, which fixes the form; whether the other 4 774
-catalogue identifiers answer to it is unmeasured. The app asks, labels them
-unconfirmed, and drops the ones that stay silent — so using it is what produces
-the measurement.
+**One implementation, two languages.** Everything in `core` is exercised against
+real captures; `bridge/ElmSession.kt` mirrors it in Kotlin and is not. Two
+implementations of one command set will drift.
+
+**Which identifier resolves a module's configuration.** The factory tool's
+attribute checks compare against two-byte values; the catalogue has a parameter
+called *Diagnostic Data Identifier*, `0x9A`, two bytes wide. It fits, nothing in
+the database ties the two together, and it is one request at a car to find out.
+
+**Anything that writes.** Not a limitation being worked around — see
+[Only reading](#only-reading). Every service this sends is a read, and the
+client refuses the rest.
 
 ---
 
