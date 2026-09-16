@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -23,6 +24,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.getValue
@@ -33,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,6 +45,7 @@ import com.varuna.opendash.Session
 import com.varuna.opendash.data.CarProfile
 import com.varuna.opendash.data.Catalogue
 import com.varuna.opendash.data.Monitor
+import com.varuna.opendash.data.Presets
 import com.varuna.opendash.data.PluginRepository
 import com.varuna.opendash.data.Settings
 import com.varuna.opendash.obd.Diagnostics
@@ -74,7 +78,9 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
     var rows by remember { mutableStateOf<List<Item>>(emptyList()) }
     var catalogue by remember { mutableStateOf<Catalogue?>(null) }
     var filter by remember { mutableStateOf("") }
-    var record by remember { mutableStateOf(false) }
+    // On by default. The cost of a recording nobody wanted is 600 kB; the
+    // cost of a drive nobody recorded is the drive.
+    var record by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     // The setup panel, folded away.
     //
@@ -99,6 +105,17 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
     var probeDone by remember { mutableIntStateOf(0) }
     var probeTotal by remember { mutableIntStateOf(0) }
     var keepToCar by remember { mutableStateOf(true) }
+
+    // Seeing the selection, and naming it. See the list header below.
+    var onlySelected by remember { mutableStateOf(false) }
+    val presets = remember { Presets(context) }
+    var presetRevision by remember { mutableIntStateOf(0) }
+    val presetNames = remember(settings.catalogueModule, presetRevision) {
+        presets.names(settings.catalogueModule)
+    }
+    var showPresets by remember { mutableStateOf(false) }
+    var naming by remember { mutableStateOf(false) }
+    var presetName by remember { mutableStateOf("") }
 
     val installed = remember(plugins.revision) { plugins.installed() }
 
@@ -212,6 +229,89 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                 busy = false
             }
         }
+    }
+
+    // While a run is going, the screen stays on if this screen is what is being
+    // looked at. The session no longer depends on it — LiveService holds the
+    // link up with the screen off — but a screen that blanks while somebody is
+    // reading a gauge is its own problem.
+    val view = LocalView.current
+    DisposableEffect(monitor.isRunning) {
+        view.keepScreenOn = monitor.isRunning
+        onDispose { view.keepScreenOn = false }
+    }
+
+    // Naming a selection, and picking one back up.
+    if (naming) {
+        AlertDialog(
+            onDismissRequest = { naming = false },
+            title = { Text(stringResource(R.string.live_preset_save)) },
+            text = {
+                OutlinedTextField(
+                    value = presetName,
+                    onValueChange = { presetName = it },
+                    label = { Text(stringResource(R.string.live_preset_name)) },
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = presetName.isNotBlank(),
+                    onClick = {
+                        presets.save(settings.catalogueModule, presetName.trim(), selected.keys.toSet())
+                        presetRevision++
+                        presetName = ""
+                        naming = false
+                    },
+                ) { Text(stringResource(R.string.action_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { naming = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+    if (showPresets) {
+        AlertDialog(
+            onDismissRequest = { showPresets = false },
+            title = { Text(stringResource(R.string.live_presets_title)) },
+            text = {
+                Column {
+                    for (name in presetNames) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        ) {
+                            TextButton(
+                                onClick = {
+                                    // Replaces the selection rather than adding
+                                    // to it: a preset is what you meant to
+                                    // watch, not an addition to whatever was
+                                    // left ticked from last time. Rows the
+                                    // catalogue no longer has are dropped.
+                                    val keys = presets.load(settings.catalogueModule, name)
+                                    val present = rows.map { it.key }.toSet()
+                                    selected.clear()
+                                    for (k in keys) if (k in present) selected[k] = Unit
+                                    showPresets = false
+                                },
+                                modifier = Modifier.weight(1f),
+                            ) { Text(name) }
+                            TextButton(onClick = {
+                                presets.forget(settings.catalogueModule, name)
+                                presetRevision++
+                            }) { Text(stringResource(R.string.action_forget)) }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showPresets = false }) {
+                    Text(stringResource(R.string.action_close))
+                }
+            },
+        )
     }
 
     // One scrolling surface, with the setup panel as the list's first item.
@@ -434,36 +534,52 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                     }
                 }
 
-                // One switch per line. Two of them side by side needs about
-                // 380dp between the switches themselves and two labels that
-                // are sentences, and a phone held upright has 360dp: the
-                // second label was squeezed to nothing, leaving a switch
-                // captioning itself. A line each always fits, and now that the
-                // panel scrolls the extra height costs nothing.
+                }
+
+                // Outside the panel, because the panel folds away as soon as
+                // there is something to watch and these are the two decisions
+                // taken immediately before pressing Start. Folded out of sight,
+                // "record this session" is a switch nobody remembers — which is
+                // how a twenty-minute drive comes home unrecorded.
+                //
+                // One switch per line: two of them side by side needs about
+                // 380dp between the switches themselves and two labels that are
+                // sentences, and a phone held upright has 360.
                 Toggle(
                     checked = record,
                     enabled = !monitor.isRunning,
                     onChange = { record = it },
                     label = stringResource(R.string.live_record),
                 )
-                // Only offered when every chosen row is a catalogue parameter.
-                // A standard OBD PID is addressed to whoever answers rather
-                // than to one module, so it has no packet to belong to.
+                // Only offered when every chosen row is a catalogue parameter of
+                // one module. A standard OBD PID is addressed to whoever answers
+                // rather than to one module, so it has no packet to belong to.
                 Toggle(
                     checked = streaming && canStream,
                     enabled = !monitor.isRunning && canStream,
                     onChange = { streaming = it },
                     label = stringResource(R.string.live_stream),
                 )
-
+                if (!canStream && selected.isNotEmpty()) {
+                    // A switch that will not move and does not say why is worse
+                    // than no switch. There are only two reasons it can refuse.
+                    val standard = selected.size - chosenParameters.size
+                    Hint(
+                        if (settings.catalogueModule.isEmpty()) {
+                            stringResource(R.string.live_stream_needs_module)
+                        } else {
+                            stringResource(R.string.live_stream_has_standard, standard)
+                        }
+                    )
+                }
                 if (canStream && streaming) {
                     Hint(stringResource(R.string.live_stream_hint))
-                    // Said rather than swallowed: a parameter that did not fit is a
-                    // row that would sit there never moving, and there is no way to
-                    // tell that from one the module refuses.
+                    // Said rather than swallowed: what did not fit in the
+                    // packets is polled, which is slower, and a row moving once
+                    // a second next to one moving a hundred times a second
+                    // needs explaining before it is noticed.
                     val left = streamPlan?.leftOut?.size ?: 0
                     if (left > 0) Hint(stringResource(R.string.live_stream_left_out, left))
-                }
                 }
 
                 Row(
@@ -579,8 +695,45 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                     }
                 }
             }
-            val visible = if (filter.isBlank()) rows
-            else rows.filter { it.name.contains(filter, ignoreCase = true) }
+            // Seeing what is already chosen, and keeping it.
+            //
+            // A selection is built through a search box, and a search box shows
+            // what matches rather than what is picked: with a few hundred rows
+            // there is no way to look at the dozen already ticked without
+            // remembering all twelve names first. And once built, it is the same
+            // dozen next time — worth naming and keeping rather than rebuilding
+            // through the search box again.
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilterChip(
+                        selected = onlySelected,
+                        onClick = { onlySelected = !onlySelected },
+                        enabled = selected.isNotEmpty(),
+                        label = { Text(stringResource(R.string.live_only_selected, selected.size)) },
+                    )
+                    if (presetNames.isNotEmpty()) {
+                        AssistChip(
+                            onClick = { showPresets = true },
+                            label = { Text(stringResource(R.string.live_presets, presetNames.size)) },
+                        )
+                    }
+                    if (selected.isNotEmpty() && settings.catalogueModule.isNotEmpty()) {
+                        AssistChip(
+                            onClick = { naming = true },
+                            label = { Text(stringResource(R.string.live_preset_save)) },
+                        )
+                    }
+                }
+            }
+            val visible = when {
+                onlySelected -> rows.filter { it.key in selected.keys }
+                filter.isBlank() -> rows
+                else -> rows.filter { it.name.contains(filter, ignoreCase = true) }
+            }
             items(visible, key = { "pick:" + it.key }) { row ->
                 PickRow(row, row.key in selected.keys) { on ->
                     if (on) selected[row.key] = Unit else selected.remove(row.key)
@@ -661,17 +814,24 @@ private fun ValueRow(row: Item, monitor: Monitor) {
             when {
                 quiet -> "—"
                 value == null -> "…"
+                // A bit is on or off. Printed as 1.00 next to an empty unit it
+                // reads like a measurement nobody could put a unit to, which is
+                // exactly how it reads on screen today.
+                row.isFlag -> if (value != 0.0) stringResource(R.string.live_on)
+                else stringResource(R.string.live_off)
                 else -> String.format(Locale.ROOT, "%.2f", value)
             },
             style = ValueStyle,
             color = if (quiet) MaterialTheme.colorScheme.onSurfaceVariant
             else MaterialTheme.colorScheme.primary,
         )
-        Text(
-            " " + row.unit,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        if (!row.isFlag) {
+            Text(
+                " " + row.unit,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -684,6 +844,9 @@ private sealed class Item {
     /** True when the vehicle itself said it supports this. */
     abstract val certain: Boolean
     abstract val identifier: String
+
+    /** A single bit of a packed byte: on or off, not a quantity. */
+    open val isFlag: Boolean get() = false
 
     class Standard(val pid: com.varuna.opendash.obd.Pid) : Item() {
         override val key = "obd:" + pid.id
@@ -708,6 +871,7 @@ private sealed class Item {
         override val unit = parameter.unit
         override val identifier =
             String.format(Locale.ROOT, "0x%04X · service 0x22", parameter.pid)
+        override val isFlag = parameter.isFlag
     }
 }
 

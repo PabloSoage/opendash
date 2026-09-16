@@ -62,6 +62,8 @@
     <string name="bridge_host_label">Interfaz ELM327</string>
     <string name="bridge_host_all">Todas las interfaces (Wi-Fi)</string>
     <string name="bridge_host_local">Solo localhost</string>
+    <string name="live_notification_channel">Sesión en directo</string>
+    <string name="live_notification_text">Leyendo datos en directo. Manteniendo el enlace con la pantalla apagada.</string>
     <string name="bridge_notification_channel">Puente</string>
     <string name="bridge_notification_text">Puerto %1$d · %2$s</string>
 
@@ -79,7 +81,7 @@
     <string name="live_rate">%1$d lecturas/s</string>
     <string name="live_stream">Rápido (emite el módulo)</string>
     <string name="live_stream_hint">En vez de pedir un parámetro y esperar la respuesta, se le dice al módulo que emita un paquete de ellos por su cuenta: unas cien veces por segundo, frente a cuatro o cinco por segundo entre todos preguntando. Sólo parámetros de catálogo de un mismo módulo: un PID estándar de OBD va dirigido a quien quiera contestar, así que no pertenece a ningún paquete.</string>
-    <string name="live_stream_left_out">%1$d de los marcados no caben en los paquetes y se quedan fuera de la emisión.</string>
+    <string name="live_stream_left_out">%1$d de lo seleccionado no cabe en los paquetes — siete de ellos suman 49 bytes — así que esos se sondean. Siguen leyéndose, unas pocas veces por segundo en vez de cien.</string>
     <string name="live_record">Grabar esta sesión</string>
     <string name="live_recording">%1$d filas · %2$s</string>
     <string name="live_catalogue_off">Nombres OBD-II estándar</string>
@@ -228,4 +230,16 @@
     <string name="wifi_why_off">El Wi-Fi está apagado.</string>
     <string name="wifi_why_nothing">Todavía no hay nada al alcance. La interfaz tarda unos segundos en levantar su punto de acceso desde que se enchufa. Si te unes con el nombre en blanco, Android enseña su propia lista.</string>
     <string name="wifi_why_throttled">Android no ha dejado escanear: una app solo puede hacerlo unas pocas veces por minuto. Prueba otra vez en un momento, o únete con el nombre en blanco y elige en la lista del propio Android.</string>
+    <string name="action_cancel">Cancelar</string>
+    <string name="action_close">Cerrar</string>
+    <string name="action_forget">Olvidar</string>
+    <string name="live_only_selected">Seleccionados (%1$d)</string>
+    <string name="live_presets">Grupos (%1$d)</string>
+    <string name="live_preset_save">Guardar grupo</string>
+    <string name="live_preset_name">Nombre del grupo</string>
+    <string name="live_presets_title">Grupos guardados</string>
+    <string name="live_stream_needs_module">Elige antes un módulo: un paquete se declara en un módulo, así que todavía no hay dónde declararlo.</string>
+    <string name="live_stream_has_standard">%1$d de lo seleccionado son PIDs OBD estándar. Esos van dirigidos a quien conteste y no a un módulo, así que no tienen paquete al que pertenecer — quítalos, o deja esto apagado y se sondea todo.</string>
+    <string name="live_on">Sí</string>
+    <string name="live_off">No</string>
 </resources>

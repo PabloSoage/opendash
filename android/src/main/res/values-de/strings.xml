@@ -62,6 +62,8 @@
     <string name="bridge_host_label">ELM327-Schnittstelle</string>
     <string name="bridge_host_all">Alle Schnittstellen (WLAN)</string>
     <string name="bridge_host_local">Nur Localhost</string>
+    <string name="live_notification_channel">Live-Sitzung</string>
+    <string name="live_notification_text">Liest Live-Daten. Hält die Verbindung bei ausgeschaltetem Bildschirm.</string>
     <string name="bridge_notification_channel">Brücke</string>
     <string name="bridge_notification_text">Port %1$d · %2$s</string>
 
@@ -79,7 +81,7 @@
     <string name="live_rate">%1$d Messwerte/s</string>
     <string name="live_stream">Schnell (Modul sendet)</string>
     <string name="live_stream_hint">Statt einen Parameter zu erfragen und auf die Antwort zu warten, wird dem Modul gesagt, ein Paket davon von sich aus zu senden: etwa hundertmal pro Sekunde, gegenüber vier oder fünf pro Sekunde für alle zusammen beim Fragen. Nur Katalogparameter eines einzigen Moduls: eine Standard-OBD-PID richtet sich an jeden, der antwortet, gehört also zu keinem Paket.</string>
-    <string name="live_stream_left_out">%1$d der ausgewählten passen nicht in die Pakete und bleiben draußen.</string>
+    <string name="live_stream_left_out">%1$d der Auswahl passen nicht in die Pakete — sieben davon fassen zusammen 49 Byte — und werden daher abgefragt. Sie werden weiter gelesen, einige Male pro Sekunde statt hundert.</string>
     <string name="live_record">Diese Sitzung aufzeichnen</string>
     <string name="live_recording">%1$d Zeilen · %2$s</string>
     <string name="live_catalogue_off">Standard-OBD-II-Namen</string>
@@ -228,4 +230,16 @@
     <string name="wifi_why_off">WLAN ist aus.</string>
     <string name="wifi_why_nothing">Noch nichts in Reichweite. Der Adapter braucht nach dem Einstecken ein paar Sekunden, bis sein Zugangspunkt steht. Ohne Namen verbinden, dann zeigt Android seine eigene Liste.</string>
     <string name="wifi_why_throttled">Android hat den Suchlauf abgelehnt: eine App darf nur ein paar Mal pro Minute suchen. Gleich noch einmal versuchen, oder ohne Namen verbinden und aus Androids eigener Liste wählen.</string>
+    <string name="action_cancel">Abbrechen</string>
+    <string name="action_close">Schließen</string>
+    <string name="action_forget">Vergessen</string>
+    <string name="live_only_selected">Ausgewählt (%1$d)</string>
+    <string name="live_presets">Gruppen (%1$d)</string>
+    <string name="live_preset_save">Gruppe speichern</string>
+    <string name="live_preset_name">Gruppenname</string>
+    <string name="live_presets_title">Gespeicherte Gruppen</string>
+    <string name="live_stream_needs_module">Erst ein Modul wählen: ein Paket wird in einem Modul deklariert, also gibt es noch nichts, worin.</string>
+    <string name="live_stream_has_standard">%1$d der Auswahl sind Standard-OBD-PIDs. Die gehen an wen auch immer antwortet und nicht an ein Modul, gehören also zu keinem Paket — abwählen, oder dies aus lassen und alles wird abgefragt.</string>
+    <string name="live_on">Ein</string>
+    <string name="live_off">Aus</string>
 </resources>

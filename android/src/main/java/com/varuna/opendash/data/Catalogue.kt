@@ -73,6 +73,20 @@ class Catalogue(
             get() = String.format(java.util.Locale.ROOT, "0x%04X", pid)
 
         /**
+         * True when this row is one bit of a packed byte — a state, not a
+         * measurement.
+         *
+         * Most of the catalogue is these: 16 347 of Opel's 21 381 rows carry no
+         * unit, and the great majority of those are masks of a single bit with
+         * names like "A/C Compressor Clutch Relay Command". Shown as 1.00 and
+         * 0.00 with no unit they look like a measurement whose unit nobody
+         * could determine, which is unsettling enough to leave unticked. They
+         * are on and off.
+         */
+        val isFlag: Boolean
+            get() = SINGLE_BIT.matches(formula)
+
+        /**
          * Apply the catalogue's own scaling. The grammar is small — a factor
          * and an offset, or a shift and a mask for status bits — and anything
          * outside it returns the raw value rather than a wrong one.
@@ -92,6 +106,7 @@ class Catalogue(
         private companion object {
             val LINEAR = Regex("""\(X\(0\)\*(-?[\d.]+)\)([+-][\d.]+)""")
             val BITS = Regex("""\(X\(0\)>>(\d+)\)&(0x[0-9a-fA-F]+)""")
+            val SINGLE_BIT = Regex("""\(X\(0\)>>\d+\)&0x1""")
         }
     }
 

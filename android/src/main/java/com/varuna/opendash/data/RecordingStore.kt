@@ -20,7 +20,7 @@ import java.util.Locale
  * way: the caller asks for a stream to write into, or for the list of what is
  * already there, and does not need to know which of the two it got.
  */
-class RecordingStore(private val context: Context, private val settings: Settings) {
+class RecordingStore(val context: Context, private val settings: Settings) {
 
     /** One saved session, from either backing store. */
     class Entry(val name: String, val bytes: Long, val modified: Long, val uri: Uri)

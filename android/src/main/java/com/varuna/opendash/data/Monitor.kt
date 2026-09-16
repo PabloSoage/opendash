@@ -64,6 +64,19 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
     private var worker: Thread? = null
     private var recorder: Recorder? = null
 
+    /**
+     * A run holds the link up for as long as it lasts.
+     *
+     * The foreground service, the Wi-Fi lock and the partial wake lock all live
+     * in [LiveService]; this is where they are turned on and off, because the
+     * monitor is the only thing that knows when a run actually begins and ends
+     * — including when it ends by itself, which is exactly the case that used
+     * to leave a locked phone with a dead socket and a half-written file.
+     */
+    private fun holdTheLink() = LiveService.start(store.context)
+
+    private fun letGo() = LiveService.stop(store.context)
+
     /** What to poll. [request] returns null when the module does not answer. */
     class Target(
         val key: String,
@@ -154,6 +167,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
 
         isRunning = true
         recordedRows = 0
+        holdTheLink()
         worker = thread(name = "monitor-stream", isDaemon = true) {
             var declared = false
             try {
@@ -165,6 +179,19 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                 }
                 var readings = 0
                 var since = System.currentTimeMillis()
+                // What did not fit in the packets is polled, one per turn round
+                // the loop, instead of being dropped.
+                //
+                // Seven packets of seven bytes is forty-nine bytes of values,
+                // and a selection can be larger than that — forty-seven
+                // parameters certainly is. Those used to go into leftOut and
+                // then nowhere: rows on screen that never showed a number,
+                // indistinguishable from a module refusing to answer. One
+                // polled request costs twenty to forty milliseconds against the
+                // stream's fifty-millisecond slice, so everything selected gets
+                // data, the packets fast and the remainder slowly.
+                val extra = targetsForCatalogue(plan.leftOut, plan.module)
+                var turn = 0
                 // The session has to be held open for as long as the module is
                 // emitting — see Diagnostics.whileStreaming. Without it the
                 // module gives up on its own a few seconds in and every batch
@@ -190,9 +217,21 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                             recorder?.add(parameter.name, parameter.identifierText, parameter.unit, value)
                             readings++
                         }
-                        silent.clear()
+                        if (extra.isNotEmpty()) {
+                            val t = extra[turn % extra.size]
+                            turn++
+                            val v = try { t.request() } catch (_: Exception) { null }
+                            if (v == null) {
+                                silent[t.key] = true
+                            } else {
+                                silent.remove(t.key)
+                                values[t.key] = v
+                                series.getOrPut(t.key) { Series() }.add(v)
+                                recorder?.add(t.name, t.identifier, t.unit, v)
+                                readings++
+                            }
+                        }
                         recordedRows = recorder?.rows ?: 0
-                recordingName = recorder?.name
                         recordingName = recorder?.name
                         tick++
                         val elapsed = System.currentTimeMillis() - since
@@ -217,6 +256,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                 // stop() used to, so a stream that died on its own left the
                 // recording open and unterminated.
                 closeRecorder()
+                letGo()
                 isRunning = false
             }
         }
@@ -240,6 +280,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
 
         isRunning = true
         recordedRows = 0
+        holdTheLink()
         worker = thread(name = "monitor", isDaemon = true) {
             val misses = HashMap<String, Int>()
             while (isRunning) {
@@ -276,6 +317,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                 if (readings == 0 && targets.all { (misses[it.key] ?: 0) >= GIVE_UP_AFTER }) break
             }
             closeRecorder()
+            letGo()
             isRunning = false
         }
     }
@@ -284,6 +326,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
         isRunning = false
         worker = null
         closeRecorder()
+        letGo()
     }
 
     private fun closeRecorder() {

@@ -65,6 +65,8 @@
     <string name="bridge_host_label">ELM327 interface</string>
     <string name="bridge_host_all">All interfaces (Wi-Fi)</string>
     <string name="bridge_host_local">Localhost only</string>
+    <string name="live_notification_channel">Live session</string>
+    <string name="live_notification_text">Reading live data. Keeping the link up with the screen off.</string>
     <string name="bridge_notification_channel">Bridge</string>
     <string name="bridge_notification_text">Port %1$d · %2$s</string>
 
@@ -83,7 +85,7 @@
     <string name="live_rate">%1$d readings/s</string>
     <string name="live_stream">Fast (module sends)</string>
     <string name="live_stream_hint">Instead of asking for one parameter and waiting, the module is told to send a packet of them on its own — about a hundred times a second, against four or five a second between all of them by asking. Catalogue parameters from a single module only: a standard OBD PID is addressed to whoever answers, so it has no packet to belong to.</string>
-    <string name="live_stream_left_out">%1$d selected do not fit in the packets and will not be in the stream.</string>
+    <string name="live_stream_left_out">%1$d of the selection do not fit in the packets — seven of those hold forty-nine bytes between them — so those are polled instead. They still read, a few times a second rather than a hundred.</string>
     <string name="live_record">Record this session</string>
     <string name="live_recording">%1$d rows · %2$s</string>
     <string name="live_catalogue_off">Standard OBD-II names</string>
@@ -238,4 +240,16 @@
     <string name="wifi_why_off">Wi-Fi is off.</string>
     <string name="wifi_why_nothing">Nothing in range yet. The adapter takes a few seconds to raise its access point after it is plugged in. Join with the name left blank and Android offers its own list instead.</string>
     <string name="wifi_why_throttled">Android refused the scan: an app may only scan a few times a minute. Try again in a moment, or just join with the name left blank and pick from Android’s own list.</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_close">Close</string>
+    <string name="action_forget">Forget</string>
+    <string name="live_only_selected">Selected (%1$d)</string>
+    <string name="live_presets">Groups (%1$d)</string>
+    <string name="live_preset_save">Save group</string>
+    <string name="live_preset_name">Group name</string>
+    <string name="live_presets_title">Saved groups</string>
+    <string name="live_stream_needs_module">Choose a module first: a packet is declared in one module, so there is nothing to declare it in yet.</string>
+    <string name="live_stream_has_standard">%1$d of the selection are standard OBD PIDs. Those are addressed to whoever answers rather than to one module, so they have no packet to belong to — untick them, or leave this off and everything is polled.</string>
+    <string name="live_on">On</string>
+    <string name="live_off">Off</string>
 </resources>

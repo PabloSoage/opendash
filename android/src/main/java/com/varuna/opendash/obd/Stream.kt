@@ -79,9 +79,14 @@ object Stream {
             out
         }
 
-        /** `AA 04 <packet> …` — start emitting all of them. */
-        fun start(): ByteArray =
-            byteArrayOf(0xAA.toByte(), 0x04) + ByteArray(packets.size) { packets[it].number.toByte() }
+        /**
+         * `AA 04 <packet> …` — start emitting them, in as many commands as it
+         * takes. Five packet numbers is all that fits in one single frame.
+         */
+        fun start(): List<ByteArray> =
+            packets.map { it.number.toByte() }
+                .chunked(PACKETS_PER_START)
+                .map { byteArrayOf(0xAA.toByte(), 0x04) + it.toByteArray() }
     }
 
     /**
@@ -95,11 +100,23 @@ object Stream {
      *
      * * `2C <packet> <id16>…` leaves room for [MAX_IDENTIFIERS] identifiers.
      *   GDS2's seven recorded declarations carry one or two, never three.
-     * * `AA 04 <packet>…` leaves room for [MAX_PACKETS] packets at a time.
-     *   GDS2 started four.
+     * * `AA 04 <packet>…` leaves room for [PACKETS_PER_START] packets in one
+     *   command. GDS2 started four.
+     *
+     * Those are limits on a *message*, and they were read as a limit on the
+     * plan: five packets of two identifiers is ten, which is exactly where a
+     * selection of forty-seven parameters stopped, the first ten reading and
+     * the other thirty-seven never receiving a single sample.
+     *
+     * The protocol numbers seven packets, not five, and nothing says a second
+     * `AA 04` cannot follow the first — so [start] is a list of commands rather
+     * than one. That raises the ceiling to fourteen identifiers, which is
+     * higher and still a ceiling: a packet carries seven bytes, so seven
+     * packets hold forty-nine bytes of values however they are declared.
+     * Anything past that is polled, by [Plan.leftOut] and the monitor.
      */
     const val MAX_IDENTIFIERS = 2
-    const val MAX_PACKETS = 5
+    const val PACKETS_PER_START = 5
 
     class Packet(val number: Int, val identifiers: List<Int>, val width: Int)
 
@@ -133,7 +150,7 @@ object Stream {
             used = 0
         }
 
-        val lastPacket = minOf(LAST_PACKET, FIRST_PACKET + MAX_PACKETS - 1)
+        val lastPacket = LAST_PACKET
         for ((id, w) in width) {
             if (number > lastPacket) break
             // A packet closes when its seven bytes are full, and also when it

@@ -1,0 +1,133 @@
+package com.varuna.opendash.data
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.net.wifi.WifiManager
+import android.os.Build
+import android.os.PowerManager
+import androidx.lifecycle.LifecycleService
+import com.varuna.opendash.MainActivity
+import com.varuna.opendash.R
+import com.varuna.opendash.Session
+
+/**
+ * Keeps a live session alive while the phone is in a pocket.
+ *
+ * A recording ends when the car is switched off, not when the screen does, and
+ * until now it ended when the screen did. Three separate things had to be true
+ * for that, and none of them were:
+ *
+ * * **A foreground service.** Plain threads in a backgrounded process are
+ *   frozen. The bridge already had one; the live session, which is the part
+ *   that writes a file, had nothing.
+ * * **A Wi-Fi lock.** Android powers the radio down when the screen goes off,
+ *   and the adapter's access point is an ordinary Wi-Fi network as far as the
+ *   phone is concerned. `WIFI_MODE_FULL_HIGH_PERF` is what keeps a socket to it
+ *   open, and it is the difference between a twenty-minute drive recorded and a
+ *   twenty-minute drive lost.
+ * * **A wake lock.** Partial: the CPU stays up, the screen does not. The
+ *   polling thread has to keep running to have anything to write.
+ *
+ * All three are released together when the run ends, because a Wi-Fi lock left
+ * held is somebody's battery.
+ */
+class LiveService : LifecycleService() {
+
+    private var wifi: WifiManager.WifiLock? = null
+    private var cpu: PowerManager.WakeLock? = null
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
+
+        // First, because Android gives a service a few seconds to show a
+        // notification and kills the process if it does not.
+        try {
+            startForeground(NOTIFICATION_ID, notification())
+        } catch (e: Exception) {
+            Session.noteBridgeFault(e.message ?: e.javaClass.simpleName)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        if (wifi == null) {
+            val manager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            // Low latency from Android 10, which is what replaced high
+            // performance and is what this actually needs: a socket to an
+            // adapter, kept responsive rather than merely awake. Below that,
+            // high performance is the only one there is.
+            @Suppress("DEPRECATION")
+            val mode =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+                } else {
+                    WifiManager.WIFI_MODE_FULL_HIGH_PERF
+                }
+            wifi = manager.createWifiLock(mode, TAG).also {
+                it.setReferenceCounted(false)
+                runCatching { it.acquire() }
+            }
+        }
+        if (cpu == null) {
+            val power = getSystemService(Context.POWER_SERVICE) as PowerManager
+            cpu = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, TAG).also {
+                it.setReferenceCounted(false)
+                runCatching { it.acquire() }
+            }
+        }
+        return START_STICKY
+    }
+
+    override fun onDestroy() {
+        runCatching { wifi?.release() }
+        runCatching { cpu?.release() }
+        wifi = null
+        cpu = null
+        super.onDestroy()
+    }
+
+    private fun notification(): Notification {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL,
+                    getString(R.string.live_notification_channel),
+                    NotificationManager.IMPORTANCE_LOW,
+                )
+            )
+        }
+        val open = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE,
+        )
+        return Notification.Builder(this, CHANNEL)
+            .setContentTitle(getString(R.string.app_name))
+            .setContentText(getString(R.string.live_notification_text))
+            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+            .setContentIntent(open)
+            .setOngoing(true)
+            .build()
+    }
+
+    companion object {
+        private const val CHANNEL = "live"
+        private const val TAG = "opendash:live"
+        private const val NOTIFICATION_ID = 2
+
+        fun start(context: Context) {
+            runCatching {
+                context.startForegroundService(Intent(context, LiveService::class.java))
+            }
+        }
+
+        fun stop(context: Context) {
+            runCatching { context.stopService(Intent(context, LiveService::class.java)) }
+        }
+    }
+}

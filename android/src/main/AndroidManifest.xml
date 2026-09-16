@@ -37,6 +37,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Partial only: the CPU stays up so the polling thread keeps running,
+         the screen does not. Without it a recording stops when the screen
+         does, which is when a drive actually starts. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
         android:label="@string/app_name"
@@ -60,6 +64,13 @@
              screen is off, which is the whole point of driving with it. -->
         <service
             android:name=".bridge.BridgeService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+
+        <!-- The same, for the app's own live session. The bridge had this from
+             the start; the part that records a drive did not. -->
+        <service
+            android:name=".data.LiveService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
 

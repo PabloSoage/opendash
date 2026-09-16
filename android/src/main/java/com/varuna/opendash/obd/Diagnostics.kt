@@ -337,7 +337,9 @@ class Diagnostics(private val sm3: Sm3Client) {
             val r = request(plan.module, declaration, timeoutMs = STREAM_SETUP_MS)
             if (r == null || (r[0].toInt() and 0xff) != 0x6C) return false
         }
-        fire(plan.module, plan.start())
+        // As many start commands as the packet count needs: five numbers is
+        // all one single frame carries.
+        for (command in plan.start()) fire(plan.module, command)
         return true
     }
 
