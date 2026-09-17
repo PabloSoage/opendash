@@ -98,11 +98,11 @@ class PluginRepository(context: Context) {
         try {
             val suffix = if (language == "en") "" else "." + language
             val required = listOf("plugin.json", "parameters$suffix.tsv")
-            // `profiles.txt` es opcional y pequeño: selecciones con nombre que
-            // el catálogo publica ya hechas. Una selección es la parte lenta de
-            // usar esto — cientos de filas, y las doce que se miran juntas son
-            // siempre las mismas — así que un catálogo que las trae ahorra la
-            // primera media hora a quien lo instale.
+            // `profiles.txt` is optional and small: named selections the
+            // catalogue publishes ready-made. Choosing what to watch is the
+            // slow part of using this — hundreds of rows, and the dozen worth
+            // reading together are always the same dozen — so a catalogue that
+            // ships them saves whoever installs it the first half hour.
             val optional =
                 listOf("variants$suffix.tsv", "modules.tsv", "dtc.tsv", "profiles.txt")
 

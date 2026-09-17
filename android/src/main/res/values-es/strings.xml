@@ -248,4 +248,10 @@
     <string name="action_import">Importar</string>
     <string name="live_presets_catalogue">Del catálogo</string>
     <string name="catalogues_update">hay actualización</string>
+    <string name="catalogues_profiles">Perfiles</string>
+    <string name="catalogues_profiles_hint">Selecciones que este catálogo publica ya hechas. Al importar una aparece en Grupos, en la pantalla Live, bajo el módulo al que pertenece.</string>
+    <string name="catalogues_profile_taken">importado</string>
+    <string name="live_presets_imported">%1$d importados</string>
+    <string name="live_preset_applied">%1$d de %2$d filas coinciden con este barrido</string>
+    <string name="live_presets_empty">Todavía no hay grupos guardados para este módulo.</string>
 </resources>

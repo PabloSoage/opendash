@@ -258,4 +258,10 @@
     <string name="action_import">Import</string>
     <string name="live_presets_catalogue">From catalogue</string>
     <string name="catalogues_update">update available</string>
+    <string name="catalogues_profiles">Profiles</string>
+    <string name="catalogues_profiles_hint">Selections this catalogue publishes ready-made. Importing one puts it under Groups on the Live screen, against the module it belongs to.</string>
+    <string name="catalogues_profile_taken">imported</string>
+    <string name="live_presets_imported">%1$d imported</string>
+    <string name="live_preset_applied">%1$d of %2$d rows matched this scan</string>
+    <string name="live_presets_empty">No groups saved for this module yet.</string>
 </resources>

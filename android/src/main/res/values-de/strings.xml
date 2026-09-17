@@ -248,4 +248,10 @@
     <string name="action_import">Importieren</string>
     <string name="live_presets_catalogue">Aus dem Katalog</string>
     <string name="catalogues_update">Update verfügbar</string>
+    <string name="catalogues_profiles">Profile</string>
+    <string name="catalogues_profiles_hint">Fertige Auswahlen, die dieser Katalog veröffentlicht. Beim Import erscheint sie unter Gruppen im Live-Bildschirm, beim zugehörigen Steuergerät.</string>
+    <string name="catalogues_profile_taken">importiert</string>
+    <string name="live_presets_imported">%1$d importiert</string>
+    <string name="live_preset_applied">%1$d von %2$d Zeilen passen zu diesem Scan</string>
+    <string name="live_presets_empty">Für dieses Steuergerät sind noch keine Gruppen gespeichert.</string>
 </resources>

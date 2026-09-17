@@ -118,6 +118,10 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
         presets.names(settings.catalogueModule)
     }
     var showPresets by remember { mutableStateOf(false) }
+    // What the last group action did. Applying a group can select nothing at
+    // all — a profile written for one variant names rows another does not have
+    // — and that has to be said rather than left to look like a dead button.
+    var presetNote by remember { mutableStateOf<String?>(null) }
     var naming by remember { mutableStateOf(false) }
     var presetName by remember { mutableStateOf("") }
 
@@ -185,6 +189,7 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
 
     fun rebuild() {
         busy = true
+        presetNote = null
         thread {
             // Guarded: asking the car what it supports is a socket
             // conversation, and a link that goes mid-question must end the
@@ -291,6 +296,9 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
             title = { Text(stringResource(R.string.live_presets_title)) },
             text = {
                 Column {
+                    if (presetNames.isEmpty()) {
+                        Hint(stringResource(R.string.live_presets_empty))
+                    }
                     for (name in presetNames) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -307,6 +315,16 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                                     val present = rows.map { it.key }.toSet()
                                     selected.clear()
                                     for (k in keys) if (k in present) selected[k] = Unit
+                                    // Said out loud, because the quiet version
+                                    // of this is a group that selects nothing:
+                                    // a profile written against one variant
+                                    // names rows another variant does not have,
+                                    // and silence looks like a broken button.
+                                    presetNote = context.getString(
+                                        R.string.live_preset_applied,
+                                        selected.size,
+                                        keys.size,
+                                    )
                                     showPresets = false
                                 },
                                 modifier = Modifier.weight(1f),
@@ -326,35 +344,52 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                             }) { Text(stringResource(R.string.action_forget)) }
                         }
                     }
+
+                    // The two ways one gets here, in the body rather than the
+                    // dialog's own button row: three buttons down there is one
+                    // more than fits a phone held upright, and the two that get
+                    // squeezed out are the ones that bring anything in.
+                    //
+                    // From the catalogue, if it publishes any. A brand ships its
+                    // own profiles.txt, so the selections somebody already
+                    // worked out for a car arrive with the parameters instead of
+                    // being rebuilt through a search box. Also offered from the
+                    // catalogues screen, which is reachable without the car.
+                    val fromCatalogue = catalogue?.brand?.let { plugins.profilesOf(it) }
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (fromCatalogue != null) {
+                            TextButton(onClick = {
+                                val taken = presets.importAll(fromCatalogue)
+                                presetRevision++
+                                presetNote = context.getString(
+                                    R.string.live_presets_imported,
+                                    taken.size,
+                                )
+                            }) { Text(stringResource(R.string.live_presets_catalogue)) }
+                        }
+                        // Paste one in. A preset is plain text by design, so it
+                        // travels in a message, a note or a repository as easily
+                        // as between two phones.
+                        TextButton(onClick = {
+                            val clip =
+                                context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                    as android.content.ClipboardManager
+                            val text =
+                                clip.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
+                            val name = text?.let { presets.import(it) }
+                            presetRevision++
+                            presetNote = context.getString(
+                                R.string.live_presets_imported,
+                                if (name == null) 0 else 1,
+                            )
+                        }) { Text(stringResource(R.string.action_import)) }
+                    }
+                    presetNote?.let { Hint(it) }
                 }
             },
             confirmButton = {
                 TextButton(onClick = { showPresets = false }) {
                     Text(stringResource(R.string.action_close))
-                }
-            },
-            dismissButton = {
-                // Paste one in. A preset is plain text by design, so it travels
-                // in a message, a note or a repository as easily as between two
-                // phones.
-                Row {
-                    // From the catalogue, if it publishes any. A brand ships
-                    // its own profiles.txt, so the selections somebody already
-                    // worked out for a car arrive with the parameters rather
-                    // than having to be rebuilt through a search box.
-                    val fromCatalogue = catalogue?.brand?.let { plugins.profilesOf(it) }
-                    if (fromCatalogue != null) {
-                        TextButton(onClick = {
-                            if (presets.importAll(fromCatalogue).isNotEmpty()) presetRevision++
-                        }) { Text(stringResource(R.string.live_presets_catalogue)) }
-                    }
-                    TextButton(onClick = {
-                        val clip =
-                            context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
-                                as android.content.ClipboardManager
-                        val text = clip.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
-                        if (text != null && presets.import(text) != null) presetRevision++
-                    }) { Text(stringResource(R.string.action_import)) }
                 }
             },
         )
@@ -750,27 +785,30 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
             // dozen next time — worth naming and keeping rather than rebuilding
             // through the search box again.
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    FilterChip(
-                        selected = onlySelected,
-                        onClick = { onlySelected = !onlySelected },
-                        enabled = selected.isNotEmpty(),
-                        label = { Text(stringResource(R.string.live_only_selected, selected.size)) },
-                    )
-                    AssistChip(
-                        onClick = { showPresets = true },
-                        label = { Text(stringResource(R.string.live_presets, presetNames.size)) },
-                    )
-                    if (selected.isNotEmpty() && settings.catalogueModule.isNotEmpty()) {
-                        AssistChip(
-                            onClick = { naming = true },
-                            label = { Text(stringResource(R.string.live_preset_save)) },
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        FilterChip(
+                            selected = onlySelected,
+                            onClick = { onlySelected = !onlySelected },
+                            enabled = selected.isNotEmpty(),
+                            label = { Text(stringResource(R.string.live_only_selected, selected.size)) },
                         )
+                        AssistChip(
+                            onClick = { showPresets = true },
+                            label = { Text(stringResource(R.string.live_presets, presetNames.size)) },
+                        )
+                        if (selected.isNotEmpty() && settings.catalogueModule.isNotEmpty()) {
+                            AssistChip(
+                                onClick = { naming = true },
+                                label = { Text(stringResource(R.string.live_preset_save)) },
+                            )
+                        }
                     }
+                    presetNote?.let { Hint(it) }
                 }
             }
             val visible = when {

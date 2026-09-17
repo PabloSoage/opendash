@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import com.varuna.opendash.R
 import com.varuna.opendash.data.PluginRepository
 import com.varuna.opendash.data.PluginSource
+import com.varuna.opendash.data.Presets
 import com.varuna.opendash.data.Settings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -75,6 +76,17 @@ fun CataloguesScreen(repository: PluginRepository, settings: Settings) {
     var working by remember { mutableStateOf<String?>(null) }
     var status by remember { mutableStateOf("") }
     var refresh by remember { mutableStateOf(0) }
+
+    val presets = remember { Presets(context) }
+    // Bumped when a profile is taken, so the row it came from redraws as taken.
+    var takenCount by remember { mutableStateOf(0) }
+    val profiles = remember(installed, repository.revision) {
+        installed.flatMap { brand ->
+            repository.profilesOf(brand)?.let { text ->
+                presets.read(text).map { brand to it }
+            }.orEmpty()
+        }
+    }
 
     val source = repository.sources.firstOrNull { it.id == sourceId }
         ?: repository.sources.firstOrNull()
@@ -221,6 +233,51 @@ fun CataloguesScreen(repository: PluginRepository, settings: Settings) {
                 // A source that publishes no index is still usable if you know
                 // what is in it.
                 if (browseError != null) ManualInstall { install(it) }
+            }
+        }
+
+        // What the installed catalogues publish as ready-made selections.
+        //
+        // This lives here rather than only behind the Live screen's group
+        // dialog because a profile arrives with a catalogue and is a property
+        // of it: the dialog is reachable only after a scan, which needs the car,
+        // and "the catalogue I just installed ships a profile for my engine"
+        // should be visible from the settee.
+        if (profiles.isNotEmpty()) {
+            Section(stringResource(R.string.catalogues_profiles))
+            Panel {
+                Hint(stringResource(R.string.catalogues_profiles_hint))
+                profiles.forEach { (brand, entry) ->
+                    val taken = remember(takenCount, entry.module, entry.name) {
+                        presets.has(entry.module, entry.name)
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(entry.name, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                brand + " · " + entry.module + " · " +
+                                    stringResource(R.string.catalogues_entry, entry.keys.size),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        if (taken) {
+                            Text(
+                                stringResource(R.string.catalogues_profile_taken),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.tertiary,
+                            )
+                        } else {
+                            TextButton(onClick = {
+                                presets.save(entry.module, entry.name, entry.keys)
+                                takenCount++
+                            }) { Text(stringResource(R.string.action_import)) }
+                        }
+                    }
+                }
             }
         }
 

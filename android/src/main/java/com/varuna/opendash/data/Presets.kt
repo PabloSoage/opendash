@@ -31,6 +31,10 @@ class Presets(context: Context) {
     fun load(module: String, name: String): Set<String> =
         prefs.getStringSet(entryKey(module, name), emptySet()).orEmpty()
 
+    /** Whether [name] is already stored for [module]. */
+    fun has(module: String, name: String): Boolean =
+        prefs.contains(entryKey(module, name))
+
     /** Store [keys] under [name]. An existing preset of that name is replaced. */
     fun save(module: String, name: String, keys: Set<String>) {
         if (module.isEmpty() || name.isBlank() || keys.isEmpty()) return
@@ -71,6 +75,36 @@ class Presets(context: Context) {
         }
     }
 
+    /** One preset as it appears in a file, before anything is stored. */
+    class Entry(val module: String, val name: String, val keys: Set<String>)
+
+    /**
+     * Every preset in [text], parsed and nothing more.
+     *
+     * Reading is separate from storing because a catalogue's profiles have to
+     * be shown before they are taken: a list of what a catalogue offers is the
+     * difference between a button that might do something and one that says
+     * what it will do.
+     *
+     * A file may hold several, one after another, with `#` for comments.
+     */
+    fun read(text: String): List<Entry> {
+        val out = ArrayList<Entry>()
+        val current = StringBuilder()
+        fun flush() {
+            if (current.isNotEmpty()) parse(current.toString())?.let { out.add(it) }
+            current.setLength(0)
+        }
+        for (line in text.lineSequence()) {
+            val trimmed = line.trim()
+            if (trimmed.startsWith("#")) continue
+            if (trimmed.startsWith(MAGIC)) flush()
+            if (trimmed.isNotEmpty()) current.appendLine(trimmed)
+        }
+        flush()
+        return out
+    }
+
     /**
      * Read one back, returning the name it was stored under.
      *
@@ -79,7 +113,23 @@ class Presets(context: Context) {
      * anything writes a preset full of somebody's shopping list.
      */
     fun import(text: String): String? {
-        val lines = text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+        val entry = read(text).firstOrNull() ?: return null
+        save(entry.module, entry.name, entry.keys)
+        return entry.name
+    }
+
+    /**
+     * Import every preset in [text], which may hold several.
+     *
+     * This is what a catalogue publishes in `profiles.txt`: the same format the
+     * app exports. Returns the names stored, so a screen can say what arrived
+     * rather than only that something did.
+     */
+    fun importAll(text: String): List<String> =
+        read(text).map { save(it.module, it.name, it.keys); it.name }
+
+    private fun parse(block: String): Entry? {
+        val lines = block.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
         if (lines.firstOrNull()?.startsWith(MAGIC) != true) return null
         var module = ""
         var name = ""
@@ -95,33 +145,7 @@ class Presets(context: Context) {
             }
         }
         if (module.isEmpty() || name.isEmpty() || keys.isEmpty()) return null
-        save(module, name, keys)
-        return name
-    }
-
-    /**
-     * Import every preset in [text], which may hold several.
-     *
-     * This is what a catalogue publishes in `profiles.txt`: the same format the
-     * app exports, one after another, with `#` for comments. Returns the names
-     * stored, so a screen can say what arrived rather than only that something
-     * did.
-     */
-    fun importAll(text: String): List<String> {
-        val out = ArrayList<String>()
-        val current = StringBuilder()
-        fun flush() {
-            if (current.isNotEmpty()) import(current.toString())?.let { out.add(it) }
-            current.setLength(0)
-        }
-        for (line in text.lineSequence()) {
-            val trimmed = line.trim()
-            if (trimmed.startsWith("#")) continue
-            if (trimmed.startsWith(MAGIC)) flush()
-            if (trimmed.isNotEmpty()) current.appendLine(trimmed)
-        }
-        flush()
-        return out
+        return Entry(module, name, keys)
     }
 
     private fun namesKey(module: String) = "names|$module"
