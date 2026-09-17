@@ -246,4 +246,5 @@
     <string name="link_bus_wide">Bus sin filtrar: el aparato entrega todas las tramas, lo que es más lento y más ruidoso. El paso de estrechamiento fue rechazado.</string>
     <string name="action_export">Exportar</string>
     <string name="action_import">Importar</string>
+    <string name="live_presets_catalogue">Del catálogo</string>
 </resources>

@@ -99,6 +99,31 @@ class Presets(context: Context) {
         return name
     }
 
+    /**
+     * Import every preset in [text], which may hold several.
+     *
+     * This is what a catalogue publishes in `profiles.txt`: the same format the
+     * app exports, one after another, with `#` for comments. Returns the names
+     * stored, so a screen can say what arrived rather than only that something
+     * did.
+     */
+    fun importAll(text: String): List<String> {
+        val out = ArrayList<String>()
+        val current = StringBuilder()
+        fun flush() {
+            if (current.isNotEmpty()) import(current.toString())?.let { out.add(it) }
+            current.setLength(0)
+        }
+        for (line in text.lineSequence()) {
+            val trimmed = line.trim()
+            if (trimmed.startsWith("#")) continue
+            if (trimmed.startsWith(MAGIC)) flush()
+            if (trimmed.isNotEmpty()) current.appendLine(trimmed)
+        }
+        flush()
+        return out
+    }
+
     private fun namesKey(module: String) = "names|$module"
 
     private fun entryKey(module: String, name: String) = "set|$module|$name"

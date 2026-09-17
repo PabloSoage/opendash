@@ -98,7 +98,13 @@ class PluginRepository(context: Context) {
         try {
             val suffix = if (language == "en") "" else "." + language
             val required = listOf("plugin.json", "parameters$suffix.tsv")
-            val optional = listOf("variants$suffix.tsv", "modules.tsv", "dtc.tsv")
+            // `profiles.txt` es opcional y pequeño: selecciones con nombre que
+            // el catálogo publica ya hechas. Una selección es la parte lenta de
+            // usar esto — cientos de filas, y las doce que se miran juntas son
+            // siempre las mismas — así que un catálogo que las trae ahorra la
+            // primera media hora a quien lo instale.
+            val optional =
+                listOf("variants$suffix.tsv", "modules.tsv", "dtc.tsv", "profiles.txt")
 
             val fetched = fetchAll(source, brand, required + optional, onProgress)
             for (name in required) {
@@ -118,6 +124,10 @@ class PluginRepository(context: Context) {
             staging.deleteRecursively()
         }
     }
+
+    /** The profiles an installed catalogue publishes, as raw text. */
+    fun profilesOf(brand: String): String? =
+        File(File(root, brand), "profiles.txt").takeIf { it.isFile }?.readText()
 
     /** One line of a source's index. */
     class Listing(val name: String, val parameters: Int, val languages: List<String>)

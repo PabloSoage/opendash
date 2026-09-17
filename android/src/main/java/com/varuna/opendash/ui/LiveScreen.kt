@@ -337,13 +337,25 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                 // Paste one in. A preset is plain text by design, so it travels
                 // in a message, a note or a repository as easily as between two
                 // phones.
-                TextButton(onClick = {
-                    val clip =
-                        context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
-                            as android.content.ClipboardManager
-                    val text = clip.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
-                    if (text != null && presets.import(text) != null) presetRevision++
-                }) { Text(stringResource(R.string.action_import)) }
+                Row {
+                    // From the catalogue, if it publishes any. A brand ships
+                    // its own profiles.txt, so the selections somebody already
+                    // worked out for a car arrive with the parameters rather
+                    // than having to be rebuilt through a search box.
+                    val fromCatalogue = catalogue?.brand?.let { plugins.profilesOf(it) }
+                    if (fromCatalogue != null) {
+                        TextButton(onClick = {
+                            if (presets.importAll(fromCatalogue).isNotEmpty()) presetRevision++
+                        }) { Text(stringResource(R.string.live_presets_catalogue)) }
+                    }
+                    TextButton(onClick = {
+                        val clip =
+                            context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                as android.content.ClipboardManager
+                        val text = clip.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
+                        if (text != null && presets.import(text) != null) presetRevision++
+                    }) { Text(stringResource(R.string.action_import)) }
+                }
             },
         )
     }

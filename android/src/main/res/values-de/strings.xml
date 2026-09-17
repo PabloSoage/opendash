@@ -246,4 +246,5 @@
     <string name="link_bus_wide">Bus ungefiltert: der Adapter liefert jeden Frame, was langsamer und lauter ist. Der Einengungsschritt wurde abgelehnt.</string>
     <string name="action_export">Exportieren</string>
     <string name="action_import">Importieren</string>
+    <string name="live_presets_catalogue">Aus dem Katalog</string>
 </resources>
