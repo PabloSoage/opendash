@@ -58,6 +58,20 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
     var rate by mutableIntStateOf(0)
         private set
 
+    /**
+     * Emitted frames per second, which is a different question from [rate].
+     *
+     * A packet frame carries every parameter declared in it, so samples per
+     * second is frames per second times the parameters per frame — and when the
+     * two stop agreeing it says where the loss is. Fifteen parameters in seven
+     * packets read at 44.8 Hz each where ten in five packets read at 100: that
+     * is either the module emitting a whole round more slowly, or this side not
+     * reading fast enough to keep up, and the two are told apart by counting
+     * what actually arrives.
+     */
+    var frameRate by mutableIntStateOf(0)
+        private set
+
     var lastError by mutableStateOf<String?>(null)
         private set
 
@@ -178,6 +192,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                     return@thread
                 }
                 var readings = 0
+                var frames = 0
                 var since = System.currentTimeMillis()
                 // What did not fit in the packets is polled, one per turn round
                 // the loop, instead of being dropped.
@@ -192,6 +207,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                 // data, the packets fast and the remainder slowly.
                 val extra = targetsForCatalogue(plan.leftOut, plan.module)
                 var turn = 0
+                var lastExtra = 0L
                 // The session has to be held open for as long as the module is
                 // emitting — see Diagnostics.whileStreaming. Without it the
                 // module gives up on its own a few seconds in and every batch
@@ -202,6 +218,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                         val batch = Session.guarded {
                             Session.diagnostics.readStream(plan, STREAM_SLICE_MS)
                         }
+                        frames += batch?.frames ?: 0
                         if (batch == null) {
                             // Said rather than swallowed. This is the link going
                             // out from under a screenful of numbers, and left
@@ -210,14 +227,22 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                             lastError = "the link went away while the module was emitting"
                             break
                         }
-                        for ((parameter, value) in batch) {
+                        for ((parameter, value) in batch.values) {
                             val key = parameter.rowKey
                             values[key] = value
                             series.getOrPut(key) { Series() }.add(value)
                             recorder?.add(parameter.name, parameter.identifierText, parameter.unit, value)
                             readings++
                         }
-                        if (extra.isNotEmpty()) {
+                        // One polled reading every EXTRA_EVERY_MS, not one per
+                        // turn round the loop. A request costs twenty to forty
+                        // milliseconds against a fifty-millisecond slice, so one
+                        // per turn is a third of the stream's time spent on the
+                        // overflow — and with two parameters in the overflow
+                        // that is a bad trade at any price.
+                        val now = System.currentTimeMillis()
+                        if (extra.isNotEmpty() && now - lastExtra >= EXTRA_EVERY_MS) {
+                            lastExtra = now
                             val t = extra[turn % extra.size]
                             turn++
                             val v = try { t.request() } catch (_: Exception) { null }
@@ -237,7 +262,9 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                         val elapsed = System.currentTimeMillis() - since
                         if (elapsed >= 1000) {
                             rate = (readings * 1000L / elapsed).toInt()
+                            frameRate = (frames * 1000L / elapsed).toInt()
                             readings = 0
+                            frames = 0
                             since = System.currentTimeMillis()
                         }
                     }
@@ -345,6 +372,9 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
 
     private companion object {
         const val GIVE_UP_AFTER = 3
+
+        /** How often the overflow gets a turn, so the stream keeps its own. */
+        const val EXTRA_EVERY_MS = 300L
 
         /** How long one read of the emitted stream blocks before looping. */
         const val STREAM_SLICE_MS = 50L

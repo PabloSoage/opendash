@@ -78,7 +78,7 @@
     <string name="live_setup_show">Ajustes</string>
     <string name="live_selected">%1$d de %2$d seleccionados</string>
     <string name="live_chart_limit">Gráficas a la vez: %1$d</string>
-    <string name="live_rate">%1$d lecturas/s</string>
+    <string name="live_rate">%1$d muestras/s · %2$d tramas/s</string>
     <string name="live_stream">Rápido (emite el módulo)</string>
     <string name="live_stream_hint">En vez de pedir un parámetro y esperar la respuesta, se le dice al módulo que emita un paquete de ellos por su cuenta: unas cien veces por segundo, frente a cuatro o cinco por segundo entre todos preguntando. Sólo parámetros de catálogo de un mismo módulo: un PID estándar de OBD va dirigido a quien quiera contestar, así que no pertenece a ningún paquete.</string>
     <string name="live_stream_left_out">%1$d de lo seleccionado no cabe en los paquetes — siete de ellos suman 49 bytes — así que esos se sondean. Siguen leyéndose, unas pocas veces por segundo en vez de cien.</string>

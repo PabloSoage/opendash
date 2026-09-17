@@ -82,7 +82,7 @@
     <string name="live_setup_show">Setup</string>
     <string name="live_selected">%1$d of %2$d selected</string>
     <string name="live_chart_limit">Charts shown at once: %1$d</string>
-    <string name="live_rate">%1$d readings/s</string>
+    <string name="live_rate">%1$d samples/s · %2$d frames/s</string>
     <string name="live_stream">Fast (module sends)</string>
     <string name="live_stream_hint">Instead of asking for one parameter and waiting, the module is told to send a packet of them on its own — about a hundred times a second, against four or five a second between all of them by asking. Catalogue parameters from a single module only: a standard OBD PID is addressed to whoever answers, so it has no packet to belong to.</string>
     <string name="live_stream_left_out">%1$d of the selection do not fit in the packets — seven of those hold forty-nine bytes between them — so those are polled instead. They still read, a few times a second rather than a hundred.</string>

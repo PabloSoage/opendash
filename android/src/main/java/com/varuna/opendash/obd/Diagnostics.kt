@@ -367,15 +367,28 @@ class Diagnostics(private val sm3: Sm3Client) {
      * emitted frames are not ISO-TP: each is one packet, whole, so there is
      * nothing to reassemble and nothing to acknowledge.
      */
-    fun readStream(plan: Stream.Plan, sliceMs: Long = 50): List<Pair<Catalogue.Parameter, Double>> {
+    /**
+     * One slice of the emission.
+     *
+     * [Batch.frames] is reported separately from the values because they answer
+     * different questions. A frame carries every parameter of one packet, so
+     * values are frames times parameters-per-packet; when the two stop agreeing
+     * the difference is frames arriving and not being read, which is the one
+     * thing a samples-per-second figure cannot show.
+     */
+    class Batch(val values: List<Pair<Catalogue.Parameter, Double>>, val frames: Int)
+
+    fun readStream(plan: Stream.Plan, sliceMs: Long = 50): Batch {
         sm3.receive(sliceMs)
         val rxId = streamIdFor(plan.module)
         val out = ArrayList<Pair<Catalogue.Parameter, Double>>()
+        var frames = 0
         for (frame in sm3.drain()) {
             if (rxId != ANY && frame.id != rxId) continue
+            frames++
             out.addAll(Stream.decode(plan, frame.data))
         }
-        return out
+        return Batch(out, frames)
     }
 
     /** Send without waiting for an answer, still refusing anything that writes. */

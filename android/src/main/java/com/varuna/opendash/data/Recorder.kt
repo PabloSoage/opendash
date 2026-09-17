@@ -36,6 +36,7 @@ class Recorder(private val open: () -> RecordingStore.Sink, private val compress
     private var writer: BufferedWriter? = null
 
     private var count = 0
+    private var lastFlush = 0L
     private val started = System.currentTimeMillis()
     private var closed = false
 
@@ -92,7 +93,20 @@ class Recorder(private val open: () -> RecordingStore.Sink, private val compress
         w.write(",")
         w.write(value.toString())
         w.newLine()
-        w.flush()
+        // Flushed on a clock, not on every row.
+        //
+        // Per row was right when a row was a polled reading four times a
+        // second. Streaming makes it seven hundred a second, and every one of
+        // those was a gzip sync-flush — a full flush block emitted, on the same
+        // thread that has to be back reading the socket before the module sends
+        // the next packet. Every 250 ms costs at most a quarter second of
+        // readings if the session is cut, which is the trade the old comment
+        // was making anyway.
+        val now = System.currentTimeMillis()
+        if (now - lastFlush >= FLUSH_EVERY_MS) {
+            w.flush()
+            lastFlush = now
+        }
         count++
     }
 
@@ -106,6 +120,8 @@ class Recorder(private val open: () -> RecordingStore.Sink, private val compress
     }
 
     companion object {
+        private const val FLUSH_EVERY_MS = 250L
+
         /** For anything that needs a stream without the CSV framing. */
         fun raw(stream: OutputStream): OutputStream = stream
     }

@@ -78,7 +78,7 @@
     <string name="live_setup_show">Einrichtung</string>
     <string name="live_selected">%1$d von %2$d ausgewählt</string>
     <string name="live_chart_limit">Diagramme gleichzeitig: %1$d</string>
-    <string name="live_rate">%1$d Messwerte/s</string>
+    <string name="live_rate">%1$d Messwerte/s · %2$d Frames/s</string>
     <string name="live_stream">Schnell (Modul sendet)</string>
     <string name="live_stream_hint">Statt einen Parameter zu erfragen und auf die Antwort zu warten, wird dem Modul gesagt, ein Paket davon von sich aus zu senden: etwa hundertmal pro Sekunde, gegenüber vier oder fünf pro Sekunde für alle zusammen beim Fragen. Nur Katalogparameter eines einzigen Moduls: eine Standard-OBD-PID richtet sich an jeden, der antwortet, gehört also zu keinem Paket.</string>
     <string name="live_stream_left_out">%1$d der Auswahl passen nicht in die Pakete — sieben davon fassen zusammen 49 Byte — und werden daher abgefragt. Sie werden weiter gelesen, einige Male pro Sekunde statt hundert.</string>

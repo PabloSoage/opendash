@@ -7,7 +7,8 @@ import java.util.zip.GZIPInputStream
  * Opens a recorded session, whichever of the two formats it is in, and puts it
  * in the shape the viewer wants.
  *
- * A file this app wrote — `ms,parameter,unit,value`, optionally gzipped — or a
+ * A file this app wrote — `ms,parameter,identifier,unit,value`, optionally
+ * gzipped, and the four-column files written before it — or a
  * `.sm2` from the Scanmatik Windows software. Both come out as a list of
  * channels, each with its own arrays of timestamps and values.
  *
@@ -137,20 +138,51 @@ object SessionFile {
      * they were polled. Each name gets an index on first sight, so the order on
      * screen is the order they were recorded in.
      */
+    /**
+     * The header says which column is which, rather than this counting them.
+     *
+     * The recorder grew an `identifier` column — a marque catalogue names the
+     * same thing once per configuration, so a name alone does not identify a
+     * series — and this read the fourth field as the value whatever it was. On
+     * a five-column file the fourth field is the unit, `"%".toDoubleOrNull()`
+     * is null, every line was skipped, and a complete 185 000-row recording
+     * opened as "no readings in this file".
+     *
+     * Reading the header means both shapes open, and it is one line of work
+     * against a format that will grow a column again.
+     */
     private fun csv(text: String, modified: Long): Session {
         val index = LinkedHashMap<String, Int>()
         val units = ArrayList<String>()
         val times = ArrayList<ArrayList<Int>>()
         val values = ArrayList<ArrayList<Double>>()
 
-        text.lineSequence().drop(1).forEach { line ->
+        val lines = text.lineSequence().iterator()
+        val header = if (lines.hasNext()) split(lines.next()).map { it.trim().lowercase() } else emptyList()
+        fun columnOf(name: String, fallback: Int): Int =
+            header.indexOf(name).takeIf { it >= 0 } ?: fallback
+        val msAt = columnOf("ms", 0)
+        val nameAt = columnOf("parameter", 1)
+        val idAt = header.indexOf("identifier")
+        val unitAt = columnOf("unit", 2)
+        val valueAt = columnOf("value", 3)
+        val widest = maxOf(msAt, nameAt, unitAt, valueAt, idAt)
+
+        lines.forEach { line ->
             if (line.isBlank()) return@forEach
             val parts = split(line)
-            if (parts.size < 4) return@forEach
-            val ms = parts[0].toIntOrNull() ?: return@forEach
-            val value = parts[3].toDoubleOrNull() ?: return@forEach
-            val i = index.getOrPut(parts[1]) {
-                units.add(parts[2])
+            if (parts.size <= widest) return@forEach
+            val ms = parts[msAt].toIntOrNull() ?: return@forEach
+            val value = parts[valueAt].toDoubleOrNull() ?: return@forEach
+            // Namesakes stay apart here too. Two rows called "Exhaust Gas
+            // Temperature Sensor 1" reading different identifiers are two
+            // series, and merged into one they read as a sensor flipping
+            // between two temperatures.
+            val label =
+                if (idAt >= 0 && parts[idAt].isNotBlank()) parts[nameAt] + "  " + parts[idAt]
+                else parts[nameAt]
+            val i = index.getOrPut(label) {
+                units.add(parts[unitAt])
                 times.add(ArrayList())
                 values.add(ArrayList())
                 index.size

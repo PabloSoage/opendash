@@ -612,7 +612,7 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                 if (monitor.isRunning) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            stringResource(R.string.live_rate, monitor.rate),
+                            stringResource(R.string.live_rate, monitor.rate, monitor.frameRate),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
