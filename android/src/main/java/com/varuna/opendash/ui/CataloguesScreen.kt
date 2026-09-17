@@ -196,6 +196,9 @@ fun CataloguesScreen(repository: PluginRepository, settings: Settings) {
                             ?: repository.size(name),
                         languages = entry?.languages.orEmpty(),
                         isInstalled = name in installed,
+                        stale = name in installed && entry != null &&
+                            entry.revision.isNotEmpty() &&
+                            repository.installedRevision(name) != entry.revision,
                         busy = working == name,
                         enabled = working == null,
                         onInstall = { install(name) },
@@ -270,6 +273,8 @@ private fun CatalogueRow(
     parameters: Int,
     languages: List<String>,
     isInstalled: Boolean,
+    /** Installed, but the source is offering different contents. */
+    stale: Boolean,
     busy: Boolean,
     enabled: Boolean,
     onInstall: () -> Unit,
@@ -293,7 +298,11 @@ private fun CatalogueRow(
             } else {
                 ""
             }
-            val detail = listOf(size, languages.joinToString(", "))
+            // "Update available" is the whole point of a revision: refresh used
+            // to re-read the same list and report no news even when the source
+            // had changed underneath it.
+            val update = if (stale) stringResource(R.string.catalogues_update) else ""
+            val detail = listOf(size, languages.joinToString(", "), update)
                 .filter { it.isNotEmpty() }
                 .joinToString(" · ")
             if (detail.isNotEmpty()) {
@@ -309,6 +318,16 @@ private fun CatalogueRow(
                 modifier = Modifier.size(20.dp),
                 strokeWidth = 2.dp,
             )
+            // Reinstalling is how a catalogue is updated: it fetches
+            // everything again, profiles included, into a staging directory and
+            // swaps it in.
+            stale -> IconButton(enabled = enabled, onClick = onInstall) {
+                Icon(
+                    Icons.Filled.Refresh,
+                    contentDescription = stringResource(R.string.catalogues_update),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
             isInstalled -> IconButton(enabled = enabled, onClick = onRemove) {
                 Icon(
                     Icons.Filled.Delete,

@@ -129,15 +129,40 @@ class PluginRepository(context: Context) {
     fun profilesOf(brand: String): String? =
         File(File(root, brand), "profiles.txt").takeIf { it.isFile }?.readText()
 
+    /**
+     * The revision of an installed catalogue, from its own `plugin.json`.
+     *
+     * Null when it is not installed, or when it predates revisions — in which
+     * case there is nothing to compare and the honest answer is not "up to
+     * date" but "unknown".
+     */
+    fun installedRevision(brand: String): String? =
+        runCatching {
+            val text = File(File(root, brand), "plugin.json").readText()
+            Regex("\"revision\"\\s*:\\s*\"([^\"]+)\"").find(text)?.groupValues?.get(1)
+        }.getOrNull()
+
     /** One line of a source's index. */
-    class Listing(val name: String, val parameters: Int, val languages: List<String>)
+    class Listing(
+        val name: String,
+        val parameters: Int,
+        val languages: List<String>,
+        /** Moves when the catalogue's contents do. Empty when the source has none. */
+        val revision: String = "",
+    )
 
     /**
      * What a source offers, from the index it publishes.
      *
-     * `brands.txt`, tab-separated: name, parameter count, languages. The last
-     * two are optional — a source that lists bare names still works, it just
-     * cannot say how big anything is until it is installed.
+     * `brands.txt`, tab-separated: name, parameter count, languages, revision.
+     * Everything after the name is optional — a source that lists bare names
+     * still works, it just cannot say how big anything is until it is
+     * installed, nor whether what is installed is stale.
+     *
+     * The revision is what makes refresh mean something. Without it the index
+     * says what a source holds and nothing about whether it changed, so
+     * pressing refresh re-read the same list and reported no news — which is
+     * what happened the first time a catalogue grew a profile.
      */
     fun discover(source: PluginSource): Result<List<Listing>> = runCatching {
         val raw = fetchAll(source, "", listOf("brands.txt")) {}["brands.txt"]
@@ -152,6 +177,7 @@ class PluginRepository(context: Context) {
                     parameters = fields.getOrNull(1)?.trim()?.toIntOrNull() ?: 0,
                     languages = fields.getOrNull(2)?.split(',')?.map { it.trim() }
                         ?.filter { it.isNotEmpty() } ?: emptyList(),
+                    revision = fields.getOrNull(3)?.trim().orEmpty(),
                 )
             }
             .filter { it.name.isNotEmpty() }

@@ -247,4 +247,5 @@
     <string name="action_export">Exportar</string>
     <string name="action_import">Importar</string>
     <string name="live_presets_catalogue">Del catálogo</string>
+    <string name="catalogues_update">hay actualización</string>
 </resources>
