@@ -242,4 +242,8 @@
     <string name="live_stream_has_standard">%1$d der Auswahl sind Standard-OBD-PIDs. Die gehen an wen auch immer antwortet und nicht an ein Modul, gehören also zu keinem Paket — abwählen, oder dies aus lassen und alles wird abgefragt.</string>
     <string name="live_on">Ein</string>
     <string name="live_off">Aus</string>
+    <string name="link_bus_filtered">Bus auf vier Adressbereiche gefiltert.</string>
+    <string name="link_bus_wide">Bus ungefiltert: der Adapter liefert jeden Frame, was langsamer und lauter ist. Der Einengungsschritt wurde abgelehnt.</string>
+    <string name="action_export">Exportieren</string>
+    <string name="action_import">Importieren</string>
 </resources>

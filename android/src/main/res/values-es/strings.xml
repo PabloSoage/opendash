@@ -242,4 +242,8 @@
     <string name="live_stream_has_standard">%1$d de lo seleccionado son PIDs OBD estándar. Esos van dirigidos a quien conteste y no a un módulo, así que no tienen paquete al que pertenecer — quítalos, o deja esto apagado y se sondea todo.</string>
     <string name="live_on">Sí</string>
     <string name="live_off">No</string>
+    <string name="link_bus_filtered">Bus filtrado a cuatro rangos de direcciones.</string>
+    <string name="link_bus_wide">Bus sin filtrar: el aparato entrega todas las tramas, lo que es más lento y más ruidoso. El paso de estrechamiento fue rechazado.</string>
+    <string name="action_export">Exportar</string>
+    <string name="action_import">Importar</string>
 </resources>

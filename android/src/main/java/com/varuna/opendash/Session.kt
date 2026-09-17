@@ -56,6 +56,14 @@ object Session {
 
     enum class State { DISCONNECTED, CONNECTING, CONNECTED, CHANNEL_OPEN }
 
+    /**
+     * Whether the adapter is filtering the bus for us, or handing over all of
+     * it. Worth saying on screen: it is the difference between four addresses
+     * and about 1340 frames a second, and everything downstream feels it.
+     */
+    var busNarrowed by mutableStateOf(false)
+        private set
+
     // ── the bridge, as the service actually found it ──────────────────────
 
     /**
@@ -122,6 +130,7 @@ object Session {
         if (state == State.DISCONNECTED && !connect()) return false
         return try {
             sm3.openChannel()
+            busNarrowed = sm3.narrowed
             state = State.CHANNEL_OPEN
             true
         } catch (e: Exception) {

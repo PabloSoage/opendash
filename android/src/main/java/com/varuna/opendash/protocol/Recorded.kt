@@ -8,6 +8,34 @@ package com.varuna.opendash.protocol
 object Recorded {
 
     /** Messages 0..17: greeting, session, config, channel, filters. */
+    /**
+     * The channel again, this time asking for four addresses instead of the bus.
+     *
+     * The opening above is the manufacturer's driver replayed byte for byte, and
+     * its channel message carries one filter: `PASS mask=0 pattern=0`, which
+     * means send me everything. On this car that is about 1340 frames a second,
+     * of which some 173 have the exact shape of a complete ISO-TP single frame
+     * and are nothing of the sort — and all of it has to cross the Wi-Fi, be
+     * parsed, and be thrown away. The adapter's own light says as much: it
+     * blinks hard the moment this app connects and asks for nothing, where the
+     * manufacturer's software sits quiet.
+     *
+     * This narrows it to the four ranges anything can answer or emit on:
+     *
+     *     0x7E8..0x7EF   powertrain replies
+     *     0x640..0x65F   GMLAN replies
+     *     0x540..0x55F   GMLAN emission
+     *     0x5E8          engine emission
+     *
+     * Constructed here rather than captured: 541 data bytes signed with h4 —
+     * the CRC chain anchored at the last bit of the padded data — and h8, the
+     * sum of the padded words. Sent after the opening, as a change to a channel
+     * that is already up, which is exactly how it was proven: the adapter
+     * accepted it and a VIN read whole through it, at the car, on 14 September.
+     */
+    val filteredChannel: ByteArray =
+        "ffff0000aec57150be6e9c51501d02c40a0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000102010020a107000000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f8070080e8070000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000e007008040060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000e007008040050000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ff070080e8050000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000".hex()
+
     val opening: List<ByteArray> = listOf(
         "ffff0000ffff000000000000830000d8".hex(),   // SALUDO
         "ffff0000ffff000000000000880000dd".hex(),   // APERTURA

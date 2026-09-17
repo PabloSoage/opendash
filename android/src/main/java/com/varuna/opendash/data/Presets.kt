@@ -25,11 +25,11 @@ class Presets(context: Context) {
 
     /** Preset names for [module], in the order a person would read them. */
     fun names(module: String): List<String> =
-        prefs.getStringSet(key(module), emptySet()).orEmpty().sorted()
+        prefs.getStringSet(namesKey(module), emptySet()).orEmpty().sorted()
 
     /** The row keys of one preset, or empty if there is no such preset. */
     fun load(module: String, name: String): Set<String> =
-        prefs.getStringSet(entry(module, name), emptySet()).orEmpty()
+        prefs.getStringSet(entryKey(module, name), emptySet()).orEmpty()
 
     /** Store [keys] under [name]. An existing preset of that name is replaced. */
     fun save(module: String, name: String, keys: Set<String>) {
@@ -37,8 +37,8 @@ class Presets(context: Context) {
         val all = names(module).toMutableSet()
         all.add(name)
         prefs.edit()
-            .putStringSet(key(module), all)
-            .putStringSet(entry(module, name), keys)
+            .putStringSet(namesKey(module), all)
+            .putStringSet(entryKey(module, name), keys)
             .apply()
     }
 
@@ -46,12 +46,64 @@ class Presets(context: Context) {
         val all = names(module).toMutableSet()
         all.remove(name)
         prefs.edit()
-            .putStringSet(key(module), all)
-            .remove(entry(module, name))
+            .putStringSet(namesKey(module), all)
+            .remove(entryKey(module, name))
             .apply()
     }
 
-    private fun key(module: String) = "names|$module"
+    /**
+     * A preset as text, to carry off the phone and onto another one.
+     *
+     * Deliberately the plainest thing that works: the module, the name, and the
+     * row keys one per line. A row key already describes its row in full —
+     * name, identifier, width, formula, unit — so an exported preset can be
+     * read, checked and edited by hand, and written by something that is not
+     * this app. A binary format would have wanted a version number by the
+     * second week.
+     */
+    fun export(module: String, name: String): String {
+        val keys = load(module, name)
+        return buildString {
+            appendLine(MAGIC + " 1")
+            appendLine("module\t" + module)
+            appendLine("name\t" + name)
+            for (k in keys.sorted()) appendLine(k)
+        }
+    }
 
-    private fun entry(module: String, name: String) = "set|$module|$name"
+    /**
+     * Read one back, returning the name it was stored under.
+     *
+     * Null when [text] is not a preset at all. That case is half the work: a
+     * clipboard holds whatever was last copied, and an import that accepts
+     * anything writes a preset full of somebody's shopping list.
+     */
+    fun import(text: String): String? {
+        val lines = text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+        if (lines.firstOrNull()?.startsWith(MAGIC) != true) return null
+        var module = ""
+        var name = ""
+        val keys = LinkedHashSet<String>()
+        for (line in lines.drop(1)) {
+            val tab = line.indexOf('\t')
+            val head = if (tab > 0) line.substring(0, tab) else ""
+            val rest = if (tab > 0) line.substring(tab + 1) else ""
+            when (head) {
+                "module" -> module = rest
+                "name" -> name = rest
+                else -> keys.add(line)
+            }
+        }
+        if (module.isEmpty() || name.isEmpty() || keys.isEmpty()) return null
+        save(module, name, keys)
+        return name
+    }
+
+    private fun namesKey(module: String) = "names|$module"
+
+    private fun entryKey(module: String, name: String) = "set|$module|$name"
+
+    private companion object {
+        const val MAGIC = "opendash-preset"
+    }
 }

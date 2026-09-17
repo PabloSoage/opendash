@@ -221,6 +221,17 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
                 },
                 busy = busy,
             )
+            // Which bus the adapter is handing over: four addresses, or all of
+            // it. The second is about 1340 frames a second of which almost
+            // none is ours, and it shows up everywhere downstream.
+            if (state == Session.State.CHANNEL_OPEN) {
+                Hint(
+                    stringResource(
+                        if (Session.busNarrowed) R.string.link_bus_filtered
+                        else R.string.link_bus_wide
+                    )
+                )
+            }
             if (Session.serial.isNotEmpty()) {
                 Field(stringResource(R.string.link_serial), Session.serial)
             }

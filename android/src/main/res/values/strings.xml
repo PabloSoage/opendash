@@ -252,4 +252,8 @@
     <string name="live_stream_has_standard">%1$d of the selection are standard OBD PIDs. Those are addressed to whoever answers rather than to one module, so they have no packet to belong to — untick them, or leave this off and everything is polled.</string>
     <string name="live_on">On</string>
     <string name="live_off">Off</string>
+    <string name="link_bus_filtered">Bus filtered to four address ranges.</string>
+    <string name="link_bus_wide">Bus unfiltered: the adapter is handing over every frame, which is slower and noisier. The narrowing step was refused.</string>
+    <string name="action_export">Export</string>
+    <string name="action_import">Import</string>
 </resources>

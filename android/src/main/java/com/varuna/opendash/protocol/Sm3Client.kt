@@ -144,7 +144,7 @@ class Sm3Client(
      * gone unanswered is what leaves the device in a state where it stops
      * talking to anything, its own application included, until it is unplugged.
      */
-    fun openChannel() = lock.withLock {
+    fun openChannel(narrow: Boolean = true) = lock.withLock {
         for (i in 1 until Recorded.opening.size) {
             if (exchangeLocked(Recorded.opening[i], STEP_TIMEOUT_MS) == null) {
                 val at = "step $i of ${Recorded.opening.size}"
@@ -152,7 +152,24 @@ class Sm3Client(
                 throw IOException("the adapter stopped answering at $at of the opening")
             }
         }
+        // Then narrow it. See Recorded.filteredChannel: the replayed opening
+        // asks for the whole bus, and everything it hands over that nobody
+        // asked for costs Wi-Fi, parsing and a race against our own answers.
+        //
+        // Not fatal if it is refused. A channel passing everything is the one
+        // this app has always used and it works; a channel that would not
+        // narrow is a slower session, not a broken one.
+        if (narrow) {
+            narrowed = exchangeLocked(Recorded.filteredChannel, STEP_TIMEOUT_MS) != null &&
+                exchangeLocked(Recorded.opening[5], STEP_TIMEOUT_MS) != null &&
+                exchangeLocked(Recorded.opening[6], STEP_TIMEOUT_MS) != null
+        }
     }
+
+    /** Whether the bus is filtered, so a screen can say which it is looking at. */
+    @Volatile
+    var narrowed: Boolean = false
+        private set
 
     /** Poll once; returns how many frames arrived. */
     fun poll(): Int = lock.withLock {

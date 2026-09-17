@@ -299,6 +299,15 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                                 modifier = Modifier.weight(1f),
                             ) { Text(name) }
                             TextButton(onClick = {
+                                val text = presets.export(settings.catalogueModule, name)
+                                val clip =
+                                    context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                        as android.content.ClipboardManager
+                                clip.setPrimaryClip(
+                                    android.content.ClipData.newPlainText("opendash preset", text)
+                                )
+                            }) { Text(stringResource(R.string.action_export)) }
+                            TextButton(onClick = {
                                 presets.forget(settings.catalogueModule, name)
                                 presetRevision++
                             }) { Text(stringResource(R.string.action_forget)) }
@@ -310,6 +319,18 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                 TextButton(onClick = { showPresets = false }) {
                     Text(stringResource(R.string.action_close))
                 }
+            },
+            dismissButton = {
+                // Paste one in. A preset is plain text by design, so it travels
+                // in a message, a note or a repository as easily as between two
+                // phones.
+                TextButton(onClick = {
+                    val clip =
+                        context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                            as android.content.ClipboardManager
+                    val text = clip.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
+                    if (text != null && presets.import(text) != null) presetRevision++
+                }) { Text(stringResource(R.string.action_import)) }
             },
         )
     }
@@ -715,12 +736,10 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                         enabled = selected.isNotEmpty(),
                         label = { Text(stringResource(R.string.live_only_selected, selected.size)) },
                     )
-                    if (presetNames.isNotEmpty()) {
-                        AssistChip(
-                            onClick = { showPresets = true },
-                            label = { Text(stringResource(R.string.live_presets, presetNames.size)) },
-                        )
-                    }
+                    AssistChip(
+                        onClick = { showPresets = true },
+                        label = { Text(stringResource(R.string.live_presets, presetNames.size)) },
+                    )
                     if (selected.isNotEmpty() && settings.catalogueModule.isNotEmpty()) {
                         AssistChip(
                             onClick = { naming = true },
