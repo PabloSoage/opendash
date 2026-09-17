@@ -94,7 +94,7 @@ class Catalogue(
         fun scale(raw: Long): Double? {
             LINEAR.matchEntire(formula)?.let { m ->
                 val (factor, offset) = m.destructured
-                return raw * factor.toDouble() + offset.toDouble()
+                return signedIfItMustBe(raw) * factor.toDouble() + offset.toDouble()
             }
             BITS.matchEntire(formula)?.let { m ->
                 val (shift, mask) = m.destructured
@@ -103,8 +103,33 @@ class Catalogue(
             return null
         }
 
+        /**
+         * Two's complement, where the catalogue says the quantity goes negative.
+         *
+         * An injector balancing rate runs from -0.256 to +0.254 ms, which is a
+         * signed byte times 0.002 — and read as an unsigned one, a cylinder
+         * trimming -0.052 ms reports +0.460, outside the range the catalogue
+         * itself declares for it. Four cylinders, two of them nonsense, on the
+         * screen somebody is using to judge injectors.
+         *
+         * The rule is narrow on purpose: a declared minimum below zero **and**
+         * no offset in the formula. A temperature reading `(X(0)*1)-40` also
+         * goes negative and is plainly unsigned, and it is excluded by having
+         * an offset. Measured across this car's 204 answering identifiers: 33
+         * rows qualify, 13 of them come back into their declared range, and
+         * none leaves it — a raw below 128 reads the same either way.
+         */
+        private fun signedIfItMustBe(raw: Long): Long {
+            if (min >= 0 || !SIGNED.matches(formula)) return raw
+            val bits = bytes * 8
+            if (bits >= 64) return raw
+            val sign = 1L shl (bits - 1)
+            return if (raw and sign != 0L) raw - (1L shl bits) else raw
+        }
+
         private companion object {
             val LINEAR = Regex("""\(X\(0\)\*(-?[\d.]+)\)([+-][\d.]+)""")
+            val SIGNED = Regex("""\(X\(0\)\*(-?[\d.]+)\)\+0""")
             val BITS = Regex("""\(X\(0\)>>(\d+)\)&(0x[0-9a-fA-F]+)""")
             val SINGLE_BIT = Regex("""\(X\(0\)>>\d+\)&0x1""")
         }

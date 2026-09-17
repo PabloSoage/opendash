@@ -101,6 +101,10 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
     val profiles = remember { CarProfile(context) }
     var profileVin by remember { mutableStateOf("") }
     var answered by remember { mutableStateOf<Set<Int>?>(null) }
+    // How wide the module's answer was, per identifier. The catalogue lists
+    // rows of several widths under one identifier and only the car knows which
+    // applies — see CarProfile.widths.
+    var widths by remember { mutableStateOf<Map<Int, Int>>(emptyMap()) }
     var probing by remember { mutableStateOf(false) }
     var probeDone by remember { mutableIntStateOf(0) }
     var probeTotal by remember { mutableIntStateOf(0) }
@@ -147,6 +151,7 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
         val vin = withContext(Dispatchers.IO) { Session.guarded { Session.diagnostics.vin() } }.orEmpty()
         profileVin = vin
         answered = profiles.answered(vin, moduleAddress)
+        widths = profiles.widths(vin, moduleAddress)
     }
 
     fun profileCar() {
@@ -168,7 +173,8 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                         onProgress = { done, total -> probeDone = done; probeTotal = total },
                     )
                     profiles.save(vin, moduleAddress, ids.toSet(), found)
-                    answered = found
+                    answered = found.keys
+                    widths = found
                 }
             } finally {
                 probing = false
@@ -208,9 +214,16 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                             c.parametersFor(module, settings.catalogueVariant)
                         }
                         val known = answered
-                        val pool = monitor.requestable(
-                            if (keepToCar && known != null) c.keptTo(all, known) else all
-                        )
+                        val kept = if (keepToCar && known != null) c.keptTo(all, known) else all
+                        // Of the rows sharing an identifier, only the ones as
+                        // wide as the module's own answer. Picking a two-byte
+                        // row where the car sends one byte — or the reverse —
+                        // applies a scale built for the other width, and reads
+                        // an accelerator pedal at 798 %.
+                        val byWidth =
+                            if (widths.isEmpty()) kept
+                            else kept.filter { p -> widths[p.pid]?.let { it == p.bytes } ?: true }
+                        val pool = monitor.requestable(byWidth)
 
                         val byPid = pool.groupBy { it.pid }
                         val named = standard.map { pid ->

@@ -184,8 +184,8 @@ class Diagnostics(private val sm3: Sm3Client) {
         timeoutMs: Long = 400,
         stop: () -> Boolean = { false },
         onProgress: (Int, Int) -> Unit = { _, _ -> },
-    ): Set<Int> = withTesterPresent(module) {
-        val answered = LinkedHashSet<Int>()
+    ): Map<Int, Int> = withTesterPresent(module) {
+        val answered = LinkedHashMap<Int, Int>()
         for ((index, id) in ids.withIndex()) {
             if (stop()) break
             onProgress(index, ids.size)
@@ -194,7 +194,15 @@ class Diagnostics(private val sm3: Sm3Client) {
             } else {
                 readDataByIdentifier(id, txId = module, timeoutMs = timeoutMs)
             }
-            if (got != null) answered.add(id)
+            // How many bytes came back, not merely that some did.
+            //
+            // One identifier carries rows of different widths — 0x131F has a
+            // one-byte accelerator position scaled by 100/255 and a two-byte one
+            // scaled as though it were still a byte — and the module decides
+            // which it is. Keeping only the fact that it answered left the
+            // choice to whichever row the catalogue listed first, and picking
+            // the wrong one reads a pedal at 798 %.
+            if (got != null) answered[id] = got.size
         }
         answered
     }

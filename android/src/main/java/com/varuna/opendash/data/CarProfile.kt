@@ -64,9 +64,33 @@ class CarProfile(context: Context) {
     fun taken(vin: String, module: Int): Long? =
         prefs.getLong(key(vin, module) + ".when", 0L).takeIf { it > 0L }
 
-    fun save(vin: String, module: Int, asked: Set<Int>, answered: Set<Int>) {
+    /**
+     * How wide the module's answer was, per identifier.
+     *
+     * The catalogue lists rows of several widths under one identifier and only
+     * the module knows which applies. Stored as `id:bytes` pairs beside the
+     * answers themselves.
+     */
+    fun widths(vin: String, module: Int): Map<Int, Int> {
+        val raw = prefs.getString(key(vin, module) + ".widths", null) ?: return emptyMap()
+        val out = LinkedHashMap<Int, Int>()
+        for (pair in raw.split(',')) {
+            val colon = pair.indexOf(':')
+            if (colon <= 0) continue
+            val id = pair.substring(0, colon).toIntOrNull() ?: continue
+            val bytes = pair.substring(colon + 1).toIntOrNull() ?: continue
+            out[id] = bytes
+        }
+        return out
+    }
+
+    fun save(vin: String, module: Int, asked: Set<Int>, answered: Map<Int, Int>) {
         prefs.edit()
-            .putString(key(vin, module), answered.joinToString(","))
+            .putString(key(vin, module), answered.keys.joinToString(","))
+            .putString(
+                key(vin, module) + ".widths",
+                answered.entries.joinToString(",") { it.key.toString() + ":" + it.value },
+            )
             .putString(key(vin, module) + ".asked", asked.joinToString(","))
             .putLong(key(vin, module) + ".when", System.currentTimeMillis())
             .apply()
@@ -76,6 +100,7 @@ class CarProfile(context: Context) {
         prefs.edit()
             .remove(key(vin, module))
             .remove(key(vin, module) + ".asked")
+            .remove(key(vin, module) + ".widths")
             .remove(key(vin, module) + ".when")
             .apply()
     }
