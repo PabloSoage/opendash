@@ -3,6 +3,7 @@ package com.varuna.opendash
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -258,6 +259,15 @@ private fun App(
     val detail = detailName
         ?.let { Detail.valueOf(it) }
         ?.takeUnless { it == Detail.RECORDING && recording == null }
+
+    // Back closes the screen you are on, not the app.
+    //
+    // The arrow in the bar already did this; the system gesture did not, so
+    // opening a recording and swiping back left the app — losing the session,
+    // the selection and, while one was running, the link. Enabled only while
+    // there is somewhere to go back to, so on a top-level tab back still means
+    // leave, which is what it should mean there.
+    BackHandler(enabled = detail != null) { detailName = null }
 
     Scaffold(
         topBar = {
