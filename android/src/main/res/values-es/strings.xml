@@ -162,9 +162,9 @@
     <string name="settings_catalogues_summary">%1$d instalados, %2$d fuentes</string>
 
     <string name="settings_advanced">Actuación</string>
-    <string name="settings_advanced_toggle">Mostrar parámetros que se pueden comandar</string>
+    <string name="settings_advanced_toggle">Permitir mandar a este vehículo</string>
     <string name="settings_advanced_prompt">Desbloquear actuación</string>
-    <string name="settings_advanced_warning">Comandar una centralita mueve piezas de un vehículo que puede tener a alguien dentro o al lado. Leer siempre está permitido; este interruptor solo enseña el resto, detrás del bloqueo del dispositivo.</string>
+    <string name="settings_advanced_warning">Mandar a una centralita mueve piezas de un vehículo que puede tener a alguien dentro o al lado. Las filas que nombran una salida se listan siempre, con candado; este interruptor es lo que deja salir una orden de la app, y se vuelve a cerrar en cuanto se cae el enlace.</string>
     <string name="settings_advanced_unavailable">Este dispositivo no tiene bloqueo de pantalla, así que la actuación no se puede desbloquear.</string>
 
     <string name="settings_about">Acerca de</string>
@@ -254,4 +254,13 @@
     <string name="live_presets_imported">%1$d importados</string>
     <string name="live_preset_applied">%1$d de %2$d filas coinciden con este barrido</string>
     <string name="live_presets_empty">Todavía no hay grupos guardados para este módulo.</string>
+    <string name="live_commandable">se puede mandar</string>
+    <string name="live_only_commandable">Actuadores (%1$d)</string>
+    <string name="live_commandable_locked">%1$d de estas filas nombran algo que la centralita gobierna, no sólo mide. Desbloquea la actuación en Ajustes para mandarlas.</string>
+    <string name="live_commandable_unlocked">Actuación desbloqueada. %1$d filas nombran algo que esta centralita gobierna. El identificador que lee una salida mandada no es el que la fija, y los identificadores de control de esta centralita no se han visto nunca, así que de momento sólo está implementada la liberación de abajo.</string>
+    <string name="live_release">Devolver el control</string>
+    <string name="live_release_done">La centralita lo recuperó.</string>
+    <string name="live_release_refused">La centralita se negó.</string>
+    <string name="live_release_failed">Sin respuesta.</string>
+    <string name="live_only_commandable_hint">Las salidas que esta centralita gobierna, y sus propias palabras de estado sobre ellas: qué petición se rechazó y por qué. Las filas de estado no llevan candado porque se leen como cualquier otra.</string>
 </resources>

@@ -169,9 +169,9 @@
     <string name="settings_catalogues_summary">%1$d installed, %2$d sources</string>
 
     <string name="settings_advanced">Actuation</string>
-    <string name="settings_advanced_toggle">Show parameters that can be commanded</string>
+    <string name="settings_advanced_toggle">Allow commanding this vehicle</string>
     <string name="settings_advanced_prompt">Unlock actuation</string>
-    <string name="settings_advanced_warning">Commanding a module moves parts on a vehicle that may have someone in or near it. Reading is always allowed; this switch only reveals the rest, behind the device lock.</string>
+    <string name="settings_advanced_warning">Commanding a module moves parts on a vehicle that may have someone in or near it. The rows that name an output are always listed, with a padlock; this switch is what lets a command leave the app, and it closes again whenever the link drops.</string>
     <string name="settings_advanced_unavailable">This device has no screen lock, so actuation cannot be unlocked.</string>
 
     <string name="settings_about">About</string>
@@ -264,4 +264,13 @@
     <string name="live_presets_imported">%1$d imported</string>
     <string name="live_preset_applied">%1$d of %2$d rows matched this scan</string>
     <string name="live_presets_empty">No groups saved for this module yet.</string>
+    <string name="live_commandable">commandable</string>
+    <string name="live_only_commandable">Actuators (%1$d)</string>
+    <string name="live_commandable_locked">%1$d of these rows name something the module drives rather than only measures. Unlock actuation in Settings to command them.</string>
+    <string name="live_commandable_unlocked">Actuation unlocked. %1$d rows name something this module drives. The identifier that reads a commanded output is not the one that sets it, and this module\'s control identifiers have never been observed, so only the release below is implemented.</string>
+    <string name="live_release">Release all control</string>
+    <string name="live_release_done">The module took it back.</string>
+    <string name="live_release_refused">The module refused.</string>
+    <string name="live_release_failed">No answer.</string>
+    <string name="live_only_commandable_hint">The outputs this module drives, and its own status words for them: which request was refused, and why. The status rows carry no padlock because they are read like any other.</string>
 </resources>

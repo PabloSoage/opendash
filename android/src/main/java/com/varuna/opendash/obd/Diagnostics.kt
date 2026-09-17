@@ -7,9 +7,13 @@ import com.varuna.opendash.protocol.Sm3Client
 /**
  * Request and response over the bus, with the segmentation handled.
  *
- * Everything here is a read. Nothing writes to a module, clears a code or runs
- * a routine, and that is deliberate: this is a tool for looking at a car, and
- * the failure modes of the other kind are expensive.
+ * Almost everything here is a read. Nothing writes to a module, clears a code
+ * or runs a routine, and that is deliberate: this is a tool for looking at a
+ * car, and the failure modes of the other kind are expensive.
+ *
+ * The exception is GMLAN DeviceControl, which is refused unless the device lock
+ * has been answered. See [Actuation], and see [refuseIfNotRead] for the
+ * services that stay refused either way.
  */
 class Diagnostics(private val sm3: Sm3Client) {
 
@@ -46,7 +50,9 @@ class Diagnostics(private val sm3: Sm3Client) {
      *
      * 0x2E WriteDataByIdentifier, 0x2F InputOutputControl, 0x31 RoutineControl,
      * 0x14 ClearDiagnosticInformation and 0x27 SecurityAccess are absent on
-     * purpose. Adding one is a decision, not a patch.
+     * purpose. Adding one is a decision, not a patch. 0xAE was such a decision
+     * and is handled separately below: it is not on this list, and is allowed
+     * only while the device lock says so.
      *
      * 0x2C is here, and it is the one that deserves its own sentence, because
      * it is the only service on this list that changes anything in a module
@@ -61,13 +67,46 @@ class Diagnostics(private val sm3: Sm3Client) {
     private val readServices =
         setOf(0x01, 0x02, 0x03, 0x06, 0x07, 0x09, 0x19, 0x1A, 0x22, 0x2C, 0xAA, 0x3E)
 
+    /**
+     * The one service that may be added to [readServices], and only while the
+     * device lock says so. See [Actuation] for what it is and what it is not.
+     *
+     * Note which services are still absent, and stay absent whether or not
+     * anything is unlocked: 0x3B WriteDataByIdentifier, 0x27 SecurityAccess,
+     * 0x28 DisableNormalCommunication, 0xA5 ProgrammingMode, 0x34/0x36
+     * RequestDownload and TransferData. Those write to a module or put it in a
+     * state it has to be programmed out of. A lock is the wrong control for
+     * them; not implementing them is the right one.
+     */
     private fun refuseIfNotRead(payload: ByteArray) {
         val service = payload.firstOrNull()?.toInt()?.and(0xff) ?: return
         // A flow-control frame is transport, not a service.
         if (service and 0xf0 == 0x30) return
+        if (service == Actuation.SERVICE) {
+            require(Actuation.unlocked) {
+                "refusing to command: actuation is locked"
+            }
+            return
+        }
         require(service in readServices) {
             "refusing to send service 0x" + service.toString(16) + ": this tool only reads"
         }
+    }
+
+    /**
+     * Hand every device back to [module], and say whether it agreed.
+     *
+     * The only command this app sends on its own. It is worth having before
+     * there is anything to command with it: a module left holding a device
+     * keeps holding it, and the way out is this or an ignition cycle.
+     *
+     * Not gated on [Actuation.unlocked] being checked here — [request] does
+     * that — so the failure is the same honest exception as any other refusal
+     * rather than a silent no-op.
+     */
+    fun releaseControl(module: Int = ENGINE): Boolean {
+        val answer = request(module, Actuation.RETURN_ALL) ?: return false
+        return answer.firstOrNull()?.toInt()?.and(0xff) == Actuation.POSITIVE
     }
 
     fun request(

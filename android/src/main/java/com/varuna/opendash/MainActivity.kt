@@ -50,6 +50,7 @@ import com.varuna.opendash.data.PluginRepository
 import com.varuna.opendash.data.RecordingStore
 import com.varuna.opendash.data.SessionFile
 import com.varuna.opendash.data.Settings
+import com.varuna.opendash.obd.Actuation
 import com.varuna.opendash.ui.CataloguesScreen
 import com.varuna.opendash.ui.FilesScreen
 import com.varuna.opendash.ui.HealthScreen
@@ -245,7 +246,13 @@ private fun App(
     // a setting being applied and the app appearing to restart.
     var tabName by rememberSaveable { mutableStateOf(Tab.LINK.name) }
     var detailName by rememberSaveable { mutableStateOf<String?>(null) }
-    var advanced by rememberSaveable { mutableStateOf(false) }
+    // Not remembered anywhere. Actuation.unlocked is the single copy, because
+    // Diagnostics consults it before it will emit a command and a second copy
+    // that drifts from it is a lock that is open on one side only. It is also
+    // deliberately not saved across a rotation: re-answering the device lock
+    // costs a thumb, and an unlock that outlives the screen it was granted on
+    // is an unlock nobody remembers granting.
+    val advanced = Actuation.unlocked
 
     // The opened recording is deliberately not saved: it is eighty thousand
     // readings, far past what an instance-state bundle will carry, so on a
@@ -344,7 +351,7 @@ private fun App(
                     plugins = plugins,
                     advancedEnabled = advanced,
                     onUnlockAdvanced = unlock,
-                    onAdvancedChanged = { advanced = it },
+                    onAdvancedChanged = { if (it) Actuation.unlock() else Actuation.lock() },
                     onOpenCatalogues = { detailName = Detail.CATALOGUES.name },
                 )
             }

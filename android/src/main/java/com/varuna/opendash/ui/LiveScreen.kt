@@ -6,9 +6,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -48,6 +51,7 @@ import com.varuna.opendash.data.Monitor
 import com.varuna.opendash.data.Presets
 import com.varuna.opendash.data.PluginRepository
 import com.varuna.opendash.data.Settings
+import com.varuna.opendash.obd.Actuation
 import com.varuna.opendash.obd.Diagnostics
 import com.varuna.opendash.obd.Stream
 import com.varuna.opendash.ui.theme.ValueStyle
@@ -112,6 +116,11 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
 
     // Seeing the selection, and naming it. See the list header below.
     var onlySelected by remember { mutableStateOf(false) }
+    // And seeing only what the module drives. See Actuation for what the
+    // padlock on those rows means and, just as importantly, what it does not.
+    var onlyCommandable by remember { mutableStateOf(false) }
+    var releasing by remember { mutableStateOf(false) }
+    var releaseNote by remember { mutableStateOf<Int?>(null) }
     val presets = remember { Presets(context) }
     var presetRevision by remember { mutableIntStateOf(0) }
     val presetNames = remember(settings.catalogueModule, presetRevision) {
@@ -143,6 +152,9 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
         .filter { it.key in selected.keys }
         .filterIsInstance<Item.FromCatalogue>()
         .map { it.parameter }
+
+    /** How many of the scanned rows name something the module drives. */
+    val commandable = rows.count { it.commandable }
     val canStream = selected.isNotEmpty() &&
         chosenParameters.size == selected.size &&
         settings.catalogueModule.isNotEmpty()
@@ -690,6 +702,47 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                     }
                 }
 
+                // The actuation panel: what the padlocks mean, and the one
+                // command this app knows how to send.
+                if (commandable > 0) {
+                    if (!Actuation.unlocked) {
+                        Hint(stringResource(R.string.live_commandable_locked, commandable))
+                    } else {
+                        Hint(stringResource(R.string.live_commandable_unlocked, commandable))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            OutlinedButton(
+                                enabled = !releasing &&
+                                    Session.state == Session.State.CHANNEL_OPEN,
+                                onClick = {
+                                    releasing = true
+                                    releaseNote = null
+                                    thread {
+                                        val ok = Session.guarded {
+                                            Session.diagnostics.releaseControl(moduleAddress)
+                                        }
+                                        releaseNote = when (ok) {
+                                            true -> R.string.live_release_done
+                                            false -> R.string.live_release_refused
+                                            null -> R.string.live_release_failed
+                                        }
+                                        releasing = false
+                                    }
+                                },
+                            ) { Text(stringResource(R.string.live_release)) }
+                            releaseNote?.let {
+                                Text(
+                                    stringResource(it),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+
                 if (monitor.isRunning) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
@@ -807,12 +860,30 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                                 label = { Text(stringResource(R.string.live_preset_save)) },
                             )
                         }
+                        // Only offered when there are any. On a standard OBD
+                        // list there are none, and a chip reading "Actuators
+                        // (0)" is a worse answer than no chip.
+                        if (commandable > 0) {
+                            FilterChip(
+                                selected = onlyCommandable,
+                                onClick = { onlyCommandable = !onlyCommandable },
+                                label = {
+                                    Text(stringResource(R.string.live_only_commandable, commandable))
+                                },
+                            )
+                        }
                     }
+                    if (onlyCommandable) Hint(stringResource(R.string.live_only_commandable_hint))
                     presetNote?.let { Hint(it) }
                 }
             }
             val visible = when {
                 onlySelected -> rows.filter { it.key in selected.keys }
+                // The outputs, and the module's own scoreboard for them. The
+                // scoreboard is the half that says whether a request would be
+                // taken at all, so filtering to actuators without it shows the
+                // levers and hides the interlocks.
+                onlyCommandable -> rows.filter { it.commandable || it.controlStatus }
                 filter.isBlank() -> rows
                 else -> rows.filter { it.name.contains(filter, ignoreCase = true) }
             }
@@ -838,6 +909,20 @@ private fun PickRow(row: Item, checked: Boolean, onChange: (Boolean) -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(checked = checked, onCheckedChange = onChange)
+        // The padlock marks a row the module drives rather than only reports.
+        // It is shown whether or not actuation is unlocked, because the useful
+        // half of it is knowing which of four thousand rows those are: "what
+        // can this car be told to do" is a question the list can answer on its
+        // own, sitting in the house with the car outside.
+        if (row.commandable) {
+            Icon(
+                if (Actuation.unlocked) Icons.Filled.LockOpen else Icons.Filled.Lock,
+                contentDescription = stringResource(R.string.live_commandable),
+                modifier = Modifier.size(16.dp).padding(end = 2.dp),
+                tint = if (Actuation.unlocked) MaterialTheme.colorScheme.tertiary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 row.name,
@@ -930,6 +1015,12 @@ private sealed class Item {
     /** A single bit of a packed byte: on or off, not a quantity. */
     open val isFlag: Boolean get() = false
 
+    /** Names something the module drives rather than only measures. */
+    open val commandable: Boolean get() = false
+
+    /** Part of the module's own device-control scoreboard. See [Actuation]. */
+    open val controlStatus: Boolean get() = false
+
     class Standard(val pid: com.varuna.opendash.obd.Pid) : Item() {
         override val key = "obd:" + pid.id
         override val name = pid.name
@@ -954,6 +1045,8 @@ private sealed class Item {
         override val identifier =
             String.format(Locale.ROOT, "0x%04X · service 0x22", parameter.pid)
         override val isFlag = parameter.isFlag
+        override val commandable = Actuation.isCommandable(parameter.name)
+        override val controlStatus = Actuation.isControlStatus(parameter.pid)
     }
 }
 

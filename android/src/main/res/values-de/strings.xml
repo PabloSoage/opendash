@@ -162,9 +162,9 @@
     <string name="settings_catalogues_summary">%1$d installiert, %2$d Quellen</string>
 
     <string name="settings_advanced">Ansteuerung</string>
-    <string name="settings_advanced_toggle">Parameter anzeigen, die angesteuert werden können</string>
+    <string name="settings_advanced_toggle">Ansteuern dieses Fahrzeugs erlauben</string>
     <string name="settings_advanced_prompt">Ansteuerung freischalten</string>
-    <string name="settings_advanced_warning">Ein Steuergerät anzusteuern bewegt Teile an einem Fahrzeug, in dem oder neben dem jemand stehen kann. Lesen ist immer erlaubt; dieser Schalter zeigt nur den Rest, hinter der Gerätesperre.</string>
+    <string name="settings_advanced_warning">Ein Steuergerät anzusteuern bewegt Teile an einem Fahrzeug, in dem oder neben dem jemand stehen kann. Zeilen, die einen Ausgang benennen, werden immer mit Schloss gelistet; dieser Schalter lässt einen Befehl die App verlassen und schließt wieder, sobald die Verbindung abreißt.</string>
     <string name="settings_advanced_unavailable">Dieses Gerät hat keine Bildschirmsperre, daher lässt sich die Ansteuerung nicht freischalten.</string>
 
     <string name="settings_about">Über</string>
@@ -254,4 +254,13 @@
     <string name="live_presets_imported">%1$d importiert</string>
     <string name="live_preset_applied">%1$d von %2$d Zeilen passen zu diesem Scan</string>
     <string name="live_presets_empty">Für dieses Steuergerät sind noch keine Gruppen gespeichert.</string>
+    <string name="live_commandable">ansteuerbar</string>
+    <string name="live_only_commandable">Aktoren (%1$d)</string>
+    <string name="live_commandable_locked">%1$d dieser Zeilen benennen etwas, das das Steuergerät ansteuert und nicht nur misst. Zum Ansteuern die Aktuierung in den Einstellungen entsperren.</string>
+    <string name="live_commandable_unlocked">Aktuierung entsperrt. %1$d Zeilen benennen etwas, das dieses Steuergerät ansteuert. Der Identifier, der einen angesteuerten Ausgang liest, ist nicht der, der ihn setzt, und die Steuer-Identifier dieses Steuergeräts wurden nie beobachtet — daher ist bislang nur die Freigabe unten umgesetzt.</string>
+    <string name="live_release">Steuerung zurückgeben</string>
+    <string name="live_release_done">Das Steuergerät hat übernommen.</string>
+    <string name="live_release_refused">Das Steuergerät hat abgelehnt.</string>
+    <string name="live_release_failed">Keine Antwort.</string>
+    <string name="live_only_commandable_hint">Die Ausgänge, die dieses Steuergerät ansteuert, und seine eigenen Statuswörter dazu: welche Anforderung abgelehnt wurde und warum. Die Statuszeilen tragen kein Schloss, denn sie werden wie jede andere gelesen.</string>
 </resources>

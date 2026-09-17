@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.varuna.opendash.net.WifiLink
+import com.varuna.opendash.obd.Actuation
 import com.varuna.opendash.obd.Diagnostics
 import com.varuna.opendash.protocol.Sm3Client
 
@@ -169,7 +170,13 @@ object Session {
     } catch (e: Exception) {
         lastError = e.message ?: e.javaClass.simpleName
         syncTransport()
-        if (!sm3.isConnected) state = State.DISCONNECTED
+        if (!sm3.isConnected) {
+            state = State.DISCONNECTED
+            // A link that went away mid-question re-locks too. Nothing can be
+            // released over a socket that is gone, and the next car to answer
+            // on this one is not necessarily the car the thumb was for.
+            Actuation.lock()
+        }
         null
     }
 
@@ -207,8 +214,16 @@ object Session {
         // own, and this is the case where somebody leaves without stopping it.
         if (state == State.CHANNEL_OPEN) {
             for (module in streaming) runCatching { diagnostics.endStream(module) }
+            // Whatever was left held goes back to the module before the socket
+            // does. A module under device control that stops hearing the tester
+            // holds for its own timeout and then releases on its own; saying so
+            // explicitly costs one message and does not depend on that timeout
+            // being what we think it is.
+            if (Actuation.unlocked) runCatching { diagnostics.releaseControl() }
         }
         streaming = emptySet()
+        // The permission goes with the car it was granted for.
+        Actuation.lock()
         sm3.close()
         state = State.DISCONNECTED
         serial = ""
