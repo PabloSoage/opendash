@@ -121,58 +121,122 @@ object Stream {
     class Packet(val number: Int, val identifiers: List<Int>, val width: Int)
 
     /**
-     * Lay [parameters] out into packets for [module].
+     * The same selection, split into rounds that are declared one after another.
+     *
+     * [rounds] each hold at most [packetsPerRound] packets; the monitor declares
+     * one, lets the module emit it for a while, stops it and declares the next.
+     * [leftOut] is what could not go in any round — an identifier wider than a
+     * packet — and is polled as before.
+     */
+    class Rotation(val rounds: List<Plan>, val leftOut: List<Catalogue.Parameter>) {
+        val isEmpty: Boolean get() = rounds.isEmpty()
+
+        /** How many identifiers are live at once, across the first round. */
+        val perRound: Int get() = rounds.firstOrNull()?.packets?.sumOf { it.identifiers.size } ?: 0
+    }
+
+    /**
+     * Lay [parameters] out into rounds of at most [packetsPerRound] packets.
+     *
+     * ## Why rounds at all
+     *
+     * A packet is cheap to read and expensive to have. Measured on this engine:
+     * five packets emit at about 96 Hz each — 480 frames a second, 960 samples
+     * — and seven emit at about 51 Hz each, which is 357 frames and 715 samples.
+     * Declaring two more packets therefore **lowers** the total. The module is
+     * not dividing a fixed bandwidth; it is paying a price per packet.
+     *
+     * So the fast configuration holds ten identifiers, and a real selection is
+     * larger. What used to happen is that fourteen streamed and the rest were
+     * polled round-robin at a third of a hertz: on a five-minute drive the DPF
+     * differential pressure got 82 readings and the accelerator got 14 897.
+     *
+     * Rotating instead keeps the module in its fast configuration and moves the
+     * membership. Twenty-four parameters become three rounds of ten; with a
+     * two-second dwell each parameter is live for two seconds in every six and a
+     * bit, which averages about 30 Hz — a hundred times what the polled overflow
+     * gave, and the aggregate stays near the ceiling instead of falling below it.
+     *
+     * What it costs is that a parameter is dark between its turns, so a
+     * transient can fall in a gap. That is a real trade and the screen says
+     * which round is live rather than hiding it.
      *
      * Identifiers are gathered first and parameters mapped onto them, so a
-     * bit-packed byte is carried once however many rows read from it. Widths
-     * come from the catalogue; where two parameters disagree about how wide
-     * their shared identifier is, the wider one wins, because reading too few
-     * bytes loses data and reading too many only wastes room in the packet.
+     * bit-packed byte is carried once however many rows read from it. Where two
+     * parameters disagree about how wide their shared identifier is, the wider
+     * one wins: reading too few bytes loses data, reading too many only wastes
+     * room in the packet.
      */
-    fun plan(module: Int, parameters: List<Catalogue.Parameter>): Plan {
+    fun rotate(
+        module: Int,
+        parameters: List<Catalogue.Parameter>,
+        packetsPerRound: Int = PACKETS_PER_START,
+    ): Rotation {
         val width = LinkedHashMap<Int, Int>()
         for (p in parameters) {
             if (p.pid !in 1..0xffff || p.bytes !in 1..PACKET_BYTES) continue
             width[p.pid] = maxOf(width[p.pid] ?: 0, p.bytes)
         }
 
-        val packets = ArrayList<Packet>()
-        val where = HashMap<Int, Pair<Int, Int>>()      // identifier to packet and offset
+        // Pack the identifiers into packets, without numbering them yet: a
+        // round's packets are always numbered from FIRST_PACKET, because only
+        // one round is declared at a time.
+        val bundles = ArrayList<List<Int>>()
         var current = ArrayList<Int>()
         var used = 0
-        var number = FIRST_PACKET
-
-        fun close() {
-            if (current.isEmpty()) return
-            packets.add(Packet(number, current.toList(), used))
-            number++
-            current = ArrayList()
-            used = 0
-        }
-
-        val lastPacket = LAST_PACKET
         for ((id, w) in width) {
-            if (number > lastPacket) break
-            // A packet closes when its seven bytes are full, and also when it
-            // already holds as many identifiers as one declaration can name.
             if (used + w > PACKET_BYTES || current.size >= MAX_IDENTIFIERS) {
-                close()
-                if (number > lastPacket) break
+                if (current.isNotEmpty()) bundles.add(current.toList())
+                current = ArrayList()
+                used = 0
             }
-            where[id] = number to used
             current.add(id)
             used += w
         }
-        close()
+        if (current.isNotEmpty()) bundles.add(current.toList())
 
-        val fields = ArrayList<Field>()
-        val leftOut = ArrayList<Catalogue.Parameter>()
-        for (p in parameters) {
-            val at = where[p.pid]
-            if (at == null) leftOut.add(p)
-            else fields.add(Field(p, at.first, at.second, width[p.pid] ?: p.bytes))
+        val perRound = packetsPerRound.coerceIn(1, LAST_PACKET - FIRST_PACKET + 1)
+        // Evenly, not greedily. Twelve packets in fives is 5, 5, 2 — a last
+        // round a fifth the size of the others, holding four parameters that
+        // then get the same dwell as the ten in the first. Three rounds of four
+        // is the same total and the same number of switches, and every
+        // parameter is live for the same share of the time.
+        val count = (bundles.size + perRound - 1) / perRound
+        // Nothing to lay out is not an edge case to be clever about: an
+        // empty selection reaches here, and a loop that divides by the number
+        // of rounds takes the whole app down rather than returning nothing.
+        if (bundles.isEmpty()) return Rotation(emptyList(), parameters)
+        val slices = ArrayList<List<List<Int>>>()
+        var from = 0
+        for (i in 0 until count) {
+            val take = (bundles.size - from + (count - i - 1)) / (count - i)
+            slices.add(bundles.subList(from, from + take).toList())
+            from += take
         }
-        return Plan(module, packets, fields, leftOut)
+        val rounds = ArrayList<Plan>()
+        val placed = HashSet<Int>()
+        for (group in slices) {
+            val packets = ArrayList<Packet>()
+            val where = HashMap<Int, Pair<Int, Int>>()
+            group.forEachIndexed { i, ids ->
+                val number = FIRST_PACKET + i
+                var offset = 0
+                for (id in ids) {
+                    where[id] = number to offset
+                    offset += width[id] ?: 1
+                }
+                packets.add(Packet(number, ids, offset))
+            }
+            val fields = ArrayList<Field>()
+            for (p in parameters) {
+                val at = where[p.pid] ?: continue
+                fields.add(Field(p, at.first, at.second, width[p.pid] ?: p.bytes))
+                placed.add(p.pid)
+            }
+            rounds.add(Plan(module, packets, fields, emptyList()))
+        }
+        val leftOut = parameters.filter { it.pid !in placed }
+        return Rotation(rounds, leftOut)
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.varuna.opendash.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,11 +11,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -75,6 +79,96 @@ fun Panel(
         verticalArrangement = Arrangement.spacedBy(10.dp),
         content = content,
     )
+}
+
+/**
+ * A panel that opens. The heading says what is inside and what it is set to,
+ * so it can stay shut.
+ *
+ * A settings field is touched once and read never. Four panels of them stacked
+ * open is what the link screen was: on a phone held upright the part that says
+ * whether anything is connected was below three screenfuls of text boxes. The
+ * subtitle is what makes folding them honest — shut, it still shows the value,
+ * so nothing is hidden, only quiet.
+ */
+@Composable
+fun Fold(
+    title: String,
+    subtitle: String? = null,
+    open: Boolean,
+    onToggle: () -> Unit,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
+    Panel {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                if (!subtitle.isNullOrBlank()) {
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Icon(
+                if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (open) content()
+    }
+}
+
+/**
+ * One rung of a chain that has to be climbed in order: Wi-Fi, then the adapter,
+ * then the bus.
+ *
+ * Three of these say where you are and what is missing in the height of one
+ * paragraph. The alternative — a status line per panel, each its own colour,
+ * scattered down the screen — makes the reader assemble the chain themselves.
+ */
+@Composable
+fun Step(label: String, detail: String, done: Boolean, busy: Boolean = false) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        if (busy) {
+            CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(
+                        if (done) MaterialTheme.colorScheme.tertiary
+                        else MaterialTheme.colorScheme.outlineVariant
+                    )
+            )
+        }
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.width(76.dp),
+        )
+        Text(
+            detail,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (done) MaterialTheme.colorScheme.onSurface
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+    }
 }
 
 /** Label on the left, value on the right, both on one line. */

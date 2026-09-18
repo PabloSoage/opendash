@@ -215,7 +215,6 @@
     <string name="wifi">Wi-Fi</string>
     <string name="wifi_off">Sin conectar</string>
     <string name="wifi_joining">Conectando a %1$s</string>
-    <string name="wifi_joined">Conectado a %1$s</string>
     <string name="wifi_failed">No se pudo conectar</string>
     <string name="wifi_network">Red</string>
     <string name="wifi_any">cualquiera que empiece por %1$s</string>
@@ -263,4 +262,13 @@
     <string name="live_release_refused">La centralita se negó.</string>
     <string name="live_release_failed">Sin respuesta.</string>
     <string name="live_only_commandable_hint">Las salidas que esta centralita gobierna, y sus propias palabras de estado sobre ellas: qué petición se rechazó y por qué. Las filas de estado no llevan candado porque se leen como cualquier otra.</string>
+    <string name="live_stream_rounds">%1$d rondas de %2$d identificadores. Cada parámetro está vivo %3$.1f s de cada %4$.1f s, al ritmo completo de los paquetes — en vez de que los que pasan del décimo se sondeen un tercio de vez por segundo.</string>
+    <string name="settings_rotate">Rotar los paquetes</string>
+    <string name="settings_rotate_hint">Cinco paquetes emiten a unos 96 Hz cada uno y siete a unos 51, así que la configuración rápida de la centralita son diez identificadores. Con esto activado, una selección mayor va rotando por esa configuración en rondas y todo recibe el ritmo completo parte del tiempo. Desactivado, los catorce primeros van en flujo y el resto se sondean un tercio de vez por segundo.</string>
+    <string name="settings_dwell">Cada ronda emite %1$.1f s</string>
+    <string name="settings_dwell_hint">Cambiar de ronda cuesta una parada y una declaración por paquete — unos dos décimas de segundo. Más largo es menos tiempo perdido en el cambio y huecos más largos por parámetro; más corto, al revés.</string>
+    <string name="live_round">ronda %1$d de %2$d</string>
+    <string name="link_step_bus">Bus</string>
+    <string name="link_step_bus_closed">sin canal</string>
+    <string name="link_setup">Configuración</string>
 </resources>

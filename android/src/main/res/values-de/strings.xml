@@ -215,7 +215,6 @@
     <string name="wifi">WLAN</string>
     <string name="wifi_off">Nicht verbunden</string>
     <string name="wifi_joining">Verbinde mit %1$s</string>
-    <string name="wifi_joined">Verbunden mit %1$s</string>
     <string name="wifi_failed">Verbindung fehlgeschlagen</string>
     <string name="wifi_network">Netz</string>
     <string name="wifi_any">beliebig, beginnend mit %1$s</string>
@@ -263,4 +262,13 @@
     <string name="live_release_refused">Das Steuergerät hat abgelehnt.</string>
     <string name="live_release_failed">Keine Antwort.</string>
     <string name="live_only_commandable_hint">Die Ausgänge, die dieses Steuergerät ansteuert, und seine eigenen Statuswörter dazu: welche Anforderung abgelehnt wurde und warum. Die Statuszeilen tragen kein Schloss, denn sie werden wie jede andere gelesen.</string>
+    <string name="live_stream_rounds">%1$d Runden zu je %2$d Identifiern. Jeder Parameter ist %3$.1f s von je %4$.1f s aktiv, mit voller Paketrate — statt dass alles ab dem zehnten dreimal in zehn Sekunden abgefragt wird.</string>
+    <string name="settings_rotate">Pakete rotieren</string>
+    <string name="settings_rotate_hint">Fünf Pakete senden mit je rund 96 Hz, sieben mit rund 51 — die schnelle Konfiguration des Steuergeräts fasst also zehn Identifier. Aktiviert rotiert eine größere Auswahl in Runden durch diese Konfiguration und alles bekommt zeitweise die volle Rate. Deaktiviert streamen die ersten vierzehn und der Rest wird dreimal in zehn Sekunden abgefragt.</string>
+    <string name="settings_dwell">Jede Runde sendet %1$.1f s</string>
+    <string name="settings_dwell_hint">Ein Rundenwechsel kostet einen Stopp und eine Deklaration je Paket — etwa zwei Zehntelsekunden. Länger heißt weniger Wechselverlust und längere Lücken je Parameter; kürzer umgekehrt.</string>
+    <string name="live_round">Runde %1$d von %2$d</string>
+    <string name="link_step_bus">Bus</string>
+    <string name="link_step_bus_closed">kein Kanal</string>
+    <string name="link_setup">Einrichtung</string>
 </resources>

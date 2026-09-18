@@ -116,6 +116,21 @@ class Settings(context: Context) {
      */
     var catalogueModule: String by pref(KEY_MODULE, prefs.getString(KEY_MODULE, null) ?: "") { it }
 
+    /**
+     * Whether a selection larger than one round of packets is rotated through
+     * the module's fast configuration, or spilled into the polled overflow.
+     *
+     * On by default, because the measurement says so: five packets emit at about
+     * 96 Hz each and seven at about 51, so the fast configuration holds ten
+     * identifiers and everything past that used to be polled at a third of a
+     * hertz. Off restores the old behaviour, which is worth keeping for the case
+     * where a transient must not fall in a gap.
+     */
+    var streamRotate: Boolean by pref(KEY_ROTATE, prefs.getBoolean(KEY_ROTATE, true)) { it }
+
+    /** How long each round emits before the next one takes the packets. */
+    var streamDwellMs: Int by pref(KEY_DWELL, prefs.getInt(KEY_DWELL, 2000)) { it }
+
     var catalogueLanguage: String by pref(
         KEY_CATALOGUE_LANG,
         prefs.getString(KEY_CATALOGUE_LANG, null) ?: "en",
@@ -168,5 +183,7 @@ class Settings(context: Context) {
         const val KEY_POLL = "poll_interval"
         const val KEY_CATALOGUE_LANG = "catalogue_language"
         const val KEY_VARIANT = "catalogue_variant"
+        const val KEY_ROTATE = "stream_rotate"
+        const val KEY_DWELL = "stream_dwell_ms"
     }
 }

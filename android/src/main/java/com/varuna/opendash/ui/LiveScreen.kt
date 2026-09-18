@@ -4,12 +4,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Search
@@ -71,6 +74,7 @@ import kotlinx.coroutines.withContext
  * Charts are limited to a few at a time, from settings. The rest of the
  * selection still shows as numbers, which is what most of them are wanted for.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) {
     // A map rather than a list. Membership is tested once per visible row
@@ -131,6 +135,10 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
     // all — a profile written for one variant names rows another does not have
     // — and that has to be said rather than left to look like a dead button.
     var presetNote by remember { mutableStateOf<String?>(null) }
+    // Which group the selection came from, or null when it was built by hand.
+    // Cleared the moment a row is ticked or unticked, because from then on
+    // what is on screen is no longer that group.
+    var appliedPreset by remember { mutableStateOf<String?>(null) }
     var naming by remember { mutableStateOf(false) }
     var presetName by remember { mutableStateOf("") }
 
@@ -158,8 +166,16 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
     val canStream = selected.isNotEmpty() &&
         chosenParameters.size == selected.size &&
         settings.catalogueModule.isNotEmpty()
-    val streamPlan =
-        if (canStream) Stream.plan(moduleAddress, chosenParameters) else null
+    // Rounds, not one plan. Five packets is the module's fast configuration —
+    // 96 Hz each against 51 Hz for seven — so a selection larger than ten
+    // identifiers is cycled through it rather than spilling into the polled
+    // overflow, which on a five-minute drive gave the DPF pressure 82 readings
+    // against the accelerator's 14 897. See Stream.rotate.
+    val streamPlan = if (!canStream) null else Stream.rotate(
+        moduleAddress,
+        chosenParameters,
+        if (settings.streamRotate) Stream.PACKETS_PER_START else Stream.LAST_PACKET - Stream.FIRST_PACKET + 1,
+    )
 
     // The stored profile for this module, if this car has one.
     LaunchedEffect(settings.catalogueModule, Session.state) {
@@ -316,6 +332,14 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                         ) {
+                            if (name == appliedPreset) {
+                                Icon(
+                                    Icons.Filled.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.tertiary,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
                             TextButton(
                                 onClick = {
                                     // Replaces the selection rather than adding
@@ -337,6 +361,7 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                                         selected.size,
                                         keys.size,
                                     )
+                                    appliedPreset = name
                                     showPresets = false
                                 },
                                 modifier = Modifier.weight(1f),
@@ -352,6 +377,7 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                             }) { Text(stringResource(R.string.action_export)) }
                             TextButton(onClick = {
                                 presets.forget(settings.catalogueModule, name)
+                                if (appliedPreset == name) appliedPreset = null
                                 presetRevision++
                             }) { Text(stringResource(R.string.action_forget)) }
                         }
@@ -672,6 +698,18 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                     // a second next to one moving a hundred times a second
                     // needs explaining before it is noticed.
                     val left = streamPlan?.leftOut?.size ?: 0
+                    val rounds = streamPlan?.rounds?.size ?: 1
+                    if (rounds > 1) {
+                        Hint(
+                            stringResource(
+                                R.string.live_stream_rounds,
+                                rounds,
+                                streamPlan?.perRound ?: 0,
+                                settings.streamDwellMs / 1000.0,
+                                rounds * (settings.streamDwellMs + 200) / 1000.0,
+                            )
+                        )
+                    }
                     if (left > 0) Hint(stringResource(R.string.live_stream_left_out, left))
                 }
 
@@ -693,7 +731,9 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                                 val chosen = rows.filter { it.key in selected.keys }
                                 val plan = streamPlan
                                 if (streaming && plan != null && !plan.isEmpty) {
-                                    monitor.startStream(plan, record, "live")
+                                    monitor.startStream(
+                                        plan, record, "live", settings.streamDwellMs.toLong(),
+                                    )
                                 } else {
                                     monitor.start(targetsFor(monitor, chosen, moduleAddress), record, "live")
                                 }
@@ -750,6 +790,20 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        // Which round is live. A chart with gaps in it and a
+                        // chart of a sensor that stopped answering look the
+                        // same until something says which this is.
+                        if (monitor.rounds > 1) {
+                            Text(
+                                stringResource(
+                                    R.string.live_round,
+                                    monitor.round + 1,
+                                    monitor.rounds,
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.tertiary,
+                            )
+                        }
                         monitor.recordingName?.let {
                             Text(
                                 stringResource(R.string.live_recording, monitor.recordedRows, it),
@@ -823,7 +877,11 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                     )
                     if (selected.isNotEmpty()) {
                         AssistChip(
-                            onClick = { selected.clear() },
+                            onClick = {
+                                selected.clear()
+                                appliedPreset = null
+                                presetNote = null
+                            },
                             label = { Text(stringResource(R.string.live_clear_selection)) },
                         )
                     }
@@ -839,10 +897,15 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
             // through the search box again.
             item {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
+                    // Wrapping, not a Row. Four chips do not fit the width of a
+                    // phone held upright, and a Row does not wrap: it clips, so
+                    // the fourth one was a sliver at the edge with no way to
+                    // reach it. Which four they are changes with the module, so
+                    // there is no arrangement that always fits.
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         FilterChip(
                             selected = onlySelected,
@@ -850,9 +913,29 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                             enabled = selected.isNotEmpty(),
                             label = { Text(stringResource(R.string.live_only_selected, selected.size)) },
                         )
-                        AssistChip(
+                        // Named when one is applied, counted when none is.
+                        // "Groups (3)" next to a screen full of ticked rows
+                        // says how many groups exist and nothing about whether
+                        // what is on screen came from one of them — which is
+                        // the only thing anybody wants to know from that chip.
+                        FilterChip(
+                            selected = appliedPreset != null,
                             onClick = { showPresets = true },
-                            label = { Text(stringResource(R.string.live_presets, presetNames.size)) },
+                            leadingIcon = if (appliedPreset == null) null else ({
+                                Icon(
+                                    Icons.Filled.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }),
+                            label = {
+                                Text(
+                                    appliedPreset
+                                        ?: stringResource(R.string.live_presets, presetNames.size),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
                         )
                         if (selected.isNotEmpty() && settings.catalogueModule.isNotEmpty()) {
                             AssistChip(
@@ -890,6 +973,7 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
             items(visible, key = { "pick:" + it.key }) { row ->
                 PickRow(row, row.key in selected.keys) { on ->
                     if (on) selected[row.key] = Unit else selected.remove(row.key)
+                    appliedPreset = null
                 }
             }
         }

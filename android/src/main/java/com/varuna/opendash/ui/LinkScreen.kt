@@ -28,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -48,8 +49,31 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /**
- * The adapter, the vehicle, and the bridge: three questions in the order they
- * get asked.
+ * Where the link stands, and the one thing to press next.
+ *
+ * ## What was wrong with the old one
+ *
+ * Four panels — Wi-Fi, adapter, vehicle, bridge — all open at once, each with
+ * its own status line in its own colour and its own row of three buttons. On a
+ * phone held upright that is three screenfuls, the question "is it connected?"
+ * is answered somewhere in the middle of it, and a row of three buttons does
+ * not fit the width, so the third one is clipped.
+ *
+ * It also had the proportions backwards. Nine of the twelve controls are setup:
+ * the access point name, the prefix, the password, the host, the port, the
+ * bridge interface. Those are set once and then read never again, and they were
+ * taking the top of the screen every single time.
+ *
+ * ## What this is instead
+ *
+ * One card at the top with the chain in it — Wi-Fi, adapter, bus — three rungs,
+ * each a dot and a line of text, so where you are and what is missing reads in
+ * one glance. Under it, the actions, **one per row and full width**, because a
+ * button that is full width cannot be clipped by a narrow screen.
+ *
+ * Everything else folds. A folded panel still shows its value in the subtitle,
+ * so nothing is hidden — the network it will join, the address it will dial,
+ * whether the bridge is listening. Open one and it is the same fields as before.
  *
  * Everything that touches the socket runs off the main thread. A poll can take
  * over a second when the bus is quiet, and blocking the UI thread for that is
@@ -60,8 +84,13 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
     val context = LocalContext.current
     var busy by remember { mutableStateOf(false) }
     var identifying by remember { mutableStateOf(false) }
-    var showAddress by remember { mutableStateOf(false) }
     var nearby by remember { mutableStateOf(WifiLink.visible(context, settings.wifiPrefix)) }
+
+    // Saved, so a rotation does not fold away the panel that was being used.
+    var openWifi by rememberSaveable { mutableStateOf(false) }
+    var openAdapter by rememberSaveable { mutableStateOf(false) }
+    var openVehicle by rememberSaveable { mutableStateOf(false) }
+    var openBridge by rememberSaveable { mutableStateOf(false) }
 
     val askToScan = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -85,36 +114,162 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
         }
     }
 
+    val joined = WifiLink.state == WifiLink.State.JOINED
+    val joining = WifiLink.state == WifiLink.State.JOINING
+    val state = Session.state
+    val connected = state != Session.State.DISCONNECTED
+    val open = state == Session.State.CHANNEL_OPEN
+    val anywhere = stringResource(R.string.wifi_any, settings.wifiPrefix)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
-        Section(stringResource(R.string.wifi), first = true)
+        // ── the chain ────────────────────────────────────────────────────
         Panel {
-            StatusLine(
-                text = when (WifiLink.state) {
+            Step(
+                label = stringResource(R.string.wifi),
+                detail = when (WifiLink.state) {
                     WifiLink.State.OFF -> stringResource(R.string.wifi_off)
                     WifiLink.State.JOINING -> stringResource(R.string.wifi_joining, WifiLink.target)
-                    WifiLink.State.JOINED -> stringResource(R.string.wifi_joined, WifiLink.target)
+                    WifiLink.State.JOINED -> WifiLink.target
                     WifiLink.State.FAILED -> stringResource(R.string.wifi_failed)
                 },
-                colour = when (WifiLink.state) {
-                    WifiLink.State.JOINED -> MaterialTheme.colorScheme.tertiary
-                    WifiLink.State.FAILED -> MaterialTheme.colorScheme.error
-                    else -> MaterialTheme.colorScheme.secondary
-                },
-                busy = WifiLink.state == WifiLink.State.JOINING,
+                done = joined,
+                busy = joining,
             )
-            ErrorLine(WifiLink.lastError)
+            Step(
+                label = stringResource(R.string.link_adapter),
+                detail = when {
+                    Session.serial.isNotEmpty() && Session.firmware.isNotEmpty() ->
+                        Session.serial + " · " + Session.firmware
+                    state == Session.State.CONNECTING -> stringResource(R.string.link_connecting)
+                    else -> stringResource(R.string.link_disconnected)
+                },
+                done = connected,
+                busy = state == Session.State.CONNECTING || busy,
+            )
+            Step(
+                label = stringResource(R.string.link_step_bus),
+                detail = when {
+                    !open -> stringResource(R.string.link_step_bus_closed)
+                    Session.busNarrowed -> stringResource(R.string.link_bus_filtered)
+                    else -> stringResource(R.string.link_bus_wide)
+                },
+                done = open,
+            )
 
+            if (Session.batteryMillivolts > 0) {
+                Field(
+                    stringResource(R.string.link_voltage),
+                    String.format(Locale.ROOT, "%.2f V", Session.batteryMillivolts / 1000.0),
+                )
+            }
+            ErrorLine(WifiLink.lastError)
+            ErrorLine(Session.lastError ?: Session.transportFault)
+
+            // One action per row, full width. Three buttons side by side is
+            // what the old screen did and the third one did not fit.
+            if (!joined) {
+                Button(
+                    enabled = !joining,
+                    onClick = {
+                        WifiLink.join(
+                            context, settings.wifiSsid, settings.wifiPassword, settings.wifiPrefix,
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(stringResource(R.string.wifi_join)) }
+            }
+            if (!connected) {
+                Button(
+                    enabled = !busy,
+                    onClick = {
+                        busy = true
+                        thread {
+                            try {
+                                Session.configure(settings.host, settings.port)
+                                Session.openChannel()
+                            } finally {
+                                busy = false
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(stringResource(R.string.action_connect)) }
+            } else {
+                OutlinedButton(
+                    enabled = !busy,
+                    onClick = { Session.disconnect() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(stringResource(R.string.action_disconnect)) }
+            }
+            if (joined) {
+                TextButton(
+                    onClick = { WifiLink.leave(context) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(stringResource(R.string.wifi_leave)) }
+            }
+        }
+
+        // ── the vehicle ──────────────────────────────────────────────────
+        Section(stringResource(R.string.vehicle))
+        Fold(
+            title = stringResource(R.string.vehicle),
+            subtitle = Session.vehicle?.takeIf { it.known }?.engine
+                ?: stringResource(R.string.vehicle_unknown),
+            open = openVehicle,
+            onToggle = { openVehicle = !openVehicle },
+        ) {
+            val v = Session.vehicle
+            if (v != null && v.known) {
+                Field(stringResource(R.string.vehicle_vin), v.vin)
+                Field(stringResource(R.string.vehicle_system), v.system)
+                Field(stringResource(R.string.vehicle_engine), v.engine)
+                Field(stringResource(R.string.vehicle_calibration), v.calibration)
+            }
+            Button(
+                enabled = !identifying && open,
+                onClick = {
+                    identifying = true
+                    thread {
+                        try {
+                            Session.identify()
+                        } finally {
+                            identifying = false
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    if (identifying) stringResource(R.string.state_working)
+                    else stringResource(R.string.vehicle_identify)
+                )
+            }
+            OutlinedButton(
+                enabled = open,
+                onClick = onOpenIdentification,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(stringResource(R.string.ident_open)) }
+            Hint(stringResource(R.string.vehicle_hint))
+        }
+
+        // ── setup, folded ────────────────────────────────────────────────
+        Section(stringResource(R.string.link_setup))
+        Fold(
+            title = stringResource(R.string.wifi),
+            subtitle = settings.wifiSsid.ifBlank { anywhere },
+            open = openWifi,
+            onToggle = { openWifi = !openWifi },
+        ) {
             // The list is only there when the location permission was given.
             // Without it the system picker does the same job, so the combo
             // appears when it can and the field is always available. The empty
             // name stays in the list as an explicit choice rather than being
             // implied by a blank field: it means "whatever Android finds".
-            val anywhere = stringResource(R.string.wifi_any, settings.wifiPrefix)
             if (nearby.names.isNotEmpty()) {
                 Combo(
                     label = stringResource(R.string.wifi_network),
@@ -163,7 +318,6 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-
             OutlinedTextField(
                 value = settings.wifiPassword,
                 onValueChange = { settings.wifiPassword = it },
@@ -171,23 +325,12 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    enabled = WifiLink.state != WifiLink.State.JOINING,
-                    onClick = {
-                        WifiLink.join(context, settings.wifiSsid, settings.wifiPassword, settings.wifiPrefix)
-                    },
-                ) { Text(stringResource(R.string.wifi_join)) }
+                // Pressing it scans, and asks for the permission only if that
+                // is what is missing — so it does something visible every time,
+                // which is what a button that scanned nothing and said nothing
+                // did not.
                 OutlinedButton(
-                    enabled = WifiLink.state == WifiLink.State.JOINED,
-                    onClick = { WifiLink.leave(context) },
-                ) { Text(stringResource(R.string.wifi_leave)) }
-                // Always here, never only when the list is empty. Pressing it
-                // scans, and asks for the permission only if that is what is
-                // missing — so it does something visible every time, which is
-                // what a button that scanned nothing and said nothing did not.
-                TextButton(
                     onClick = {
                         val found = WifiLink.visible(context, settings.wifiPrefix)
                         nearby = found
@@ -195,41 +338,36 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
                             askToScan.launch(WifiLink.scanPermission)
                         }
                     },
+                    modifier = Modifier.weight(1f),
                 ) { Text(stringResource(R.string.wifi_list)) }
+                TextButton(
+                    onClick = { copyThenOpenWifi(context, settings.wifiPassword) },
+                    modifier = Modifier.weight(1f),
+                ) { Text(stringResource(R.string.wifi_settings)) }
             }
             Hint(stringResource(R.string.wifi_hint))
-            TextButton(onClick = { copyThenOpenWifi(context, settings.wifiPassword) }) {
-                Text(stringResource(R.string.wifi_settings))
-            }
         }
 
-        Section(stringResource(R.string.link_adapter))
-        Panel {
-            val state = Session.state
-            StatusLine(
-                text = when (state) {
-                    Session.State.DISCONNECTED -> stringResource(R.string.link_disconnected)
-                    Session.State.CONNECTING -> stringResource(R.string.link_connecting)
-                    Session.State.CONNECTED -> stringResource(R.string.link_connected)
-                    Session.State.CHANNEL_OPEN -> stringResource(R.string.link_channel_open)
-                },
-                colour = when (state) {
-                    Session.State.DISCONNECTED -> MaterialTheme.colorScheme.error
-                    Session.State.CONNECTING -> MaterialTheme.colorScheme.secondary
-                    Session.State.CONNECTED -> MaterialTheme.colorScheme.secondary
-                    Session.State.CHANNEL_OPEN -> MaterialTheme.colorScheme.tertiary
-                },
-                busy = busy,
-            )
-            // Which bus the adapter is handing over: four addresses, or all of
-            // it. The second is about 1340 frames a second of which almost
-            // none is ours, and it shows up everywhere downstream.
-            if (state == Session.State.CHANNEL_OPEN) {
-                Hint(
-                    stringResource(
-                        if (Session.busNarrowed) R.string.link_bus_filtered
-                        else R.string.link_bus_wide
-                    )
+        Fold(
+            title = stringResource(R.string.link_adapter),
+            subtitle = settings.host + ":" + settings.port,
+            open = openAdapter,
+            onToggle = { openAdapter = !openAdapter },
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = settings.host,
+                    onValueChange = { settings.host = it.trim() },
+                    label = { Text(stringResource(R.string.link_host)) },
+                    singleLine = true,
+                    modifier = Modifier.weight(2f),
+                )
+                OutlinedTextField(
+                    value = settings.port.toString(),
+                    onValueChange = { it.toIntOrNull()?.let { p -> settings.port = p } },
+                    label = { Text(stringResource(R.string.link_port)) },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
                 )
             }
             if (Session.serial.isNotEmpty()) {
@@ -238,131 +376,35 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
             if (Session.firmware.isNotEmpty()) {
                 Field(stringResource(R.string.link_firmware), Session.firmware)
             }
-            if (Session.batteryMillivolts > 0) {
-                Field(
-                    stringResource(R.string.link_voltage),
-                    String.format(Locale.ROOT, "%.2f V", Session.batteryMillivolts / 1000.0),
-                )
-            }
             // Only shown when it is not zero, and then it is the whole story:
             // bytes the reader had to throw away to find the start of a
             // message. A healthy link never needs to.
             if (Session.resynchronised > 0) {
-                Field(
-                    stringResource(R.string.link_resync),
-                    Session.resynchronised.toString(),
-                )
+                Field(stringResource(R.string.link_resync), Session.resynchronised.toString())
             }
             // Answers nobody was waiting for. Zero on a link whose model of
             // the protocol is right, and the first thing to look at if a
             // reading ever comes back belonging to the previous question.
             if (Session.unpaired > 0) {
-                Field(
-                    stringResource(R.string.link_unpaired),
-                    Session.unpaired.toString(),
-                )
-            }
-            ErrorLine(Session.lastError ?: Session.transportFault)
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    enabled = !busy,
-                    onClick = {
-                        busy = true
-                        thread {
-                            try {
-                                Session.configure(settings.host, settings.port)
-                                Session.openChannel()
-                            } finally {
-                                busy = false
-                            }
-                        }
-                    },
-                ) { Text(stringResource(R.string.action_connect)) }
-
-                OutlinedButton(
-                    enabled = !busy && Session.state != Session.State.DISCONNECTED,
-                    onClick = { Session.disconnect() },
-                ) { Text(stringResource(R.string.action_disconnect)) }
-            }
-
-            TextButton(onClick = { showAddress = !showAddress }) {
-                Text(settings.host + ":" + settings.port)
-            }
-            if (showAddress) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = settings.host,
-                        onValueChange = { settings.host = it.trim() },
-                        label = { Text(stringResource(R.string.link_host)) },
-                        singleLine = true,
-                        modifier = Modifier.weight(2f),
-                    )
-                    OutlinedTextField(
-                        value = settings.port.toString(),
-                        onValueChange = { it.toIntOrNull()?.let { p -> settings.port = p } },
-                        label = { Text(stringResource(R.string.link_port)) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+                Field(stringResource(R.string.link_unpaired), Session.unpaired.toString())
             }
         }
 
-        Section(stringResource(R.string.vehicle))
-        Panel {
-            val v = Session.vehicle
-            if (v == null || !v.known) {
-                Text(
-                    stringResource(R.string.vehicle_unknown),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+        Fold(
+            title = stringResource(R.string.bridge),
+            subtitle = if (Session.bridgePort > 0) {
+                stringResource(R.string.bridge_listening, settings.elmHost, Session.bridgePort)
             } else {
-                Field(stringResource(R.string.vehicle_vin), v.vin)
-                Field(stringResource(R.string.vehicle_system), v.system)
-                Field(stringResource(R.string.vehicle_engine), v.engine)
-                Field(stringResource(R.string.vehicle_calibration), v.calibration)
-            }
-            Button(
-                enabled = !identifying && Session.state == Session.State.CHANNEL_OPEN,
-                onClick = {
-                    identifying = true
-                    thread {
-                        try {
-                            Session.identify()
-                        } finally {
-                            identifying = false
-                        }
-                    }
-                },
-            ) {
-                Text(
-                    if (identifying) stringResource(R.string.state_working)
-                    else stringResource(R.string.vehicle_identify)
-                )
-            }
-            Hint(stringResource(R.string.vehicle_hint))
-            OutlinedButton(
-                enabled = Session.state == Session.State.CHANNEL_OPEN,
-                onClick = onOpenIdentification,
-            ) { Text(stringResource(R.string.ident_open)) }
-        }
-
-        Section(stringResource(R.string.bridge))
-        Panel {
+                stringResource(R.string.bridge_stopped)
+            },
+            open = openBridge,
+            onToggle = { openBridge = !openBridge },
+        ) {
             // Read from the service, not from the button: starting it can fail
             // and the label has to follow what actually happened.
             val running = Session.bridgePort > 0
             var probe by remember { mutableStateOf("") }
             var probing by remember { mutableStateOf(false) }
-            Text(
-                if (running) {
-                    stringResource(R.string.bridge_listening, settings.elmHost, Session.bridgePort)
-                } else {
-                    stringResource(R.string.bridge_stopped)
-                },
-                style = MaterialTheme.typography.bodyMedium,
-            )
             ErrorLine(Session.bridgeError)
             val hostAll = stringResource(R.string.bridge_host_all)
             val hostLocal = stringResource(R.string.bridge_host_local)
@@ -375,14 +417,17 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    enabled = !running,
-                    onClick = { BridgeService.start(context, settings.elmPort, settings.elmHost) },
-                ) { Text(stringResource(R.string.action_start)) }
-                OutlinedButton(
-                    enabled = running,
-                    onClick = { BridgeService.stop(context) },
-                ) { Text(stringResource(R.string.action_stop)) }
+                if (!running) {
+                    Button(
+                        onClick = { BridgeService.start(context, settings.elmPort, settings.elmHost) },
+                        modifier = Modifier.weight(1f),
+                    ) { Text(stringResource(R.string.action_start)) }
+                } else {
+                    OutlinedButton(
+                        onClick = { BridgeService.stop(context) },
+                        modifier = Modifier.weight(1f),
+                    ) { Text(stringResource(R.string.action_stop)) }
+                }
                 // The bridge is the one part of this app with no screen of its
                 // own: it is a socket another app talks to, so when it does not
                 // work there is nothing to look at. This connects to it exactly
@@ -403,6 +448,7 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
                             }
                         }
                     },
+                    modifier = Modifier.weight(1f),
                 ) { Text(stringResource(R.string.bridge_test)) }
             }
             if (probe.isNotEmpty()) {

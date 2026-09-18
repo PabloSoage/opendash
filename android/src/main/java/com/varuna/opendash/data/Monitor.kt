@@ -72,6 +72,20 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
     var frameRate by mutableIntStateOf(0)
         private set
 
+    /**
+     * How many rounds the stream is cycling through, and which one is live.
+     *
+     * One round means no rotation at all and nothing worth saying. More than one
+     * means a parameter is dark between its turns, and that has to be visible:
+     * a chart with gaps in it is a different thing from a chart of a sensor that
+     * stopped answering, and they look the same until the screen says so.
+     */
+    var rounds by mutableIntStateOf(1)
+        private set
+
+    var round by mutableIntStateOf(0)
+        private set
+
     var lastError by mutableStateOf<String?>(null)
         private set
 
@@ -174,8 +188,16 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
      * standard OBD PIDs, which are addressed functionally and have no packet to
      * declare. This is for a catalogue module.
      */
-    fun startStream(plan: Stream.Plan, record: Boolean, label: String) {
-        if (isRunning || plan.isEmpty) return
+    fun startStream(
+        rotation: Stream.Rotation,
+        record: Boolean,
+        label: String,
+        dwellMs: Long = DWELL_MS,
+    ) {
+        if (isRunning || rotation.isEmpty) return
+        val module = rotation.rounds.first().module
+        rounds = rotation.rounds.size
+        round = 0
         lastError = null
         openRecorder(record, label)
 
@@ -185,12 +207,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
         worker = thread(name = "monitor-stream", isDaemon = true) {
             var declared = false
             try {
-                declared = Session.guarded { Session.diagnostics.beginStream(plan) } ?: false
-                if (declared) Session.nowStreaming(plan.module)
-                if (!declared) {
-                    lastError = "the module refused to declare the data packets"
-                    return@thread
-                }
+                Session.nowStreaming(module)
                 var readings = 0
                 var frames = 0
                 var since = System.currentTimeMillis()
@@ -205,7 +222,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                 // polled request costs twenty to forty milliseconds against the
                 // stream's fifty-millisecond slice, so everything selected gets
                 // data, the packets fast and the remainder slowly.
-                val extra = targetsForCatalogue(plan.leftOut, plan.module)
+                val extra = targetsForCatalogue(rotation.leftOut, module)
                 var turn = 0
                 var lastExtra = 0L
                 // The session has to be held open for as long as the module is
@@ -213,59 +230,81 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                 // module gives up on its own a few seconds in and every batch
                 // from then on is empty, which on screen is numbers that arrive
                 // and then freeze.
-                Session.diagnostics.whileStreaming(plan.module) {
+                Session.diagnostics.whileStreaming(module) {
                     while (isRunning) {
-                        val batch = Session.guarded {
-                            Session.diagnostics.readStream(plan, STREAM_SLICE_MS)
-                        }
-                        frames += batch?.frames ?: 0
-                        if (batch == null) {
-                            // Said rather than swallowed. This is the link going
-                            // out from under a screenful of numbers, and left
-                            // silent it looks identical to a module that simply
-                            // stopped having anything to say.
-                            lastError = "the link went away while the module was emitting"
+                        // A round is declared, left to emit for the dwell, then
+                        // stopped so the next one can take the packets. With a
+                        // single round this happens once and the inner loop
+                        // never ends, which is exactly the old behaviour.
+                        val plan = rotation.rounds[round % rotation.rounds.size]
+                        declared = Session.guarded { Session.diagnostics.beginStream(plan) } ?: false
+                        if (!declared) {
+                            lastError = "the module refused to declare the data packets"
                             break
                         }
-                        for ((parameter, value) in batch.values) {
-                            val key = parameter.rowKey
-                            values[key] = value
-                            series.getOrPut(key) { Series() }.add(value)
-                            recorder?.add(parameter.name, parameter.identifierText, parameter.unit, value)
-                            readings++
-                        }
-                        // One polled reading every EXTRA_EVERY_MS, not one per
-                        // turn round the loop. A request costs twenty to forty
-                        // milliseconds against a fifty-millisecond slice, so one
-                        // per turn is a third of the stream's time spent on the
-                        // overflow — and with two parameters in the overflow
-                        // that is a bad trade at any price.
-                        val now = System.currentTimeMillis()
-                        if (extra.isNotEmpty() && now - lastExtra >= EXTRA_EVERY_MS) {
-                            lastExtra = now
-                            val t = extra[turn % extra.size]
-                            turn++
-                            val v = try { t.request() } catch (_: Exception) { null }
-                            if (v == null) {
-                                silent[t.key] = true
-                            } else {
-                                silent.remove(t.key)
-                                values[t.key] = v
-                                series.getOrPut(t.key) { Series() }.add(v)
-                                recorder?.add(t.name, t.identifier, t.unit, v)
+                        val until =
+                            if (rotation.rounds.size > 1) System.currentTimeMillis() + dwellMs
+                            else Long.MAX_VALUE
+                        while (isRunning && System.currentTimeMillis() < until) {
+                            val batch = Session.guarded {
+                                Session.diagnostics.readStream(plan, STREAM_SLICE_MS)
+                            }
+                            frames += batch?.frames ?: 0
+                            if (batch == null) {
+                                // Said rather than swallowed. This is the link going
+                                // out from under a screenful of numbers, and left
+                                // silent it looks identical to a module that simply
+                                // stopped having anything to say.
+                                lastError = "the link went away while the module was emitting"
+                                break
+                            }
+                            for ((parameter, value) in batch.values) {
+                                val key = parameter.rowKey
+                                values[key] = value
+                                series.getOrPut(key) { Series() }.add(value)
+                                recorder?.add(parameter.name, parameter.identifierText, parameter.unit, value)
                                 readings++
                             }
+                            // One polled reading every EXTRA_EVERY_MS, not one per
+                            // turn round the loop. A request costs twenty to forty
+                            // milliseconds against a fifty-millisecond slice, so one
+                            // per turn is a third of the stream's time spent on the
+                            // overflow — and with two parameters in the overflow
+                            // that is a bad trade at any price.
+                            val now = System.currentTimeMillis()
+                            if (extra.isNotEmpty() && now - lastExtra >= EXTRA_EVERY_MS) {
+                                lastExtra = now
+                                val t = extra[turn % extra.size]
+                                turn++
+                                val v = try { t.request() } catch (_: Exception) { null }
+                                if (v == null) {
+                                    silent[t.key] = true
+                                } else {
+                                    silent.remove(t.key)
+                                    values[t.key] = v
+                                    series.getOrPut(t.key) { Series() }.add(v)
+                                    recorder?.add(t.name, t.identifier, t.unit, v)
+                                    readings++
+                                }
+                            }
+                            recordedRows = recorder?.rows ?: 0
+                            recordingName = recorder?.name
+                            tick++
+                            val elapsed = System.currentTimeMillis() - since
+                            if (elapsed >= 1000) {
+                                rate = (readings * 1000L / elapsed).toInt()
+                                frameRate = (frames * 1000L / elapsed).toInt()
+                                readings = 0
+                                frames = 0
+                                since = System.currentTimeMillis()
+                            }
                         }
-                        recordedRows = recorder?.rows ?: 0
-                        recordingName = recorder?.name
-                        tick++
-                        val elapsed = System.currentTimeMillis() - since
-                        if (elapsed >= 1000) {
-                            rate = (readings * 1000L / elapsed).toInt()
-                            frameRate = (frames * 1000L / elapsed).toInt()
-                            readings = 0
-                            frames = 0
-                            since = System.currentTimeMillis()
+                        // Between rounds: stop, so the packet numbers are free
+                        // for the next declaration. Costs one round trip, which
+                        // is why the dwell is seconds and not milliseconds.
+                        if (rotation.rounds.size > 1 && isRunning) {
+                            runCatching { Session.diagnostics.endStream(module) }
+                            round = (round + 1) % rotation.rounds.size
                         }
                     }
                 }
@@ -275,10 +314,8 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                 // Always, even after a failure: a module left emitting keeps a
                 // hundred frames a second coming at an adapter nobody is
                 // reading, and the next tool to connect finds the bus busy.
-                if (declared) {
-                    runCatching { Session.diagnostics.endStream(plan.module) }
-                    Session.stoppedStreaming(plan.module)
-                }
+                runCatching { Session.diagnostics.endStream(module) }
+                Session.stoppedStreaming(module)
                 // A run that ends by itself has to close its file too. Only
                 // stop() used to, so a stream that died on its own left the
                 // recording open and unterminated.
@@ -378,5 +415,16 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
 
         /** How long one read of the emitted stream blocks before looping. */
         const val STREAM_SLICE_MS = 50L
+
+        /**
+         * How long a round emits before the next one takes the packets.
+         *
+         * Switching costs a stop and one declaration per packet — six round
+         * trips at twenty to forty milliseconds each — so the dwell has to be
+         * seconds for the duty cycle to be worth having. Two seconds against a
+         * switch of about a fifth of a second is ninety per cent of the time
+         * spent emitting.
+         */
+        const val DWELL_MS = 2000L
     }
 }

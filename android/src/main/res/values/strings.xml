@@ -225,7 +225,6 @@
     <string name="wifi">Wi-Fi</string>
     <string name="wifi_off">Not joined</string>
     <string name="wifi_joining">Joining %1$s</string>
-    <string name="wifi_joined">Joined %1$s</string>
     <string name="wifi_failed">Could not join</string>
     <string name="wifi_network">Network</string>
     <string name="wifi_any">any starting with %1$s</string>
@@ -273,4 +272,13 @@
     <string name="live_release_refused">The module refused.</string>
     <string name="live_release_failed">No answer.</string>
     <string name="live_only_commandable_hint">The outputs this module drives, and its own status words for them: which request was refused, and why. The status rows carry no padlock because they are read like any other.</string>
+    <string name="live_stream_rounds">%1$d rounds of %2$d identifiers. Each parameter is live %3$.1f s in every %4$.1f s, at the full packet rate — instead of the ones past the tenth being polled a third of a time a second.</string>
+    <string name="settings_rotate">Rotate the packets</string>
+    <string name="settings_rotate_hint">Five packets emit at about 96 Hz each and seven at about 51, so the module\'s fast configuration holds ten identifiers. With this on, a larger selection cycles through that configuration in rounds and everything gets the full rate part of the time. With it off, the first fourteen stream and the rest are polled a third of a time a second.</string>
+    <string name="settings_dwell">Each round emits for %1$.1f s</string>
+    <string name="settings_dwell_hint">Switching rounds costs a stop and one declaration per packet — about a fifth of a second. Longer means less time lost switching and longer gaps for each parameter; shorter means the opposite.</string>
+    <string name="live_round">round %1$d of %2$d</string>
+    <string name="link_step_bus">Bus</string>
+    <string name="link_step_bus_closed">no channel</string>
+    <string name="link_setup">Setup</string>
 </resources>

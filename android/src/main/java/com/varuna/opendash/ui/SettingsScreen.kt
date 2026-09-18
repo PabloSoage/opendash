@@ -164,6 +164,25 @@ fun SettingsScreen(
                 valueRange = 0f..1000f,
             )
             Hint(stringResource(R.string.settings_poll_hint))
+
+            Toggle(
+                label = stringResource(R.string.settings_rotate),
+                checked = settings.streamRotate,
+                onChange = { settings.streamRotate = it },
+            )
+            Hint(stringResource(R.string.settings_rotate_hint))
+            if (settings.streamRotate) {
+                Text(
+                    stringResource(R.string.settings_dwell, settings.streamDwellMs / 1000.0),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Slider(
+                    value = settings.streamDwellMs.toFloat(),
+                    onValueChange = { settings.streamDwellMs = (it.toInt() / 250) * 250 },
+                    valueRange = 500f..6000f,
+                )
+                Hint(stringResource(R.string.settings_dwell_hint))
+            }
         }
 
         Section(stringResource(R.string.catalogues))
