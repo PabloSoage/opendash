@@ -74,8 +74,6 @@
     <string name="live_profile_busy">Frage… %1$d von %2$d</string>
     <string name="live_profile_only">Nur von diesem Auto (%1$d von %2$d)</string>
     <string name="live_profile_hint">Der Katalog beschreibt jede Konfiguration, die die Marke je gebaut hat, und kann nicht sagen, welche hier steht: die GDS2-Pakete enthalten keine Zuordnung von Modell zu Variante. Das Modul zu fragen, welche Kennungen es hat, dauert einmalig ein paar Minuten und wird je Fahrzeug gemerkt.</string>
-    <string name="live_setup_hide">Einrichtung ausblenden</string>
-    <string name="live_setup_show">Einrichtung</string>
     <string name="live_selected">%1$d von %2$d ausgewählt</string>
     <string name="live_chart_limit">Diagramme gleichzeitig: %1$d</string>
     <string name="live_rate">%1$d Messwerte/s · %2$d Frames/s</string>
@@ -271,4 +269,8 @@
     <string name="link_step_bus">Bus</string>
     <string name="link_step_bus_closed">kein Kanal</string>
     <string name="link_setup">Einrichtung</string>
+    <string name="live_setup">Einrichtung</string>
+    <string name="live_options">Optionen</string>
+    <string name="live_no_module">Kein Steuergerät gewählt</string>
+    <string name="live_not_scanned">Noch nichts gescannt</string>
 </resources>

@@ -74,8 +74,6 @@
     <string name="live_profile_busy">Preguntando… %1$d de %2$d</string>
     <string name="live_profile_only">Solo lo de este coche (%1$d de %2$d)</string>
     <string name="live_profile_hint">El catálogo describe todas las configuraciones que la marca llegó a montar y no puede decir cuál es ésta: los paquetes de GDS2 no traen tabla de modelo a variante. Preguntarle al módulo qué identificadores tiene cuesta unos minutos una vez y se recuerda por vehículo.</string>
-    <string name="live_setup_hide">Ocultar ajustes</string>
-    <string name="live_setup_show">Ajustes</string>
     <string name="live_selected">%1$d de %2$d seleccionados</string>
     <string name="live_chart_limit">Gráficas a la vez: %1$d</string>
     <string name="live_rate">%1$d muestras/s · %2$d tramas/s</string>
@@ -271,4 +269,8 @@
     <string name="link_step_bus">Bus</string>
     <string name="link_step_bus_closed">sin canal</string>
     <string name="link_setup">Configuración</string>
+    <string name="live_setup">Configuración</string>
+    <string name="live_options">Opciones</string>
+    <string name="live_no_module">Sin módulo elegido</string>
+    <string name="live_not_scanned">Todavía sin barrer</string>
 </resources>
