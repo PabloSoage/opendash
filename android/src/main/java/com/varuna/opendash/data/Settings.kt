@@ -129,7 +129,7 @@ class Settings(context: Context) {
     var streamRotate: Boolean by pref(KEY_ROTATE, prefs.getBoolean(KEY_ROTATE, true)) { it }
 
     /** How long each round emits before the next one takes the packets. */
-    var streamDwellMs: Int by pref(KEY_DWELL, prefs.getInt(KEY_DWELL, 2000)) { it }
+    var streamDwellMs: Int by pref(KEY_DWELL, prefs.getInt(KEY_DWELL, 5000)) { it }
 
     var catalogueLanguage: String by pref(
         KEY_CATALOGUE_LANG,

@@ -425,7 +425,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
         rate = 0
     }
 
-    private companion object {
+    companion object {
         const val GIVE_UP_AFTER = 3
 
         /** How often the overflow gets a turn, so the stream keeps its own. */
@@ -437,13 +437,27 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
         /**
          * How long a round emits before the next one takes the packets.
          *
-         * Switching costs a stop and one declaration per packet — six round
-         * trips at twenty to forty milliseconds each — so the dwell has to be
-         * seconds for the duty cycle to be worth having. Two seconds against a
-         * switch of about a fifth of a second is ninety per cent of the time
-         * spent emitting.
+         * Measured at the car on 18 September, and the estimate it replaces was
+         * wrong by nine times. A switch is a stop, one declaration per packet
+         * and a start — seven round trips — and a round trip costs far more
+         * while the module is emitting than while it is idle, because every one
+         * of them has to read past five hundred frames a second to find its own
+         * answer. Measured: **1832 ms**, against the 200 ms this code assumed.
+         *
+         * That changes the arithmetic completely. At a two-second dwell over
+         * four rounds the cycle is 15.3 s and each parameter is live for 13 %
+         * of it, not 91 %. The dwell has to be long enough to pay for the
+         * switch, so the default is five seconds: 27 s a cycle, 18 % live.
+         *
+         * The real fix is fewer switches, and that is a separate change — see
+         * [Stream.rotate]. A multi-frame declaration takes six identifiers per
+         * packet instead of two, which is proven on this module, and it halves
+         * the rounds.
          */
-        const val DWELL_MS = 2000L
+        const val DWELL_MS = 5000L
+
+        /** What one round change actually costs. Measured, not estimated. */
+        const val SWITCH_MS = 1832L
 
         /** Consecutive refused round declarations before a run is abandoned. */
         const val ROUNDS_GIVE_UP_AFTER = 4

@@ -640,7 +640,7 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                                 rounds,
                                 streamPlan?.perRound ?: 0,
                                 settings.streamDwellMs / 1000.0,
-                                rounds * (settings.streamDwellMs + 200) / 1000.0,
+                                rounds * (settings.streamDwellMs + Monitor.SWITCH_MS) / 1000.0,
                             )
                         )
                     }
