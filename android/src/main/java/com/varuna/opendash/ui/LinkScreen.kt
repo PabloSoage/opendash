@@ -114,6 +114,16 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
         }
     }
 
+    // Folding the vehicle panel away was right while there was nothing in it
+    // and wrong the moment there is. Identifying takes a few seconds and the
+    // whole point is to read what came back — the calibration number most of
+    // all, which is the one field that is not in the summary line. So the
+    // panel opens itself when the answer arrives, once, and closing it again
+    // sticks.
+    LaunchedEffect(Session.vehicle?.known) {
+        if (Session.vehicle?.known == true) openVehicle = true
+    }
+
     val joined = WifiLink.state == WifiLink.State.JOINED
     val joining = WifiLink.state == WifiLink.State.JOINING
     val state = Session.state
@@ -350,7 +360,13 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
 
         Fold(
             title = stringResource(R.string.link_adapter),
-            subtitle = settings.host + ":" + settings.port,
+            // What it is when it has said so, where it lives when it has not.
+            subtitle = if (Session.serial.isNotEmpty()) {
+                Session.serial + " · " + Session.firmware + " · " +
+                    settings.host + ":" + settings.port
+            } else {
+                settings.host + ":" + settings.port
+            },
             open = openAdapter,
             onToggle = { openAdapter = !openAdapter },
         ) {
