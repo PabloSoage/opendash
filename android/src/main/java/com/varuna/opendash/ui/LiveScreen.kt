@@ -139,6 +139,11 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
     // Cleared the moment a row is ticked or unticked, because from then on
     // what is on screen is no longer that group.
     var appliedPreset by remember { mutableStateOf<String?>(null) }
+    // And in what order it listed them. That order decides which identifiers
+    // share a packet — and two in the same packet arrive in the same frame, at
+    // the same instant. A profile that pairs the air mass with its target only
+    // means something if the pairing survives to the declaration.
+    var appliedOrder by remember { mutableStateOf<List<String>>(emptyList()) }
     var naming by remember { mutableStateOf(false) }
     var presetName by remember { mutableStateOf("") }
 
@@ -156,10 +161,20 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
     // The packets to declare, if the selection can be streamed at all. Only a
     // catalogue module can: a standard OBD PID is addressed to whoever answers
     // rather than to one module, so it has no packet to belong to.
-    val chosenParameters = rows
-        .filter { it.key in selected.keys }
-        .filterIsInstance<Item.FromCatalogue>()
-        .map { it.parameter }
+    // In the applied group's order when there is one, otherwise the
+    // catalogue's. See appliedOrder: the order is what pairs identifiers into
+    // packets, so a group that was written with a layout in mind keeps it.
+    val chosenParameters = run {
+        val byKey = rows.filterIsInstance<Item.FromCatalogue>().associateBy { it.key }
+        val ordered = if (appliedOrder.isEmpty()) {
+            rows.filterIsInstance<Item.FromCatalogue>().filter { it.key in selected.keys }
+        } else {
+            appliedOrder.mapNotNull { byKey[it] }.filter { it.key in selected.keys } +
+                rows.filterIsInstance<Item.FromCatalogue>()
+                    .filter { it.key in selected.keys && it.key !in appliedOrder }
+        }
+        ordered.map { it.parameter }
+    }
 
     /** How many of the scanned rows name something the module drives. */
     val commandable = rows.count { it.commandable }
@@ -304,7 +319,14 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                 TextButton(
                     enabled = presetName.isNotBlank(),
                     onClick = {
-                        presets.save(settings.catalogueModule, presetName.trim(), selected.keys.toSet())
+                        presets.save(
+                            settings.catalogueModule,
+                            presetName.trim(),
+                            // In the order the list shows them, not the order a
+                            // hash map happens to hold them: a saved group has
+                            // to come back the same next time.
+                            rows.filter { it.key in selected.keys }.map { it.key },
+                        )
                         presetRevision++
                         presetName = ""
                         naming = false
@@ -362,6 +384,7 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                                         keys.size,
                                     )
                                     appliedPreset = name
+                                    appliedOrder = keys
                                     showPresets = false
                                 },
                                 modifier = Modifier.weight(1f),
@@ -880,6 +903,7 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                             onClick = {
                                 selected.clear()
                                 appliedPreset = null
+                                appliedOrder = emptyList()
                                 presetNote = null
                             },
                             label = { Text(stringResource(R.string.live_clear_selection)) },
@@ -974,6 +998,7 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                 PickRow(row, row.key in selected.keys) { on ->
                     if (on) selected[row.key] = Unit else selected.remove(row.key)
                     appliedPreset = null
+                    appliedOrder = emptyList()
                 }
             }
         }

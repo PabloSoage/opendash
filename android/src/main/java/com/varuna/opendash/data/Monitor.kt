@@ -225,6 +225,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                 val extra = targetsForCatalogue(rotation.leftOut, module)
                 var turn = 0
                 var lastExtra = 0L
+                var refused = 0
                 // The session has to be held open for as long as the module is
                 // emitting — see Diagnostics.whileStreaming. Without it the
                 // module gives up on its own a few seconds in and every batch
@@ -239,9 +240,26 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                         val plan = rotation.rounds[round % rotation.rounds.size]
                         declared = Session.guarded { Session.diagnostics.beginStream(plan) } ?: false
                         if (!declared) {
-                            lastError = "the module refused to declare the data packets"
-                            break
+                            // One refused round does not end a two-hour
+                            // recording. A declaration is a round trip and a
+                            // round trip can be lost — to a retransmission, to
+                            // the module being busy — and ending the run there
+                            // throws away everything after it as well as
+                            // everything that round was for. So: say so, move
+                            // to the next round, and only give up when several
+                            // in a row fail, which is a module that has stopped
+                            // listening rather than a message that went astray.
+                            refused++
+                            lastError = if (refused >= ROUNDS_GIVE_UP_AFTER) {
+                                "the module refused to declare the data packets"
+                            } else {
+                                "a round was refused; carrying on with the next"
+                            }
+                            if (refused >= ROUNDS_GIVE_UP_AFTER) break
+                            round = (round + 1) % rotation.rounds.size
+                            continue
                         }
+                        refused = 0
                         val until =
                             if (rotation.rounds.size > 1) System.currentTimeMillis() + dwellMs
                             else Long.MAX_VALUE
@@ -426,5 +444,8 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
          * spent emitting.
          */
         const val DWELL_MS = 2000L
+
+        /** Consecutive refused round declarations before a run is abandoned. */
+        const val ROUNDS_GIVE_UP_AFTER = 4
     }
 }

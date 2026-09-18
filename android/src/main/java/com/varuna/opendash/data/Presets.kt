@@ -27,22 +27,39 @@ class Presets(context: Context) {
     fun names(module: String): List<String> =
         prefs.getStringSet(namesKey(module), emptySet()).orEmpty().sorted()
 
-    /** The row keys of one preset, or empty if there is no such preset. */
-    fun load(module: String, name: String): Set<String> =
-        prefs.getStringSet(entryKey(module, name), emptySet()).orEmpty()
+    /**
+     * The row keys of one preset, in the order they were written.
+     *
+     * Order is not decoration. It decides which identifiers share a packet and
+     * which round they are declared in, and two parameters in the same packet
+     * arrive in the same frame — the same instant. A profile that wants the air
+     * mass and its target compared has to be able to put them next to each
+     * other, and a Set threw that away.
+     *
+     * Presets written before this was stored come back from the old unordered
+     * form rather than not at all.
+     */
+    fun load(module: String, name: String): List<String> {
+        val ordered = prefs.getString(orderKey(module, name), null)
+        if (ordered != null) {
+            return ordered.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+        }
+        return prefs.getStringSet(entryKey(module, name), emptySet()).orEmpty().sorted()
+    }
 
     /** Whether [name] is already stored for [module]. */
     fun has(module: String, name: String): Boolean =
-        prefs.contains(entryKey(module, name))
+        prefs.contains(orderKey(module, name)) || prefs.contains(entryKey(module, name))
 
-    /** Store [keys] under [name]. An existing preset of that name is replaced. */
-    fun save(module: String, name: String, keys: Set<String>) {
+    /** Store [keys] under [name], in order. An existing preset is replaced. */
+    fun save(module: String, name: String, keys: List<String>) {
         if (module.isEmpty() || name.isBlank() || keys.isEmpty()) return
         val all = names(module).toMutableSet()
         all.add(name)
         prefs.edit()
             .putStringSet(namesKey(module), all)
-            .putStringSet(entryKey(module, name), keys)
+            .putString(orderKey(module, name), keys.joinToString("\n"))
+            .remove(entryKey(module, name))
             .apply()
     }
 
@@ -52,6 +69,7 @@ class Presets(context: Context) {
         prefs.edit()
             .putStringSet(namesKey(module), all)
             .remove(entryKey(module, name))
+            .remove(orderKey(module, name))
             .apply()
     }
 
@@ -71,12 +89,12 @@ class Presets(context: Context) {
             appendLine(MAGIC + " 1")
             appendLine("module\t" + module)
             appendLine("name\t" + name)
-            for (k in keys.sorted()) appendLine(k)
+            for (k in keys) appendLine(k)
         }
     }
 
     /** One preset as it appears in a file, before anything is stored. */
-    class Entry(val module: String, val name: String, val keys: Set<String>)
+    class Entry(val module: String, val name: String, val keys: List<String>)
 
     /**
      * Every preset in [text], parsed and nothing more.
@@ -145,12 +163,14 @@ class Presets(context: Context) {
             }
         }
         if (module.isEmpty() || name.isEmpty() || keys.isEmpty()) return null
-        return Entry(module, name, keys)
+        return Entry(module, name, keys.toList())
     }
 
     private fun namesKey(module: String) = "names|$module"
 
     private fun entryKey(module: String, name: String) = "set|$module|$name"
+
+    private fun orderKey(module: String, name: String) = "order|$module|$name"
 
     private companion object {
         const val MAGIC = "opendash-preset"
