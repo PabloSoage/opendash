@@ -93,14 +93,18 @@ object SessionFile {
     fun read(bytes: ByteArray, modified: Long = System.currentTimeMillis()): Session {
         if (bytes.size > 4 && String(bytes, 0, 4, Charsets.US_ASCII) == "SMFS") return sm2(bytes)
 
-        val text = if (bytes.size > 2 && bytes[0] == 0x1f.toByte() && bytes[1] == 0x8b.toByte()) {
-            GZIPInputStream(ByteArrayInputStream(bytes)).use {
-                String(it.readBytes(), Charsets.UTF_8)
+        // Streamed, never held whole. A two-and-a-half hour recording is 5.7
+        // million rows: 312 MB of text decompressed, and 624 MB again as a
+        // String, because a Kotlin String is UTF-16. That is over before a
+        // single row is parsed, and from the outside it is the app closing when
+        // you press a file.
+        val stream =
+            if (bytes.size > 2 && bytes[0] == 0x1f.toByte() && bytes[1] == 0x8b.toByte()) {
+                GZIPInputStream(ByteArrayInputStream(bytes))
+            } else {
+                ByteArrayInputStream(bytes)
             }
-        } else {
-            String(bytes, Charsets.UTF_8)
-        }
-        return csv(text, modified)
+        return stream.bufferedReader(Charsets.UTF_8).use { csv(it, modified) }
     }
 
     // ── .sm2 ──────────────────────────────────────────────────────────────
@@ -151,14 +155,18 @@ object SessionFile {
      * Reading the header means both shapes open, and it is one line of work
      * against a format that will grow a column again.
      */
-    private fun csv(text: String, modified: Long): Session {
+    private fun csv(reader: java.io.BufferedReader, modified: Long): Session {
         val index = LinkedHashMap<String, Int>()
         val units = ArrayList<String>()
-        val times = ArrayList<ArrayList<Int>>()
-        val values = ArrayList<ArrayList<Double>>()
+        // Primitive, not ArrayList<Int> and ArrayList<Double>. Those box every
+        // single value — sixteen bytes and a reference where four or eight
+        // would do — so 5.7 million readings cost about 270 MB of boxes on top
+        // of the 68 MB the numbers actually need, and then toIntArray()
+        // allocates the real array while the boxes are still alive.
+        val times = ArrayList<Ints>()
+        val values = ArrayList<Doubles>()
 
-        val lines = text.lineSequence().iterator()
-        val header = if (lines.hasNext()) split(lines.next()).map { it.trim().lowercase() } else emptyList()
+        val header = reader.readLine()?.let { split(it).map { f -> f.trim().lowercase() } } ?: emptyList()
         fun columnOf(name: String, fallback: Int): Int =
             header.indexOf(name).takeIf { it >= 0 } ?: fallback
         val msAt = columnOf("ms", 0)
@@ -168,12 +176,13 @@ object SessionFile {
         val valueAt = columnOf("value", 3)
         val widest = maxOf(msAt, nameAt, unitAt, valueAt, idAt)
 
-        lines.forEach { line ->
-            if (line.isBlank()) return@forEach
+        while (true) {
+            val line = reader.readLine() ?: break
+            if (line.isBlank()) continue
             val parts = split(line)
-            if (parts.size <= widest) return@forEach
-            val ms = parts[msAt].toIntOrNull() ?: return@forEach
-            val value = parts[valueAt].toDoubleOrNull() ?: return@forEach
+            if (parts.size <= widest) continue
+            val ms = parts[msAt].toIntOrNull() ?: continue
+            val value = parts[valueAt].toDoubleOrNull() ?: continue
             // Namesakes stay apart here too. Two rows called "Exhaust Gas
             // Temperature Sensor 1" reading different identifiers are two
             // series, and merged into one they read as a sensor flipping
@@ -183,8 +192,8 @@ object SessionFile {
                 else parts[nameAt]
             val i = index.getOrPut(label) {
                 units.add(parts[unitAt])
-                times.add(ArrayList())
-                values.add(ArrayList())
+                times.add(Ints())
+                values.add(Doubles())
                 index.size
             }
             times[i].add(ms)
@@ -193,9 +202,37 @@ object SessionFile {
         require(index.isNotEmpty()) { "no readings in this file" }
 
         val channels = index.keys.mapIndexed { i, name ->
-            Channel(name, units[i], times[i].toIntArray(), values[i].toDoubleArray())
+            Channel(name, units[i], times[i].trimmed(), values[i].trimmed())
         }
         return Session(modified, channels, null)
+    }
+
+    /**
+     * Growable primitive arrays.
+     *
+     * One per channel rather than one for the file, which is what keeps the
+     * peak down: a channel of a long recording is a hundred and forty thousand
+     * readings, so the doubling that growth costs is half a megabyte at a time
+     * and not half the file.
+     */
+    private class Ints {
+        private var a = IntArray(256)
+        private var n = 0
+        fun add(v: Int) {
+            if (n == a.size) a = a.copyOf(a.size * 2)
+            a[n++] = v
+        }
+        fun trimmed(): IntArray = a.copyOf(n)
+    }
+
+    private class Doubles {
+        private var a = DoubleArray(256)
+        private var n = 0
+        fun add(v: Double) {
+            if (n == a.size) a = a.copyOf(a.size * 2)
+            a[n++] = v
+        }
+        fun trimmed(): DoubleArray = a.copyOf(n)
     }
 
     /** Just enough CSV: only the parameter name is ever quoted. */
