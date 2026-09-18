@@ -308,9 +308,31 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                             byPid[pid.id]?.firstOrNull()?.let { Item.FromCatalogue(it, certain = true) }
                                 ?: Item.Standard(pid)
                         }
+                        // Everything else the module has, and "everything"
+                        // has to mean it. This used to be `pid > 0xff`, which
+                        // quietly dropped every catalogue row whose identifier
+                        // happens to collide with a standard OBD PID — because
+                        // those were represented by `named` above, which takes
+                        // the FIRST catalogue row at that identifier and not
+                        // necessarily the one a profile asked for.
+                        //
+                        // A catalogue lists several rows per identifier and only
+                        // one belongs to a given car, so "the first one" is a
+                        // coin toss. When it came up wrong the row simply was not
+                        // in the list, and a profile naming it selected nothing —
+                        // silently, because a profile already drops rows the
+                        // catalogue does not have.
+                        //
+                        // It cost the seven that matter most: 0x0010 the air
+                        // mass, 0x0023 the real rail pressure, 0x002C and 0x002D
+                        // the EGR target and its error, 0x000F, 0x000D, 0x002F.
+                        // Forty asked for, thirty-three recorded.
+                        val taken = named.filterIsInstance<Item.FromCatalogue>()
+                            .map { it.parameter.rowKey }
+                            .toSet()
                         val extra = pool
-                            .filter { it.pid > 0xff }
-                            .map { Item.FromCatalogue(it, certain = false) }
+                            .filter { it.rowKey !in taken }
+                            .map { Item.FromCatalogue(it, certain = it.pid <= 0xff) }
                         named + extra
                     }
                 }
