@@ -283,4 +283,6 @@
     <string name="live_options">Options</string>
     <string name="live_no_module">No module chosen</string>
     <string name="live_not_scanned">Nothing scanned yet</string>
+    <string name="live_multiframe">Six identifiers per packet</string>
+    <string name="live_multiframe_hint">A packet holds seven bytes of values, but the request that declares it only fitted two identifiers in one frame. Splitting that request across frames fits six — measured on this engine as three times the samples per second, at the same frame rate, with no extra traffic on the bus. It also halves the number of rounds, and a round change costs nearly two seconds. Turn it off if every round is refused and nothing ever emits.</string>
 </resources>

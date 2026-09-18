@@ -115,7 +115,25 @@ object Stream {
      * packets hold forty-nine bytes of values however they are declared.
      * Anything past that is polled, by [Plan.leftOut] and the monitor.
      */
-    const val MAX_IDENTIFIERS = 2
+    /**
+     * How many identifiers one declaration may name.
+     *
+     * Two was never a property of the packet — a packet holds seven bytes of
+     * values — it was a property of the *request*: `2C <packet> <id16> <id16>`
+     * is six bytes and an ISO-TP single frame carries seven, so the third
+     * identifier needed the request split across frames.
+     *
+     * It does split now, and this module takes it. Measured at the car on 18
+     * September: six identifiers accepted, all six emitted, every value at the
+     * offset it should be, and 71 Hz against 72 for two — three times the
+     * samples with no extra frame on the bus. Six is where it was measured and
+     * also where the packet runs out, since the narrowest identifier is a byte.
+     *
+     * [SAFE_IDENTIFIERS] is the old ceiling, kept as the way back: a module
+     * that will not reassemble a request still works, one packet at a time.
+     */
+    const val MAX_IDENTIFIERS = 6
+    const val SAFE_IDENTIFIERS = 2
     const val PACKETS_PER_START = 5
 
     class Packet(val number: Int, val identifiers: List<Int>, val width: Int)
@@ -171,6 +189,7 @@ object Stream {
         module: Int,
         parameters: List<Catalogue.Parameter>,
         packetsPerRound: Int = PACKETS_PER_START,
+        maxIdentifiers: Int = MAX_IDENTIFIERS,
     ): Rotation {
         val width = LinkedHashMap<Int, Int>()
         for (p in parameters) {
@@ -185,7 +204,7 @@ object Stream {
         var current = ArrayList<Int>()
         var used = 0
         for ((id, w) in width) {
-            if (used + w > PACKET_BYTES || current.size >= MAX_IDENTIFIERS) {
+            if (used + w > PACKET_BYTES || current.size >= maxIdentifiers) {
                 if (current.isNotEmpty()) bundles.add(current.toList())
                 current = ArrayList()
                 used = 0

@@ -109,6 +109,81 @@ class Diagnostics(private val sm3: Sm3Client) {
         return answer.firstOrNull()?.toInt()?.and(0xff) == Actuation.POSITIVE
     }
 
+    /**
+     * Send a request too long for one frame, in ISO-TP.
+     *
+     * Until today nothing here needed it: every read is two or three bytes. A
+     * packet declaration is what needs it — `2C <packet> <id16>…` is six bytes
+     * for two identifiers and eight for three, and a single frame carries
+     * seven. That ceiling is why a packet used to carry two values when it has
+     * room for seven bytes of them.
+     *
+     * Measured against this module on 18 September: it accepts up to six
+     * identifiers in a packet, emits all six, every value lands at the offset
+     * it should, and the frame rate does not drop — 71 Hz against 72 for two.
+     * Three times the samples per second without one extra frame on the bus.
+     *
+     *  - first frame `1L LL` and six bytes, where LLL is the total length;
+     *  - the module answers a flow control `30 BS ST` on its own address;
+     *  - consecutive frames `2N` and seven bytes, N counting 1..15 and round.
+     *
+     * Returns false rather than throwing when the module never clears us to
+     * send: a declaration that is not acknowledged is an ordinary refusal and
+     * the caller already knows what to do with one.
+     */
+    private fun sendSegmented(txId: Int, payload: ByteArray, rxId: Int): Boolean {
+        val first = ByteArray(8)
+        first[0] = (0x10 or ((payload.size shr 8) and 0x0f)).toByte()
+        first[1] = (payload.size and 0xff).toByte()
+        payload.copyInto(first, 2, 0, 6)
+        sm3.sendFrame(txId, first)
+
+        // Wait to be cleared. Sending the rest blind is what makes a module
+        // discard the whole reassembly and answer no for the wrong reason.
+        val accepts: (Int) -> Boolean =
+            if (rxId != ANY) ({ it == rxId }) else ({ isDiagnosticReply(it) })
+        var separation = 0L
+        var cleared = false
+        val until = System.currentTimeMillis() + FLOW_CONTROL_MS
+        while (!cleared && System.currentTimeMillis() < until) {
+            sm3.receive(minOf(SLICE_MS, until - System.currentTimeMillis()))
+            for (frame in sm3.drain()) {
+                if (!accepts(frame.id)) continue
+                val pci = frame.data.getOrNull(0)?.toInt()?.and(0xff) ?: continue
+                if (pci and 0xf0 != 0x30) continue
+                when (pci and 0x0f) {
+                    // Wait: the module is not ready, keep waiting.
+                    1 -> continue
+                    0 -> {
+                        val st = frame.data.getOrNull(2)?.toInt()?.and(0xff) ?: 0
+                        // Under 0x80 the separation is milliseconds; above it
+                        // is microseconds, and a millisecond covers all of it.
+                        separation = if (st <= 0x7f) st.toLong() else 1L
+                        cleared = true
+                    }
+                    // Overflow: the module cannot hold a message this long.
+                    else -> return false
+                }
+                if (cleared) break
+            }
+        }
+        if (!cleared) return false
+
+        var index = 1
+        var at = 6
+        while (at < payload.size) {
+            val cf = ByteArray(8)
+            cf[0] = (0x20 or (index and 0x0f)).toByte()
+            val take = minOf(7, payload.size - at)
+            payload.copyInto(cf, 1, at, at + take)
+            sm3.sendFrame(txId, cf)
+            at += take
+            index++
+            if (separation > 0) Thread.sleep(separation)
+        }
+        return true
+    }
+
     fun request(
         txId: Int,
         payload: ByteArray,
@@ -118,7 +193,11 @@ class Diagnostics(private val sm3: Sm3Client) {
         refuseIfNotRead(payload)
         isotp.reset()
         sm3.drain()
-        sm3.send(txId, payload)
+        if (payload.size <= SINGLE_FRAME_BYTES) {
+            sm3.send(txId, payload)
+        } else if (!sendSegmented(txId, payload, rxId)) {
+            return null
+        }
 
         val deadline = System.currentTimeMillis() + timeoutMs
         var flowControlSent = false
@@ -525,6 +604,12 @@ class Diagnostics(private val sm3: Sm3Client) {
          * second an ISO-TP sender waits for one.
          */
         private const val SLICE_MS = 50L
+
+        /** What one ISO-TP single frame carries. */
+        const val SINGLE_FRAME_BYTES = 7
+
+        /** How long to wait to be cleared to send the rest of a long request. */
+        private const val FLOW_CONTROL_MS = 1000L
 
         /**
          * How often a request pokes the adapter while waiting. The factory

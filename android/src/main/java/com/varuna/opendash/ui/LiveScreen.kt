@@ -219,6 +219,7 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
         chosenParameters,
         if (settings.streamRotate) Stream.PACKETS_PER_START
         else Stream.LAST_PACKET - Stream.FIRST_PACKET + 1,
+        if (settings.streamMultiFrame) Stream.MAX_IDENTIFIERS else Stream.SAFE_IDENTIFIERS,
     )
 
     // The stored profile for this module, if this car has one.
@@ -651,6 +652,14 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                     val left = streamPlan?.leftOut?.size ?: 0
                     if (left > 0) Hint(stringResource(R.string.live_stream_left_out, left))
                 }
+
+                Toggle(
+                    checked = settings.streamMultiFrame,
+                    enabled = !monitor.isRunning,
+                    onChange = { settings.streamMultiFrame = it },
+                    label = stringResource(R.string.live_multiframe),
+                )
+                Hint(stringResource(R.string.live_multiframe_hint))
 
                 Text(
                     stringResource(R.string.live_chart_limit, settings.chartCount),

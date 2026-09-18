@@ -131,6 +131,20 @@ class Settings(context: Context) {
     /** How long each round emits before the next one takes the packets. */
     var streamDwellMs: Int by pref(KEY_DWELL, prefs.getInt(KEY_DWELL, 5000)) { it }
 
+    /**
+     * Whether a packet declaration may be split across frames, so a packet can
+     * name six identifiers instead of two.
+     *
+     * On, because it is measured rather than hoped for: this engine accepts it,
+     * emits all six, and does not slow down. It is three times the samples per
+     * second and half the rounds, which is half the round changes — and a round
+     * change costs nearly two seconds.
+     *
+     * Off is the way back for a module that will not reassemble a request. The
+     * symptom is unmistakable: every round refused, nothing ever emitted.
+     */
+    var streamMultiFrame: Boolean by pref(KEY_MULTIFRAME, prefs.getBoolean(KEY_MULTIFRAME, true)) { it }
+
     var catalogueLanguage: String by pref(
         KEY_CATALOGUE_LANG,
         prefs.getString(KEY_CATALOGUE_LANG, null) ?: "en",
@@ -185,5 +199,6 @@ class Settings(context: Context) {
         const val KEY_VARIANT = "catalogue_variant"
         const val KEY_ROTATE = "stream_rotate"
         const val KEY_DWELL = "stream_dwell_ms"
+        const val KEY_MULTIFRAME = "stream_multiframe"
     }
 }

@@ -273,4 +273,6 @@
     <string name="live_options">Optionen</string>
     <string name="live_no_module">Kein Steuergerät gewählt</string>
     <string name="live_not_scanned">Noch nichts gescannt</string>
+    <string name="live_multiframe">Sechs Identifier je Paket</string>
+    <string name="live_multiframe_hint">Ein Paket fasst sieben Bytes an Werten, aber in die Anforderung, die es deklariert, passten in einem Frame nur zwei Identifier. Verteilt man diese Anforderung auf mehrere Frames, passen sechs — an diesem Motor gemessen: die dreifache Anzahl Messwerte pro Sekunde, bei gleicher Framerate und ohne zusätzlichen Busverkehr. Außerdem halbiert es die Runden, und ein Rundenwechsel kostet fast zwei Sekunden. Ausschalten, wenn jede Runde abgelehnt wird und nichts sendet.</string>
 </resources>
