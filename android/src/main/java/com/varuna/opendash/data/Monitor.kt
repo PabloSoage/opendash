@@ -259,123 +259,163 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                 var turn = 0
                 var lastExtra = 0L
                 var refused = 0
+                // How many times the whole streaming session has been torn down
+                // and built again after it stopped working. See below.
+                var revivals = 0
+
                 // The session has to be held open for as long as the module is
                 // emitting — see Diagnostics.whileStreaming. Without it the
                 // module gives up on its own a few seconds in and every batch
                 // from then on is empty, which on screen is numbers that arrive
                 // and then freeze.
-                Session.diagnostics.whileStreaming(module) {
-                    while (isRunning) {
-                        // A round is declared, left to emit for the dwell, then
-                        // stopped so the next one can take the packets. With a
-                        // single round this happens once and the inner loop
-                        // never ends, which is exactly the old behaviour.
-                        val plan = rotation.rounds[round % rotation.rounds.size]
-                        declared = Session.guarded { Session.diagnostics.beginStream(plan) } ?: false
-                        if (!declared) {
-                            // One refused round does not end a two-hour
-                            // recording. A declaration is a round trip and a
-                            // round trip can be lost — to a retransmission, to
-                            // the module being busy — and ending the run there
-                            // throws away everything after it as well as
-                            // everything that round was for. So: say so, move
-                            // to the next round, and only give up when several
-                            // in a row fail, which is a module that has stopped
-                            // listening rather than a message that went astray.
-                            refused++
-                            // And if the reason the round was refused is that
-                            // there is no longer a link, get the link back.
-                            //
-                            // A 65-minute recording stopped at a round change
-                            // with the rate perfectly healthy up to the last
-                            // sample. Whatever went — the adapter browning out
-                            // on a bump, the phone's Wi-Fi moving — the
-                            // response to it was to give up, and what that
-                            // throws away is not the round, it is the rest of
-                            // the drive. Reconnecting costs a second and
-                            // everything after it is data that would not exist.
-                            if (Session.state != Session.State.CHANNEL_OPEN) {
-                                lastError = "the link went away; getting it back"
-                                if (reopenLink()) {
-                                    refused = 0
-                                    continue
+                //
+                // ## Why this is a loop and not one call
+                //
+                // A 65-minute recording stopped at a round change with the rate
+                // perfectly healthy up to the last sample, and pressing Start
+                // again picked straight up — no reconnecting the Wi-Fi, no
+                // reconnecting the adapter, just Start. **So the link was never
+                // the problem.** The transport was alive the whole time; what
+                // stopped was the streaming session, and what fixed it was
+                // tearing the whole thing down and building it again.
+                //
+                // Why the module stopped accepting declarations is not known,
+                // and guessing at it here would be inventing a cause to justify
+                // a fix. What is known is exactly one thing: **a fresh start
+                // works.** So when the rounds give up, do precisely what
+                // pressing Start does — stop the emission, drop the heartbeat,
+                // wait, and declare again — instead of ending a recording that
+                // only needed the thing the user would have done by hand.
+                //
+                // The recorder is untouched across a revival. What was wanted
+                // was the rest of the drive in one file, not a second file
+                // starting at zero.
+                while (isRunning) {
+                    Session.diagnostics.whileStreaming(module) {
+                        while (isRunning) {
+                            // A round is declared, left to emit for the dwell, then
+                            // stopped so the next one can take the packets. With a
+                            // single round this happens once and the inner loop
+                            // never ends, which is exactly the old behaviour.
+                            val plan = rotation.rounds[round % rotation.rounds.size]
+                            declared = Session.guarded { Session.diagnostics.beginStream(plan) } ?: false
+                            if (!declared) {
+                                // One refused round does not end a two-hour
+                                // recording. A declaration is a round trip and a
+                                // round trip can be lost — to a retransmission, to
+                                // the module being busy — and ending the run there
+                                // throws away everything after it as well as
+                                // everything that round was for. So: say so, move
+                                // to the next round, and only give up when several
+                                // in a row fail, which is a module that has stopped
+                                // listening rather than a message that went astray.
+                                refused++
+                                // The one case where the link really has gone: get
+                                // it back before anything else, because nothing
+                                // below can work over a socket that is not there.
+                                if (Session.state != Session.State.CHANNEL_OPEN) {
+                                    lastError = "the link went away; getting it back"
+                                    if (reopenLink()) {
+                                        refused = 0
+                                        continue
+                                    }
                                 }
-                            }
-                            lastError = if (refused >= ROUNDS_GIVE_UP_AFTER) {
-                                "the module refused to declare the data packets"
-                            } else {
-                                "a round was refused; carrying on with the next"
-                            }
-                            if (refused >= ROUNDS_GIVE_UP_AFTER) break
-                            round = (round + 1) % rotation.rounds.size
-                            continue
-                        }
-                        refused = 0
-                        val until =
-                            if (rotation.rounds.size > 1) System.currentTimeMillis() + dwellMs
-                            else Long.MAX_VALUE
-                        while (isRunning && System.currentTimeMillis() < until) {
-                            val batch = Session.guarded {
-                                Session.diagnostics.readStream(plan, STREAM_SLICE_MS)
-                            }
-                            frames += batch?.frames ?: 0
-                            if (batch == null) {
-                                // Said rather than swallowed. This is the link going
-                                // out from under a screenful of numbers, and left
-                                // silent it looks identical to a module that simply
-                                // stopped having anything to say.
-                                lastError = "the link went away while the module was emitting"
-                                break
-                            }
-                            for ((parameter, value) in batch.values) {
-                                val key = parameter.rowKey
-                                values[key] = value
-                                series.getOrPut(key) { Series() }.add(value)
-                                recorder?.add(parameter.name, parameter.identifierText, parameter.unit, value)
-                                readings++
-                            }
-                            // One polled reading every EXTRA_EVERY_MS, not one per
-                            // turn round the loop. A request costs twenty to forty
-                            // milliseconds against a fifty-millisecond slice, so one
-                            // per turn is a third of the stream's time spent on the
-                            // overflow — and with two parameters in the overflow
-                            // that is a bad trade at any price.
-                            val now = System.currentTimeMillis()
-                            if (extra.isNotEmpty() && now - lastExtra >= EXTRA_EVERY_MS) {
-                                lastExtra = now
-                                val t = extra[turn % extra.size]
-                                turn++
-                                val v = try { t.request() } catch (_: Exception) { null }
-                                if (v == null) {
-                                    silent[t.key] = true
+                                lastError = if (refused >= ROUNDS_GIVE_UP_AFTER) {
+                                    "the module stopped accepting declarations"
                                 } else {
-                                    silent.remove(t.key)
-                                    values[t.key] = v
-                                    series.getOrPut(t.key) { Series() }.add(v)
-                                    recorder?.add(t.name, t.identifier, t.unit, v)
+                                    "a round was refused; carrying on with the next"
+                                }
+                                if (refused >= ROUNDS_GIVE_UP_AFTER) break
+                                round = (round + 1) % rotation.rounds.size
+                                continue
+                            }
+                            refused = 0
+                            val until =
+                                if (rotation.rounds.size > 1) System.currentTimeMillis() + dwellMs
+                                else Long.MAX_VALUE
+                            while (isRunning && System.currentTimeMillis() < until) {
+                                val batch = Session.guarded {
+                                    Session.diagnostics.readStream(plan, STREAM_SLICE_MS)
+                                }
+                                frames += batch?.frames ?: 0
+                                if (batch == null) {
+                                    // Said rather than swallowed. This is the link going
+                                    // out from under a screenful of numbers, and left
+                                    // silent it looks identical to a module that simply
+                                    // stopped having anything to say.
+                                    lastError = "the link went away while the module was emitting"
+                                    break
+                                }
+                                for ((parameter, value) in batch.values) {
+                                    val key = parameter.rowKey
+                                    values[key] = value
+                                    series.getOrPut(key) { Series() }.add(value)
+                                    recorder?.add(parameter.name, parameter.identifierText, parameter.unit, value)
                                     readings++
                                 }
+                                // One polled reading every EXTRA_EVERY_MS, not one per
+                                // turn round the loop. A request costs twenty to forty
+                                // milliseconds against a fifty-millisecond slice, so one
+                                // per turn is a third of the stream's time spent on the
+                                // overflow — and with two parameters in the overflow
+                                // that is a bad trade at any price.
+                                val now = System.currentTimeMillis()
+                                if (extra.isNotEmpty() && now - lastExtra >= EXTRA_EVERY_MS) {
+                                    lastExtra = now
+                                    val t = extra[turn % extra.size]
+                                    turn++
+                                    val v = try { t.request() } catch (_: Exception) { null }
+                                    if (v == null) {
+                                        silent[t.key] = true
+                                    } else {
+                                        silent.remove(t.key)
+                                        values[t.key] = v
+                                        series.getOrPut(t.key) { Series() }.add(v)
+                                        recorder?.add(t.name, t.identifier, t.unit, v)
+                                        readings++
+                                    }
+                                }
+                                recordedRows = recorder?.rows ?: 0
+                                recordingName = recorder?.name
+                                tick++
+                                val elapsed = System.currentTimeMillis() - since
+                                if (elapsed >= 1000) {
+                                    rate = (readings * 1000L / elapsed).toInt()
+                                    frameRate = (frames * 1000L / elapsed).toInt()
+                                    readings = 0
+                                    frames = 0
+                                    since = System.currentTimeMillis()
+                                }
                             }
-                            recordedRows = recorder?.rows ?: 0
-                            recordingName = recorder?.name
-                            tick++
-                            val elapsed = System.currentTimeMillis() - since
-                            if (elapsed >= 1000) {
-                                rate = (readings * 1000L / elapsed).toInt()
-                                frameRate = (frames * 1000L / elapsed).toInt()
-                                readings = 0
-                                frames = 0
-                                since = System.currentTimeMillis()
+                            // Between rounds: stop, so the packet numbers are free
+                            // for the next declaration. Costs one round trip, which
+                            // is why the dwell is seconds and not milliseconds.
+                            if (rotation.rounds.size > 1 && isRunning) {
+                                runCatching { Session.diagnostics.endStream(module) }
+                                round = (round + 1) % rotation.rounds.size
                             }
-                        }
-                        // Between rounds: stop, so the packet numbers are free
-                        // for the next declaration. Costs one round trip, which
-                        // is why the dwell is seconds and not milliseconds.
-                        if (rotation.rounds.size > 1 && isRunning) {
-                            runCatching { Session.diagnostics.endStream(module) }
-                            round = (round + 1) % rotation.rounds.size
                         }
                     }
+
+                    // Out here the heartbeat thread is already gone: leaving
+                    // the block above is what stops it. So this is the same
+                    // state the app is in between pressing Stop and pressing
+                    // Start, which is the state a fresh start is known to work
+                    // from.
+                    if (!isRunning) break
+                    if (revivals >= REVIVALS_GIVE_UP_AFTER) {
+                        lastError = "the stream stopped and would not start again"
+                        break
+                    }
+                    revivals++
+                    lastError = "the stream stopped; starting it again (" + revivals + ")"
+                    // Tell the module to stop emitting whatever it still thinks
+                    // it is emitting, so the packet numbers are free.
+                    runCatching { Session.diagnostics.endStream(module) }
+                    if (Session.state != Session.State.CHANNEL_OPEN && !reopenLink()) break
+                    Thread.sleep(REVIVE_WAIT_MS)
+                    refused = 0
+                    round = 0
                 }
             } catch (e: Exception) {
                 lastError = e.message ?: e.javaClass.simpleName
@@ -592,5 +632,19 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
          */
         const val RECONNECT_TRIES = 6
         const val RECONNECT_WAIT_MS = 1000L
+
+        /**
+         * How many times to tear the streaming session down and build it again
+         * before accepting that the recording is over.
+         *
+         * Three, two seconds apart. The evidence that this is the right shape
+         * of fix is narrow but solid: the session that stopped after 65 minutes
+         * needed nothing but Start pressed again -- no reconnecting anything --
+         * so a fresh session is known to work where a retried round did not.
+         * What is not known is why, and a bound is what stops a guess about the
+         * cause from turning into a thread that never lets go.
+         */
+        const val REVIVALS_GIVE_UP_AFTER = 3
+        const val REVIVE_WAIT_MS = 2000L
     }
 }
