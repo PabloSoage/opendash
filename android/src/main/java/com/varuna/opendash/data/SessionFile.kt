@@ -100,11 +100,11 @@ object SessionFile {
         // you press a file.
         val stream =
             if (bytes.size > 2 && bytes[0] == 0x1f.toByte() && bytes[1] == 0x8b.toByte()) {
-                GZIPInputStream(ByteArrayInputStream(bytes))
+                GZIPInputStream(ByteArrayInputStream(bytes), 1 shl 16)
             } else {
                 ByteArrayInputStream(bytes)
             }
-        return stream.bufferedReader(Charsets.UTF_8).use { csv(it, modified) }
+        return stream.use { csv(it, modified) }
     }
 
     // ── .sm2 ──────────────────────────────────────────────────────────────
@@ -135,38 +135,45 @@ object SessionFile {
         return Session(recording.startedAt, channels, recording.visible)
     }
 
-    // ── our own CSV ───────────────────────────────────────────────────────
+    // ── our own CSV ───────────────────────────────────────
 
     /**
+     * Our own CSV, parsed straight out of the bytes.
+     *
      * The rows arrive interleaved, one parameter at a time, because that is how
      * they were polled. Each name gets an index on first sight, so the order on
      * screen is the order they were recorded in.
-     */
-    /**
-     * The header says which column is which, rather than this counting them.
      *
-     * The recorder grew an `identifier` column — a marque catalogue names the
-     * same thing once per configuration, so a name alone does not identify a
-     * series — and this read the fourth field as the value whatever it was. On
+     * The header says which column is which rather than this counting them. The
+     * recorder grew an `identifier` column — a marque catalogue names the same
+     * thing once per configuration, so a name alone does not identify a series
+     * — and this used to read the fourth field as the value whatever it was. On
      * a five-column file the fourth field is the unit, `"%".toDoubleOrNull()`
      * is null, every line was skipped, and a complete 185 000-row recording
      * opened as "no readings in this file".
      *
-     * Reading the header means both shapes open, and it is one line of work
-     * against a format that will grow a column again.
+     * **Why bytes and not a BufferedReader.** Reading lines and splitting them
+     * is about ten allocations a row — the line itself, a list, a builder, and
+     * a String per field — and a recording is millions of rows. The 22-minute
+     * one is 1,9 million; the long one 5,7 million. That is tens of millions of
+     * short-lived objects, on a phone, with the garbage collector running the
+     * whole time, and from the outside it is a file that takes forever to open.
+     *
+     * So nothing here allocates per row. The bytes are scanned in a sliding
+     * window, the two numbers are parsed from the bytes, and the channel is
+     * found by hashing the name and identifier bytes — a String is built once
+     * per channel, not once per row.
      */
-    private fun csv(reader: java.io.BufferedReader, modified: Long): Session {
-        val index = LinkedHashMap<String, Int>()
-        val units = ArrayList<String>()
-        // Primitive, not ArrayList<Int> and ArrayList<Double>. Those box every
-        // single value — sixteen bytes and a reference where four or eight
-        // would do — so 5.7 million readings cost about 270 MB of boxes on top
-        // of the 68 MB the numbers actually need, and then toIntArray()
-        // allocates the real array while the boxes are still alive.
-        val times = ArrayList<Ints>()
-        val values = ArrayList<Doubles>()
+    private fun csv(input: java.io.InputStream, modified: Long): Session {
+        val lines = Lines(input)
+        val fields = Fields()
 
-        val header = reader.readLine()?.let { split(it).map { f -> f.trim().lowercase() } } ?: emptyList()
+        if (!lines.next()) throw IllegalArgumentException("no readings in this file")
+        fields.split(lines.bytes, lines.from, lines.to)
+        val header = (0 until fields.count).map {
+            String(lines.bytes, fields.from(it), fields.length(it), Charsets.UTF_8)
+                .trim().lowercase()
+        }
         fun columnOf(name: String, fallback: Int): Int =
             header.indexOf(name).takeIf { it >= 0 } ?: fallback
         val msAt = columnOf("ms", 0)
@@ -176,36 +183,272 @@ object SessionFile {
         val valueAt = columnOf("value", 3)
         val widest = maxOf(msAt, nameAt, unitAt, valueAt, idAt)
 
-        while (true) {
-            val line = reader.readLine() ?: break
-            if (line.isBlank()) continue
-            val parts = split(line)
-            if (parts.size <= widest) continue
-            val ms = parts[msAt].toIntOrNull() ?: continue
-            val value = parts[valueAt].toDoubleOrNull() ?: continue
-            // Namesakes stay apart here too. Two rows called "Exhaust Gas
-            // Temperature Sensor 1" reading different identifiers are two
-            // series, and merged into one they read as a sensor flipping
-            // between two temperatures.
-            val label =
-                if (idAt >= 0 && parts[idAt].isNotBlank()) parts[nameAt] + "  " + parts[idAt]
-                else parts[nameAt]
-            val i = index.getOrPut(label) {
-                units.add(parts[unitAt])
+        val names = ArrayList<String>()
+        val units = ArrayList<String>()
+        val times = ArrayList<Ints>()
+        val values = ArrayList<Doubles>()
+        val channels = Channels()
+
+        while (lines.next()) {
+            if (lines.to <= lines.from) continue
+            fields.split(lines.bytes, lines.from, lines.to)
+            if (fields.count <= widest) continue
+            val buf = lines.bytes
+            val ms = parseInt(buf, fields.from(msAt), fields.to(msAt))
+            if (ms < 0) continue
+            val value = parseDouble(buf, fields.from(valueAt), fields.to(valueAt))
+            if (value.isNaN()) continue
+
+            // Namesakes stay apart. Two rows called "Exhaust Gas Temperature
+            // Sensor 1" reading different identifiers are two series, and
+            // merged into one they read as a sensor flipping between two
+            // temperatures.
+            val hasId = idAt >= 0 && fields.to(idAt) > fields.from(idAt)
+            val i = channels.indexOf(
+                buf,
+                fields.from(nameAt), fields.to(nameAt),
+                if (hasId) fields.from(idAt) else 0,
+                if (hasId) fields.to(idAt) else 0,
+            )
+            if (i == channels.size) {
+                val name = String(buf, fields.from(nameAt), fields.length(nameAt), Charsets.UTF_8)
+                names.add(if (hasId) name + "  " + String(buf, fields.from(idAt), fields.length(idAt), Charsets.UTF_8) else name)
+                units.add(String(buf, fields.from(unitAt), fields.length(unitAt), Charsets.UTF_8))
                 times.add(Ints())
                 values.add(Doubles())
-                index.size
+                channels.keep()
             }
             times[i].add(ms)
             values[i].add(value)
         }
-        require(index.isNotEmpty()) { "no readings in this file" }
+        require(names.isNotEmpty()) { "no readings in this file" }
 
-        val channels = index.keys.mapIndexed { i, name ->
-            Channel(name, units[i], times[i].trimmed(), values[i].trimmed())
-        }
-        return Session(modified, channels, null)
+        return Session(
+            modified,
+            names.mapIndexed { i, name -> Channel(name, units[i], times[i].trimmed(), values[i].trimmed()) },
+            null,
+        )
     }
+
+    // ── the byte machinery ────────────────────────────────────────────────
+
+    /**
+     * Lines out of a stream, without making a String of any of them.
+     *
+     * The window slides: what has been consumed is dropped to the front and the
+     * buffer only grows when a single line does not fit in it, which for this
+     * format never happens.
+     */
+    private class Lines(private val input: java.io.InputStream) {
+        var bytes = ByteArray(1 shl 16)
+            private set
+        private var filled = 0
+        private var at = 0
+
+        /** Start and end of the line [next] just found, end exclusive. */
+        var from = 0
+            private set
+        var to = 0
+            private set
+
+        fun next(): Boolean {
+            while (true) {
+                var i = at
+                while (i < filled && bytes[i] != NEWLINE) i++
+                if (i < filled) {
+                    from = at
+                    to = if (i > at && bytes[i - 1] == RETURN) i - 1 else i
+                    at = i + 1
+                    return true
+                }
+                if (at > 0) {
+                    System.arraycopy(bytes, at, bytes, 0, filled - at)
+                    filled -= at
+                    at = 0
+                }
+                if (filled == bytes.size) bytes = bytes.copyOf(bytes.size * 2)
+                val n = input.read(bytes, filled, bytes.size - filled)
+                if (n <= 0) {
+                    if (at >= filled) return false
+                    from = at
+                    to = filled
+                    at = filled
+                    return true
+                }
+                filled += n
+            }
+        }
+    }
+
+    /**
+     * Where the commas are. Just enough CSV: only the parameter name is ever
+     * quoted, and the quotes are dropped from the field rather than copied out.
+     */
+    private class Fields {
+        private var starts = IntArray(16)
+        private var ends = IntArray(16)
+        var count = 0
+            private set
+
+        fun from(i: Int) = starts[i]
+        fun to(i: Int) = ends[i]
+        fun length(i: Int) = ends[i] - starts[i]
+
+        fun split(buf: ByteArray, from: Int, to: Int) {
+            count = 0
+            var start = from
+            var quoted = false
+            var i = from
+            while (i <= to) {
+                if (i == to || (buf[i] == COMMA && !quoted)) {
+                    add(start, i, buf)
+                    start = i + 1
+                } else if (buf[i] == QUOTE) {
+                    quoted = !quoted
+                }
+                i++
+            }
+        }
+
+        private fun add(start: Int, end: Int, buf: ByteArray) {
+            if (count == starts.size) {
+                starts = starts.copyOf(starts.size * 2)
+                ends = ends.copyOf(ends.size * 2)
+            }
+            var a = start
+            var b = end
+            if (b > a && buf[a] == QUOTE) a++
+            if (b > a && buf[b - 1] == QUOTE) b--
+            starts[count] = a
+            ends[count] = b
+            count++
+        }
+    }
+
+    /**
+     * Which channel a row belongs to, found from the raw bytes.
+     *
+     * A 64-bit FNV-1a over the name and the identifier picks a candidate, and
+     * the candidate's stored bytes are compared before it is believed —
+     * a hash collision here would not fail, it would silently merge two
+     * parameters into one series, which is the kind of wrong that gets
+     * plotted and believed.
+     */
+    private class Channels {
+        private val byHash = HashMap<Long, Int>()
+        private val keys = ArrayList<ByteArray>()
+        private var pending: ByteArray = ByteArray(0)
+        private var pendingHash = 0L
+
+        val size: Int get() = keys.size
+
+        /**
+         * The channel's index, or [size] when it is new — in which case the
+         * caller adds its arrays and calls [keep].
+         */
+        fun indexOf(buf: ByteArray, aFrom: Int, aTo: Int, bFrom: Int, bTo: Int): Int {
+            var h = -0x340d631b7bdddcdbL          // FNV-1a 64 offset basis
+            for (i in aFrom until aTo) {
+                h = (h xor (buf[i].toLong() and 0xff)) * 0x100000001b3L
+            }
+            h = (h xor 0xffL) * 0x100000001b3L    // the two ranges cannot run together
+            for (i in bFrom until bTo) {
+                h = (h xor (buf[i].toLong() and 0xff)) * 0x100000001b3L
+            }
+            val key = ByteArray((aTo - aFrom) + (bTo - bFrom))
+            System.arraycopy(buf, aFrom, key, 0, aTo - aFrom)
+            System.arraycopy(buf, bFrom, key, aTo - aFrom, bTo - bFrom)
+
+            val candidate = byHash[h]
+            if (candidate != null && keys[candidate].contentEquals(key)) return candidate
+            if (candidate != null) {
+                // Collision. Rare enough never to have been seen, cheap enough
+                // to handle honestly: look for it the slow way.
+                for (i in keys.indices) if (keys[i].contentEquals(key)) return i
+            }
+            pending = key
+            pendingHash = h
+            return keys.size
+        }
+
+        /** Confirms the channel [indexOf] just reported as new. */
+        fun keep() {
+            byHash.putIfAbsent(pendingHash, keys.size)
+            keys.add(pending)
+        }
+    }
+
+    /** The timestamp. Negative means the field was not a number. */
+    private fun parseInt(buf: ByteArray, from: Int, to: Int): Int {
+        if (to <= from) return -1
+        var v = 0L
+        for (i in from until to) {
+            val d = buf[i] - ZERO
+            if (d < 0 || d > 9) return -1
+            v = v * 10 + d
+            if (v > Int.MAX_VALUE) return -1
+        }
+        return v.toInt()
+    }
+
+    /**
+     * The value. NaN means the field was not a number, which is how a header
+     * row or a torn last line gets skipped.
+     *
+     * Exact where it matters: a mantissa of at most eighteen digits scaled by a
+     * power of ten that Java represents exactly is one correctly rounded
+     * division. Anything longer or stranger — an exponent, a very long decimal
+     * — is handed to the platform, which is slower and always right.
+     */
+    private fun parseDouble(buf: ByteArray, from: Int, to: Int): Double {
+        if (to <= from) return Double.NaN
+        var i = from
+        var negative = false
+        if (buf[i] == MINUS) { negative = true; i++ } else if (buf[i] == PLUS) i++
+        var mantissa = 0L
+        var digits = 0
+        var decimals = -1
+        while (i < to) {
+            val c = buf[i]
+            if (c == DOT) {
+                if (decimals >= 0) return Double.NaN
+                decimals = 0
+            } else {
+                val d = c - ZERO
+                if (d < 0 || d > 9) return slowDouble(buf, from, to)
+                if (digits < 18) {
+                    mantissa = mantissa * 10 + d
+                    digits++
+                    if (decimals >= 0) decimals++
+                } else if (decimals < 0) {
+                    return slowDouble(buf, from, to)
+                }
+            }
+            i++
+        }
+        if (digits == 0) return Double.NaN
+        val scaled = when {
+            decimals <= 0 -> mantissa.toDouble()
+            decimals < POWERS.size -> mantissa.toDouble() / POWERS[decimals]
+            else -> return slowDouble(buf, from, to)
+        }
+        return if (negative) -scaled else scaled
+    }
+
+    private fun slowDouble(buf: ByteArray, from: Int, to: Int): Double =
+        String(buf, from, to - from, Charsets.UTF_8).toDoubleOrNull() ?: Double.NaN
+
+    private const val NEWLINE = '\n'.code.toByte()
+    private const val RETURN = '\r'.code.toByte()
+    private const val COMMA = ','.code.toByte()
+    private const val QUOTE = '"'.code.toByte()
+    private const val MINUS = '-'.code.toByte()
+    private const val PLUS = '+'.code.toByte()
+    private const val DOT = '.'.code.toByte()
+    private const val ZERO = '0'.code.toByte()
+
+    /** Powers of ten that a double holds exactly. */
+    private val POWERS = DoubleArray(23) { Math.pow(10.0, it.toDouble()) }
 
     /**
      * Growable primitive arrays.
@@ -233,24 +476,5 @@ object SessionFile {
             a[n++] = v
         }
         fun trimmed(): DoubleArray = a.copyOf(n)
-    }
-
-    /** Just enough CSV: only the parameter name is ever quoted. */
-    private fun split(line: String): List<String> {
-        val out = ArrayList<String>(4)
-        val field = StringBuilder()
-        var quoted = false
-        for (c in line) {
-            when {
-                c == '"' -> quoted = !quoted
-                c == ',' && !quoted -> {
-                    out.add(field.toString())
-                    field.setLength(0)
-                }
-                else -> field.append(c)
-            }
-        }
-        out.add(field.toString())
-        return out
     }
 }

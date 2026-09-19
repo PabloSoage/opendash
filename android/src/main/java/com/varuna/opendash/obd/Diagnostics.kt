@@ -235,8 +235,17 @@ class Diagnostics(private val sm3: Sm3Client) {
                 val done = isotp.push(frame.id, frame.data)
                 if (done != null) return done
                 // A multi-frame answer stalls until the tester says go ahead.
+                // And "go ahead" is addressed to the module that is answering,
+                // not to whoever was asked. A functional request goes out as a
+                // broadcast on 0x7DF; a broadcast flow control is addressed to
+                // nobody, so the module holding the rest of the message never
+                // hears it and the answer stops after its first frame.
+                //
+                // That costs nothing while every answer fits in one frame,
+                // which is why it was never seen — and it is precisely what a
+                // multi-PID mode 01 stops doing.
                 if (pci == 0x10 && !flowControlSent) {
-                    sm3.sendFrame(txId, IsoTp.FLOW_CONTROL)
+                    sm3.sendFrame(requestIdFor(frame.id, txId), IsoTp.FLOW_CONTROL)
                     flowControlSent = true
                 }
             }
@@ -249,6 +258,52 @@ class Diagnostics(private val sm3: Sm3Client) {
         val r = request(txId, byteArrayOf(0x01, pid.toByte()), rxId = ANY) ?: return null
         if (r.size < 2 || (r[0].toInt() and 0xff) != 0x41) return null
         return r.copyOfRange(2, r.size)
+    }
+
+    /**
+     * Mode 01 with several PIDs in one request, which is what makes the
+     * standard OBD screen usable.
+     *
+     * The service takes up to six PIDs at a time — `01 04 05 0C 0D 0F 10` — and
+     * answers all of them in one message, echoing each PID before its bytes.
+     * One PID at a time costs a round trip each, and a round trip on this car
+     * is about eighty milliseconds: twenty-five parameters are then two
+     * seconds a lap, which is the twelve readings a second this used to
+     * manage. In five requests it is under half a second.
+     *
+     * That number is not a guess. The manufacturer's own Windows software,
+     * logging twenty-six OBD parameters on this same car, records every one of
+     * them at **2,12 Hz** — fifty-seven readings a second. Six PIDs a request
+     * is the only arrangement that fits: twenty-six PIDs in five requests, at
+     * about ninety milliseconds each, is exactly 2,1 laps a second.
+     *
+     * Where the answer is split. Each PID's width comes from [Pids], and an
+     * echoed PID this build does not know stops the parse rather than
+     * guessing — a wrong width would not fail, it would silently shift every
+     * value after it by a byte, which is the kind of bug that gets believed.
+     */
+    fun mode01Batch(pids: List<Int>, txId: Int = FUNCTIONAL): Map<Int, ByteArray> {
+        if (pids.isEmpty()) return emptyMap()
+        if (pids.size == 1) {
+            val only = mode01(pids[0], txId) ?: return emptyMap()
+            return mapOf(pids[0] to only)
+        }
+        val payload = ByteArray(pids.size + 1)
+        payload[0] = 0x01
+        for ((i, pid) in pids.withIndex()) payload[i + 1] = pid.toByte()
+        val r = request(txId, payload, rxId = ANY) ?: return emptyMap()
+        if (r.isEmpty() || (r[0].toInt() and 0xff) != 0x41) return emptyMap()
+
+        val out = LinkedHashMap<Int, ByteArray>()
+        var at = 1
+        while (at < r.size) {
+            val pid = r[at].toInt() and 0xff
+            val width = Pids.byId[pid]?.bytes ?: break
+            if (at + 1 + width > r.size) break
+            out[pid] = r.copyOfRange(at + 1, at + 1 + width)
+            at += 1 + width
+        }
+        return out
     }
 
     /**
@@ -685,6 +740,21 @@ class Diagnostics(private val sm3: Sm3Client) {
             txId in 0x7E0..0x7E7 -> txId + 8
             txId in 0x240..0x25F -> txId + 0x400
             else -> ANY
+        }
+
+        /**
+         * The inverse, for talking back to whoever answered.
+         *
+         * Only flow control needs this, and only after a functional request:
+         * the answer arrives on 0x7E8 and the "carry on" has to go to 0x7E0.
+         * [asked] is what to fall back to when the response address is not one
+         * this mapping recognises, which keeps a physically addressed request
+         * behaving exactly as it did.
+         */
+        fun requestIdFor(rxId: Int, asked: Int): Int = when {
+            rxId in 0x7E8..0x7EF -> rxId - 8
+            rxId in 0x640..0x65F -> rxId - 0x400
+            else -> asked
         }
 
         /**

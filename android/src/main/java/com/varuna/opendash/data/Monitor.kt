@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import com.varuna.opendash.Session
 import com.varuna.opendash.obd.Diagnostics
 import com.varuna.opendash.obd.Pid
+import com.varuna.opendash.obd.Pids
 import com.varuna.opendash.obd.Stream
 import kotlin.concurrent.thread
 
@@ -112,6 +113,16 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
         val unit: String,
         /** What it was asked for by, so a recording can tell namesakes apart. */
         val identifier: String,
+        /**
+         * Set when this can travel in a batched mode 01 request — six PIDs to a
+         * question instead of one. [decode] then turns the bytes that came back
+         * for it into the number.
+         *
+         * Both or neither: a target with a PID and no decoder is asked for one
+         * at a time, which is what everything did before batching existed.
+         */
+        val batchPid: Int? = null,
+        val decode: ((ByteArray) -> Double?)? = null,
         val request: () -> Double?,
     )
 
@@ -121,6 +132,8 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
             pid.name,
             pid.unit,
             String.format(java.util.Locale.ROOT, "PID %02X", pid.id),
+            batchPid = pid.id,
+            decode = { pid.value(it) },
         ) {
             Session.diagnostics.mode01(pid.id)?.let { pid.value(it) }
         }
@@ -160,16 +173,36 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
         params: List<Catalogue.Parameter>,
         module: Int = Diagnostics.ENGINE,
     ): List<Target> = params.map { p ->
-        Target(p.rowKey, p.name, p.unit, p.identifierText) {
+        val fromBytes: (ByteArray) -> Double? = { raw ->
+            if (raw.size < p.bytes) {
+                null
+            } else {
+                var value = 0L
+                for (i in 0 until p.bytes) value = (value shl 8) or (raw[i].toLong() and 0xff)
+                p.scale(value)
+            }
+        }
+        // A catalogue row can be batched too, but only when its identifier is a
+        // standard PID **and** the catalogue agrees with J1979 about how wide
+        // the answer is. Splitting a batched answer needs the width, and taking
+        // the catalogue's word for it against the standard's would not fail
+        // loudly — it would shift every value after it along by a byte.
+        val standard = Pids.byId[p.pid]
+        val batchable = p.pid <= 0xff && standard != null && standard.bytes == p.bytes
+        Target(
+            p.rowKey,
+            p.name,
+            p.unit,
+            p.identifierText,
+            batchPid = if (batchable) p.pid else null,
+            decode = if (batchable) fromBytes else null,
+        ) {
             val raw = if (p.pid <= 0xff) {
                 Session.diagnostics.mode01(p.pid)
             } else {
                 Session.diagnostics.readDataByIdentifier(p.pid, txId = module)
             } ?: return@Target null
-            if (raw.size < p.bytes) return@Target null
-            var value = 0L
-            for (i in 0 until p.bytes) value = (value shl 8) or (raw[i].toLong() and 0xff)
-            p.scale(value)
+            fromBytes(raw)
         }
     }
 
@@ -365,38 +398,71 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
         holdTheLink()
         worker = thread(name = "monitor", isDaemon = true) {
             val misses = HashMap<String, Int>()
+            var readings = 0
+
+            fun alive(t: Target) = (misses[t.key] ?: 0) < GIVE_UP_AFTER
+
+            /** One answer, or the absence of one, booked the same way either way. */
+            fun record(t: Target, v: Double?) {
+                if (v == null) {
+                    val n = (misses[t.key] ?: 0) + 1
+                    misses[t.key] = n
+                    if (n >= GIVE_UP_AFTER) silent[t.key] = true
+                } else {
+                    misses[t.key] = 0
+                    silent.remove(t.key)
+                    values[t.key] = v
+                    series.getOrPut(t.key) { Series() }.add(v)
+                    recorder?.add(t.name, t.identifier, t.unit, v)
+                    readings++
+                }
+            }
+
+            // Split once, not every lap. What can go six to a request goes
+            // there; the rest keeps the one-at-a-time path it always had.
+            val batched = targets.filter { it.batchPid != null && it.decode != null }
+            val singly = targets.filter { it.batchPid == null || it.decode == null }
+
             while (isRunning) {
                 val lapStart = System.currentTimeMillis()
-                var readings = 0
-                for (t in targets) {
+                readings = 0
+
+                for (chunk in batched.filter(::alive).chunked(MODE01_BATCH)) {
                     if (!isRunning) break
-                    if ((misses[t.key] ?: 0) >= GIVE_UP_AFTER) continue
-                    val v = try {
-                        t.request()
+                    val answers = try {
+                        Session.diagnostics.mode01Batch(chunk.map { it.batchPid!! })
                     } catch (_: Exception) {
-                        null
+                        emptyMap()
                     }
-                    if (v == null) {
-                        val n = (misses[t.key] ?: 0) + 1
-                        misses[t.key] = n
-                        if (n >= GIVE_UP_AFTER) silent[t.key] = true
-                    } else {
-                        misses[t.key] = 0
-                        silent.remove(t.key)
-                        values[t.key] = v
-                        series.getOrPut(t.key) { Series() }.add(v)
-                        recorder?.add(t.name, t.identifier, t.unit, v)
-                        readings++
+                    for (t in chunk) {
+                        val raw = answers[t.batchPid]
+                        record(t, if (raw == null) null else t.decode!!(raw))
                     }
                     val gap = settings.pollIntervalMs.toLong()
                     if (gap > 0) Thread.sleep(gap)
                 }
+
+                for (t in singly) {
+                    if (!isRunning) break
+                    if (!alive(t)) continue
+                    record(
+                        t,
+                        try {
+                            t.request()
+                        } catch (_: Exception) {
+                            null
+                        },
+                    )
+                    val gap = settings.pollIntervalMs.toLong()
+                    if (gap > 0) Thread.sleep(gap)
+                }
+
                 val elapsed = (System.currentTimeMillis() - lapStart).coerceAtLeast(1)
                 rate = (readings * 1000L / elapsed).toInt()
                 recordedRows = recorder?.rows ?: 0
                 tick++
                 // Everything in the rotation went quiet: stop hammering the bus.
-                if (readings == 0 && targets.all { (misses[it.key] ?: 0) >= GIVE_UP_AFTER }) break
+                if (readings == 0 && targets.none(::alive)) break
             }
             closeRecorder()
             letGo()
@@ -427,6 +493,15 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
 
     companion object {
         const val GIVE_UP_AFTER = 3
+
+        /**
+         * How many PIDs travel in one mode 01 request.
+         *
+         * Six is what J1979 allows, and six is what the request byte count
+         * permits without segmenting it: the service byte plus six PIDs is
+         * seven bytes, exactly one CAN frame's payload.
+         */
+        const val MODE01_BATCH = 6
 
         /** How often the overflow gets a turn, so the stream keeps its own. */
         const val EXTRA_EVERY_MS = 300L

@@ -51,6 +51,13 @@ android {
         }
     }
 
+    testOptions {
+        unitTests.all {
+            it.testLogging { showStandardStreams = true }
+            it.maxHeapSize = "1g"
+        }
+    }
+
     lint {
         disable += "MissingTranslation"
         disable += "OldTargetApi"
@@ -103,6 +110,10 @@ kotlin {
 }
 
 dependencies {
+    // The parsing lives on the host, so it is tested on the host: no
+    // device, no emulator, and it runs in a second.
+    testImplementation(libs.junit)
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.activity.compose)

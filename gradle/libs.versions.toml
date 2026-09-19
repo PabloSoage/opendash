@@ -19,6 +19,7 @@ bouncycastle = "1.78.1"
 slf4j = "2.0.13"
 
 [libraries]
+junit = { module = "junit:junit", version = "4.13.2" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
