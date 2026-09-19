@@ -280,4 +280,17 @@
     <string name="live_known_taken">sondeado el %1$s · %2$d identificadores</string>
     <string name="live_known_hint">Lo que contestó otro coche como éste cuando se le preguntó, publicado por el catálogo. Adoptarlo permite listar aquí lo que merece la pena grabar sin el coche conectado. Es una medida de otro vehículo, no un hecho sobre el tuyo: pregúntale a este coche cuando lo tengas.</string>
     <string name="live_known_taken_on">Usando %1$s</string>
+    <string name="live_layout">Reparto en paquetes</string>
+    <string name="live_layout_none">Todavía no hay nada que repartir. Elige parámetros de catálogo de un módulo: un PID estándar de OBD se dirige a quien conteste, así que no pertenece a ningún paquete.</string>
+    <string name="live_layout_summary">%1$d identificadores en %2$d paquetes, en %3$d rondas</string>
+    <string name="live_layout_gap">Cada ronda emite %1$s s y luego se queda a oscuras %2$s s. Un transitorio que caiga en ese hueco no se graba.</string>
+    <string name="live_layout_round">Ronda %1$d — %2$d paquetes</string>
+    <string name="live_layout_packet">Paquete %1$#X · %2$d identificadores · %3$d de %4$d bytes</string>
+    <string name="live_layout_bytes">%1$d bytes</string>
+    <string name="live_layout_up">Subir</string>
+    <string name="live_layout_down">Bajar</string>
+    <string name="live_layout_left_out">Fuera del flujo (%1$d)</string>
+    <string name="live_layout_left_out_hint">Más anchos que un paquete, así que se piden de uno en uno: mucho más despacio, y nunca en el mismo instante que ninguna otra cosa.</string>
+    <string name="live_layout_hint">El orden no es cosmético. Dos identificadores seguidos caen en el mismo paquete, un paquete llega en UNA trama, y una trama es un instante. Dos valores que quieras comparar tienen que ir juntos; separados en rondas distintas no se midieron nunca a la vez.</string>
+    <string name="live_layout_open">Reparto en paquetes</string>
 </resources>

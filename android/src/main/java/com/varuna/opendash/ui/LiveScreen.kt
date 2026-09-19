@@ -16,6 +16,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Search
@@ -127,6 +129,9 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
     // be seen while driving; everything behind them is a decision taken once.
     var showSetup by remember { mutableStateOf(false) }
     var showOptions by remember { mutableStateOf(false) }
+    // And the third, which is where a recording is actually designed:
+    // what shares a frame with what. See LayoutSheet.
+    var showLayout by remember { mutableStateOf(false) }
 
     // What this car answered when it was asked, and whether the list is being
     // kept to it. See CarProfile: the catalogue cannot say which of a marque's
@@ -192,16 +197,34 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
     // In the applied group's order when there is one, otherwise the
     // catalogue's. See appliedOrder: the order is what pairs identifiers into
     // packets, so a group that was written with a layout in mind keeps it.
-    val chosenParameters = run {
+    val chosenItems = run {
         val byKey = rows.filterIsInstance<Item.FromCatalogue>().associateBy { it.key }
-        val ordered = if (appliedOrder.isEmpty()) {
+        if (appliedOrder.isEmpty()) {
             rows.filterIsInstance<Item.FromCatalogue>().filter { it.key in selected.keys }
         } else {
             appliedOrder.mapNotNull { byKey[it] }.filter { it.key in selected.keys } +
                 rows.filterIsInstance<Item.FromCatalogue>()
                     .filter { it.key in selected.keys && it.key !in appliedOrder }
         }
-        ordered.map { it.parameter }
+    }
+    val chosenParameters = chosenItems.map { it.parameter }
+
+    /**
+     * Move one row in the order, which is the only thing the layout editor does.
+     *
+     * It writes [appliedOrder], the same list an applied group carries, so the
+     * layout somebody arranges by hand and the layout a group remembers are the
+     * same mechanism. And it clears [appliedPreset]: from the moment the order
+     * moves, what is on screen is no longer that group, exactly as ticking a
+     * row makes it no longer that group.
+     */
+    fun moveChosen(from: Int, to: Int) {
+        val keys = chosenItems.map { it.key }
+        if (from !in keys.indices || to !in keys.indices || from == to) return
+        val next = keys.toMutableList()
+        next.add(to, next.removeAt(from))
+        appliedOrder = next
+        appliedPreset = null
     }
 
     /** How many of the scanned rows name something the module drives. */
@@ -695,6 +718,16 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
         }
     }
 
+    if (showLayout) {
+        LayoutSheet(
+            rotation = streamPlan,
+            chosen = chosenParameters,
+            dwellMs = settings.streamDwellMs,
+            onMove = { from, to -> moveChosen(from, to) },
+            onDismiss = { showLayout = false },
+        )
+    }
+
     if (showOptions) {
         ModalBottomSheet(
             onDismissRequest = { showOptions = false },
@@ -723,6 +756,16 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                     onChange = { streaming = it },
                     label = stringResource(R.string.live_stream),
                 )
+                // Where a recording is designed rather than merely chosen.
+                // Offered whenever there is a plan to look at, and it is the
+                // only place the order can be changed.
+                OutlinedButton(
+                    enabled = !monitor.isRunning && streamPlan != null && !streamPlan.isEmpty,
+                    onClick = { showOptions = false; showLayout = true },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.live_layout_open))
+                }
                 if (!canStream && selected.isNotEmpty()) {
                     // A switch that will not move and does not say why is worse
                     // than no switch. There are only two reasons it can refuse.
@@ -1405,5 +1448,159 @@ private fun Toggle(
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f),
         )
+    }
+}
+
+/**
+ * The packet layout, and the one place the order can be changed.
+ *
+ * ## Why a screen for this at all
+ *
+ * Because the order is not cosmetic. Two identifiers next to each other land in
+ * the same packet, a packet arrives in **one CAN frame**, and one frame is one
+ * instant. So the air mass and its target sitting together means they can be
+ * compared; the same two split across packets — worse, across rounds — means
+ * they were never measured at the same time, and every conclusion drawn from
+ * comparing them is an artefact of the layout.
+ *
+ * That was worked out on paper for the first long drive, by hand, in a script.
+ * It belongs here: the thing being designed is visible, and the arithmetic that
+ * decides whether it fits is done by the same code that will declare it.
+ *
+ * ## What it shows
+ *
+ * Every round, every packet inside it, and every parameter reading from each
+ * packet — with the bytes used out of the seven a packet holds. A packet with
+ * room left is a packet that could carry one more thing at no cost at all,
+ * which is the single most useful number on the screen and is invisible
+ * anywhere else.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LayoutSheet(
+    rotation: Stream.Rotation?,
+    chosen: List<Catalogue.Parameter>,
+    dwellMs: Int,
+    onMove: (from: Int, to: Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
+        Column(
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Section(stringResource(R.string.live_layout), first = true)
+
+            if (rotation == null || rotation.isEmpty) {
+                Hint(stringResource(R.string.live_layout_none))
+                return@Column
+            }
+
+            // The headline numbers, because they are the reason to look.
+            val rounds = rotation.rounds.size
+            val identifiers = rotation.rounds.sumOf { r -> r.packets.sumOf { it.identifiers.size } }
+            Hint(
+                stringResource(
+                    R.string.live_layout_summary,
+                    identifiers,
+                    rotation.rounds.sumOf { it.packets.size },
+                    rounds,
+                )
+            )
+            if (rounds > 1) {
+                // What rotation costs, said in seconds rather than left to be
+                // discovered in the data. A parameter is dark between its
+                // turns, and a transient in that gap is simply not recorded.
+                val cycle = rounds * (dwellMs + Monitor.SWITCH_MS)
+                Hint(
+                    stringResource(
+                        R.string.live_layout_gap,
+                        (dwellMs / 1000.0).let { "%.1f".format(it) },
+                        ((cycle - dwellMs) / 1000.0).let { "%.1f".format(it) },
+                    )
+                )
+            }
+
+            // Where each parameter sits, so a row can be named under its packet.
+            val byIdentifier = chosen.groupBy { it.pid }
+            var index = 0
+
+            rotation.rounds.forEachIndexed { r, plan ->
+                Section(stringResource(R.string.live_layout_round, r + 1, plan.packets.size))
+                plan.packets.forEach { packet ->
+                    Text(
+                        stringResource(
+                            R.string.live_layout_packet,
+                            packet.number,
+                            packet.identifiers.size,
+                            packet.width,
+                            Stream.PACKET_BYTES,
+                        ),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    packet.identifiers.forEach { id ->
+                        byIdentifier[id].orEmpty().forEach { parameter ->
+                            val at = index++
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(parameter.name, style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        parameter.identifierText + "  ·  " +
+                                            stringResource(R.string.live_layout_bytes, parameter.bytes),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                // Up and down rather than drag. A drag inside a
+                                // scrolling sheet fights the scroll, and the
+                                // move that matters here is one place at a
+                                // time: putting a value next to its target.
+                                IconButton(
+                                    enabled = at > 0,
+                                    onClick = { onMove(at, at - 1) },
+                                ) {
+                                    Icon(
+                                        Icons.Filled.KeyboardArrowUp,
+                                        contentDescription = stringResource(R.string.live_layout_up),
+                                    )
+                                }
+                                IconButton(
+                                    enabled = at < chosen.size - 1,
+                                    onClick = { onMove(at, at + 1) },
+                                ) {
+                                    Icon(
+                                        Icons.Filled.KeyboardArrowDown,
+                                        contentDescription = stringResource(R.string.live_layout_down),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (rotation.leftOut.isNotEmpty()) {
+                Section(stringResource(R.string.live_layout_left_out, rotation.leftOut.size))
+                Hint(stringResource(R.string.live_layout_left_out_hint))
+                rotation.leftOut.forEach {
+                    Text(
+                        it.name + "  " + it.identifierText,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+
+            Hint(stringResource(R.string.live_layout_hint))
+        }
     }
 }

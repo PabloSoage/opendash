@@ -280,4 +280,17 @@
     <string name="live_known_taken">abgefragt am %1$s · %2$d Kennungen</string>
     <string name="live_known_hint">Was ein anderes Auto dieser Art geantwortet hat, als es gefragt wurde, veröffentlicht vom Katalog. Damit listet dieser Bildschirm ohne angeschlossenes Auto, was sich aufzuzeichnen lohnt. Es ist eine Messung an einem anderen Fahrzeug, keine Tatsache über Ihres: fragen Sie dieses Auto, sobald Sie es haben.</string>
     <string name="live_known_taken_on">Verwendet %1$s</string>
+    <string name="live_layout">Paketaufteilung</string>
+    <string name="live_layout_none">Noch nichts aufzuteilen. Wählen Sie Katalogparameter eines Moduls: eine Standard-OBD-PID richtet sich an jeden, der antwortet, und gehört daher zu keinem Paket.</string>
+    <string name="live_layout_summary">%1$d Kennungen in %2$d Paketen, über %3$d Runden</string>
+    <string name="live_layout_gap">Jede Runde sendet %1$s s und ist dann %2$s s dunkel. Ein Ereignis in dieser Lücke wird gar nicht aufgezeichnet.</string>
+    <string name="live_layout_round">Runde %1$d — %2$d Pakete</string>
+    <string name="live_layout_packet">Paket %1$#X · %2$d Kennungen · %3$d von %4$d Bytes</string>
+    <string name="live_layout_bytes">%1$d Bytes</string>
+    <string name="live_layout_up">Nach oben</string>
+    <string name="live_layout_down">Nach unten</string>
+    <string name="live_layout_left_out">Nicht im Strom (%1$d)</string>
+    <string name="live_layout_left_out_hint">Breiter als ein Paket, daher werden diese einzeln abgefragt: viel langsamer und nie im selben Augenblick wie etwas anderes.</string>
+    <string name="live_layout_hint">Die Reihenfolge ist nicht kosmetisch. Zwei benachbarte Kennungen teilen sich ein Paket, ein Paket kommt in EINEM CAN-Rahmen an, und ein Rahmen ist ein Augenblick. Zwei Werte, die verglichen werden sollen, müssen zusammenstehen; auf verschiedene Runden verteilt wurden sie nie gleichzeitig gemessen.</string>
+    <string name="live_layout_open">Paketaufteilung</string>
 </resources>

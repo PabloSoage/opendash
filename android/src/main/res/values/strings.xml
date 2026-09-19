@@ -290,4 +290,17 @@
     <string name="live_known_taken">scanned %1$s · %2$d identifiers</string>
     <string name="live_known_hint">What another car of this kind answered when it was asked, published by the catalogue. Taking one on lets this screen list what is worth recording with no car connected. It is a measurement of some other vehicle, not a fact about yours: ask this car when you have it.</string>
     <string name="live_known_taken_on">Using %1$s</string>
+    <string name="live_layout">Packet layout</string>
+    <string name="live_layout_none">Nothing to lay out yet. Choose some catalogue parameters of one module: a standard OBD PID is addressed to whoever answers, so it has no packet to belong to.</string>
+    <string name="live_layout_summary">%1$d identifiers in %2$d packets, over %3$d rounds</string>
+    <string name="live_layout_gap">Each round emits for %1$s s and is then dark for %2$s s. A transient in that gap is not recorded at all.</string>
+    <string name="live_layout_round">Round %1$d — %2$d packets</string>
+    <string name="live_layout_packet">Packet %1$#X · %2$d identifiers · %3$d of %4$d bytes</string>
+    <string name="live_layout_bytes">%1$d bytes</string>
+    <string name="live_layout_up">Move up</string>
+    <string name="live_layout_down">Move down</string>
+    <string name="live_layout_left_out">Not in the stream (%1$d)</string>
+    <string name="live_layout_left_out_hint">Wider than a packet, so these are polled one at a time instead — far more slowly, and never at the same instant as anything else.</string>
+    <string name="live_layout_hint">The order is not cosmetic. Two identifiers next to each other share a packet, a packet arrives in one CAN frame, and one frame is one instant. Two values you mean to compare must sit together; split across rounds they were never measured at the same time.</string>
+    <string name="live_layout_open">Packet layout</string>
 </resources>
