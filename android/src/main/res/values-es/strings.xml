@@ -275,4 +275,9 @@
     <string name="live_not_scanned">Todavía sin barrer</string>
     <string name="live_multiframe">Seis identificadores por paquete</string>
     <string name="live_multiframe_hint">Un paquete tiene siete bytes de valores, pero la petición que lo declara sólo cabía con dos identificadores en una trama. Partir esa petición en varias tramas permite seis — medido en este motor: tres veces las muestras por segundo, al mismo ritmo de tramas y sin una trama más en el bus. Además reduce las rondas a la mitad, y cambiar de ronda cuesta casi dos segundos. Desactívalo si todas las rondas se rechazan y no emite nada.</string>
+    <string name="live_known">Vehículos conocidos</string>
+    <string name="live_known_use">Usar %1$s</string>
+    <string name="live_known_taken">sondeado el %1$s · %2$d identificadores</string>
+    <string name="live_known_hint">Lo que contestó otro coche como éste cuando se le preguntó, publicado por el catálogo. Adoptarlo permite listar aquí lo que merece la pena grabar sin el coche conectado. Es una medida de otro vehículo, no un hecho sobre el tuyo: pregúntale a este coche cuando lo tengas.</string>
+    <string name="live_known_taken_on">Usando %1$s</string>
 </resources>

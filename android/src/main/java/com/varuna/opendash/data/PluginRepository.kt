@@ -103,8 +103,14 @@ class PluginRepository(context: Context) {
             // slow part of using this — hundreds of rows, and the dozen worth
             // reading together are always the same dozen — so a catalogue that
             // ships them saves whoever installs it the first half hour.
-            val optional =
-                listOf("variants$suffix.tsv", "modules.tsv", "dtc.tsv", "profiles.txt")
+            // `vehicles.txt` is optional too, and it is what makes the live
+            // screen work on a sofa: what one car actually answered, so the
+            // 21 382 rows of a marque can be cut down to the few hundred this
+            // engine has without the engine being present.
+            val optional = listOf(
+                "variants$suffix.tsv", "modules.tsv", "dtc.tsv",
+                "profiles.txt", "vehicles.txt",
+            )
 
             val fetched = fetchAll(source, brand, required + optional, onProgress)
             for (name in required) {
@@ -128,6 +134,10 @@ class PluginRepository(context: Context) {
     /** The profiles an installed catalogue publishes, as raw text. */
     fun profilesOf(brand: String): String? =
         File(File(root, brand), "profiles.txt").takeIf { it.isFile }?.readText()
+
+    /** The known vehicles an installed catalogue publishes, as raw text. */
+    fun vehiclesOf(brand: String): String? =
+        File(File(root, brand), "vehicles.txt").takeIf { it.isFile }?.readText()
 
     /**
      * The revision of an installed catalogue, from its own `plugin.json`.

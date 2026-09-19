@@ -158,14 +158,15 @@ class CarProfile(context: Context) {
      *
      * **The VIN is not written unless it is asked for.** It identifies the
      * vehicle and, through it, its owner, and the whole reason to export this
-     * is to give it to somebody. [asVin] is what the file is keyed by instead.
+     * is to give it to somebody. [asLabel] is what the record is keyed by
+     * instead.
      */
-    fun export(vin: String, module: Int, asVin: String = "vehicle"): String {
+    fun export(vin: String, module: Int, asLabel: String = "vehicle"): String {
         val answeredWidths = widths(vin, module)
         val answeredIds = answered(vin, module).orEmpty()
         val out = StringBuilder()
-        out.append("# opendash car profile\n")
-        out.append("vin\t").append(asVin).append('\n')
+        out.append("# opendash known vehicles\n\n")
+        out.append("vehicle\t").append(asLabel).append('\n')
         out.append("module\t").append(module).append('\n')
         out.append("taken\t").append(taken(vin, module) ?: 0L).append('\n')
         out.append("supported\t").append(supported(vin).orEmpty().joinToString(",")).append('\n')
@@ -176,43 +177,96 @@ class CarProfile(context: Context) {
         return out.toString()
     }
 
-    /** Reads back what [export] wrote. Returns the VIN and module it was for. */
-    fun import(text: String): Pair<String, Int>? {
-        var vin = ""
-        var module = -1
-        var taken = 0L
-        var supported = emptySet<Int>()
-        var asked = emptySet<Int>()
-        val answered = LinkedHashMap<Int, Int>()
-        for (line in text.lineSequence()) {
-            if (line.isBlank() || line.startsWith("#")) continue
-            val tab = line.indexOf('\t')
-            if (tab <= 0) continue
-            val value = line.substring(tab + 1)
-            when (line.substring(0, tab)) {
-                "vin" -> vin = value.trim()
-                "module" -> module = value.trim().toIntOrNull() ?: -1
-                "taken" -> taken = value.trim().toLongOrNull() ?: 0L
-                "supported" ->
-                    supported = value.split(',').mapNotNullTo(LinkedHashSet()) { it.toIntOrNull() }
-                "asked" ->
-                    asked = value.split(',').mapNotNullTo(LinkedHashSet()) { it.toIntOrNull() }
-                "answered" -> for (pair in value.split(',')) {
-                    val colon = pair.indexOf(':')
-                    if (colon <= 0) continue
-                    val id = pair.substring(0, colon).toIntOrNull() ?: continue
-                    answered[id] = pair.substring(colon + 1).toIntOrNull() ?: 0
-                }
-            }
-        }
-        if (vin.isBlank() || module < 0 || answered.isEmpty()) return null
-        save(vin, module, asked, answered)
-        if (supported.isNotEmpty()) saveSupported(vin, supported)
+    /**
+     * Takes a record on as the car this app knows about.
+     *
+     * The label becomes the key, exactly where a VIN would be. That is the
+     * whole trick: nothing downstream cares that the string came from a file
+     * rather than from a module, so every screen that already works from a
+     * scan works from this one.
+     */
+    fun adopt(record: Record) {
+        save(record.label, record.module, record.asked, record.answered)
+        if (record.supported.isNotEmpty()) saveSupported(record.label, record.supported)
         // The day it was taken travels with it. A profile that came from
         // somewhere else is exactly the case where "how old is this" matters,
         // and stamping it with today would be a lie that reads as reassurance.
-        if (taken > 0L) prefs.edit().putLong(key(vin, module) + ".when", taken).apply()
-        lastVin = vin
-        return vin to module
+        if (record.taken > 0L) {
+            prefs.edit().putLong(key(record.label, record.module) + ".when", record.taken).apply()
+        }
+        lastVin = record.label
+    }
+
+    companion object {
+
+        /** One vehicle in such a file, read but not yet stored. */
+        class Record(
+            val label: String,
+            val module: Int,
+            val taken: Long,
+            val supported: Set<Int>,
+            val asked: Set<Int>,
+            val answered: Map<Int, Int>,
+        )
+
+        /**
+         * Every vehicle a file describes, without storing any of them.
+         *
+         * Reading and adopting are separate on purpose: a file can hold several
+         * cars — a catalogue may publish one per engine — and which of them is the
+         * one outside is a question for whoever is looking, not for the parser.
+         *
+         * Records are separated by their `vehicle` line. Anything before the first
+         * one is a header, which is where the format explains itself.
+         */
+        fun parse(text: String): List<Record> {
+            val out = ArrayList<Record>()
+            var label: String? = null
+            var module = -1
+            var taken = 0L
+            var supported = emptySet<Int>()
+            var asked = emptySet<Int>()
+            var answered = LinkedHashMap<Int, Int>()
+
+            fun flush() {
+                val name = label ?: return
+                if (module >= 0 && answered.isNotEmpty()) {
+                    out.add(Record(name, module, taken, supported, asked, answered))
+                }
+            }
+
+            for (line in text.lineSequence()) {
+                if (line.isBlank() || line.startsWith("#")) continue
+                val tab = line.indexOf('\t')
+                if (tab <= 0) continue
+                val value = line.substring(tab + 1).trim()
+                when (line.substring(0, tab).trim()) {
+                    // `vin` is what the first version of this wrote. Files exist.
+                    "vehicle", "vin" -> {
+                        flush()
+                        label = value
+                        module = -1
+                        taken = 0L
+                        supported = emptySet()
+                        asked = emptySet()
+                        answered = LinkedHashMap()
+                    }
+                    "module" -> module = value.toIntOrNull() ?: -1
+                    "taken" -> taken = value.toLongOrNull() ?: 0L
+                    "supported" ->
+                        supported = value.split(',').mapNotNullTo(LinkedHashSet()) { it.toIntOrNull() }
+                    "asked" ->
+                        asked = value.split(',').mapNotNullTo(LinkedHashSet()) { it.toIntOrNull() }
+                    "answered" -> for (pair in value.split(',')) {
+                        val colon = pair.indexOf(':')
+                        if (colon <= 0) continue
+                        val id = pair.substring(0, colon).toIntOrNull() ?: continue
+                        answered[id] = pair.substring(colon + 1).toIntOrNull() ?: 0
+                    }
+                }
+            }
+            flush()
+            return out
+        }
     }
 }

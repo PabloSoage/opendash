@@ -275,4 +275,9 @@
     <string name="live_not_scanned">Noch nichts gescannt</string>
     <string name="live_multiframe">Sechs Identifier je Paket</string>
     <string name="live_multiframe_hint">Ein Paket fasst sieben Bytes an Werten, aber in die Anforderung, die es deklariert, passten in einem Frame nur zwei Identifier. Verteilt man diese Anforderung auf mehrere Frames, passen sechs — an diesem Motor gemessen: die dreifache Anzahl Messwerte pro Sekunde, bei gleicher Framerate und ohne zusätzlichen Busverkehr. Außerdem halbiert es die Runden, und ein Rundenwechsel kostet fast zwei Sekunden. Ausschalten, wenn jede Runde abgelehnt wird und nichts sendet.</string>
+    <string name="live_known">Bekannte Fahrzeuge</string>
+    <string name="live_known_use">%1$s verwenden</string>
+    <string name="live_known_taken">abgefragt am %1$s · %2$d Kennungen</string>
+    <string name="live_known_hint">Was ein anderes Auto dieser Art geantwortet hat, als es gefragt wurde, veröffentlicht vom Katalog. Damit listet dieser Bildschirm ohne angeschlossenes Auto, was sich aufzuzeichnen lohnt. Es ist eine Messung an einem anderen Fahrzeug, keine Tatsache über Ihres: fragen Sie dieses Auto, sobald Sie es haben.</string>
+    <string name="live_known_taken_on">Verwendet %1$s</string>
 </resources>

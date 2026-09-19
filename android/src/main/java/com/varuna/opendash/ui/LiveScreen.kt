@@ -623,12 +623,63 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                                 )
                             }
                             if (answered == null) Hint(stringResource(R.string.live_profile_hint))
+
+                            // What some other car of this kind answered, if the
+                            // catalogue publishes it. This is what turns the
+                            // screen from useless-without-the-car into
+                            // useful-at-a-desk: the slow part of using this is
+                            // deciding what to watch, and that decision needs a
+                            // list, not a link.
+                            val known = remember(c.brand, plugins.revision, moduleAddress) {
+                                runCatching {
+                                    CarProfile.parse(plugins.vehiclesOf(c.brand).orEmpty())
+                                        .filter { it.module == moduleAddress }
+                                }.getOrDefault(emptyList())
+                            }
+                            if (known.isNotEmpty()) {
+                                Section(stringResource(R.string.live_known))
+                                known.forEach { record ->
+                                    OutlinedButton(
+                                        enabled = !probing && !busy && !monitor.isRunning,
+                                        onClick = {
+                                            profiles.adopt(record)
+                                            profileVin = record.label
+                                            answered = record.answered.keys
+                                            widths = record.answered
+                                            forget()
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) {
+                                        Text(
+                                            if (profileVin == record.label) {
+                                                stringResource(
+                                                    R.string.live_known_taken_on, record.label,
+                                                )
+                                            } else {
+                                                stringResource(R.string.live_known_use, record.label)
+                                            }
+                                        )
+                                    }
+                                    Hint(
+                                        stringResource(
+                                            R.string.live_known_taken,
+                                            java.text.DateFormat.getDateInstance()
+                                                .format(java.util.Date(record.taken)),
+                                            record.answered.size,
+                                        )
+                                    )
+                                }
+                                Hint(stringResource(R.string.live_known_hint))
+                            }
                         }
                     }
                 }
                 Button(
+                    // Offered with no link when there is a scan on file, the
+                    // car's own or one taken on from the catalogue. Building
+                    // the list is not a conversation; reading values is.
                     enabled = !busy && !monitor.isRunning &&
-                        Session.state == Session.State.CHANNEL_OPEN,
+                        (Session.state == Session.State.CHANNEL_OPEN || answered != null),
                     onClick = { rebuild() },
                     modifier = Modifier.fillMaxWidth(),
                 ) {

@@ -283,6 +283,24 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                             // in a row fail, which is a module that has stopped
                             // listening rather than a message that went astray.
                             refused++
+                            // And if the reason the round was refused is that
+                            // there is no longer a link, get the link back.
+                            //
+                            // A 65-minute recording stopped at a round change
+                            // with the rate perfectly healthy up to the last
+                            // sample. Whatever went — the adapter browning out
+                            // on a bump, the phone's Wi-Fi moving — the
+                            // response to it was to give up, and what that
+                            // throws away is not the round, it is the rest of
+                            // the drive. Reconnecting costs a second and
+                            // everything after it is data that would not exist.
+                            if (Session.state != Session.State.CHANNEL_OPEN) {
+                                lastError = "the link went away; getting it back"
+                                if (reopenLink()) {
+                                    refused = 0
+                                    continue
+                                }
+                            }
                             lastError = if (refused >= ROUNDS_GIVE_UP_AFTER) {
                                 "the module refused to declare the data packets"
                             } else {
@@ -375,6 +393,33 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                 isRunning = false
             }
         }
+    }
+
+    /**
+     * Get the link back, without giving up the recording to do it.
+     *
+     * Backed off, and bounded. Backed off because a Wi-Fi link that has just
+     * dropped is not ready a millisecond later and hammering it is how a
+     * recovery becomes a hang; bounded because a car that has been switched off
+     * is never coming back, and a worker thread retrying for ever holds the
+     * wake lock and the file open behind it.
+     *
+     * The file is not touched either way. A reconnected session keeps writing
+     * to the same recording, which is the point: what was wanted was the rest
+     * of the drive, not a second file starting at zero.
+     */
+    private fun reopenLink(): Boolean {
+        for (attempt in 0 until RECONNECT_TRIES) {
+            if (!isRunning) return false
+            Thread.sleep(RECONNECT_WAIT_MS * (attempt + 1))
+            if (!isRunning) return false
+            if (Session.openChannel()) {
+                lastError = "the link came back after " + (attempt + 1) +
+                    (if (attempt == 0) " try" else " tries")
+                return true
+            }
+        }
+        return false
     }
 
     private fun openRecorder(record: Boolean, label: String) {
@@ -536,5 +581,16 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
 
         /** Consecutive refused round declarations before a run is abandoned. */
         const val ROUNDS_GIVE_UP_AFTER = 4
+
+        /**
+         * How hard to try to get a dropped link back mid-recording.
+         *
+         * Six tries, waiting a second longer each time, is about twenty
+         * seconds. Long enough to ride out a Wi-Fi hiccup or an adapter
+         * brown-out; short enough that a car switched off does not leave a
+         * worker thread holding a wake lock and an open file for ever.
+         */
+        const val RECONNECT_TRIES = 6
+        const val RECONNECT_WAIT_MS = 1000L
     }
 }
