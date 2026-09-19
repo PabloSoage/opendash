@@ -107,4 +107,112 @@ class CarProfile(context: Context) {
 
     private fun key(vin: String, module: Int): String =
         "profile." + vin.ifBlank { "unknown" } + "." + module
+
+    // ── what makes the screens usable with no car in front of them ─────
+
+    /**
+     * The last vehicle this app talked to.
+     *
+     * Everything above is keyed by VIN, which is right — and useless on a
+     * kitchen table, because the VIN comes from the car. Remembering the last
+     * one is what lets a screen open the right profile when there is nothing to
+     * ask.
+     */
+    var lastVin: String
+        get() = prefs.getString("profile.last", "").orEmpty()
+        set(value) {
+            if (value.isNotBlank()) prefs.edit().putString("profile.last", value).apply()
+        }
+
+    /** Every vehicle there is a stored profile for, newest first. */
+    fun vehicles(): List<String> =
+        prefs.all.keys
+            .filter { it.startsWith("profile.") && it.endsWith(".when") }
+            .mapNotNull { it.removePrefix("profile.").removeSuffix(".when").substringBeforeLast('.').ifBlank { null } }
+            .distinct()
+
+    /**
+     * Which standard OBD PIDs the car advertised.
+     *
+     * Asked live on every rebuild until now, which is fine with the car
+     * connected and is the one thing standing between the live screen and
+     * being useful on a sofa. It is four short requests and it does not change,
+     * so it is worth keeping.
+     */
+    fun supported(vin: String): Set<Int>? = read("supported." + vin.ifBlank { "unknown" })
+
+    fun saveSupported(vin: String, pids: Set<Int>) {
+        prefs.edit()
+            .putString("supported." + vin.ifBlank { "unknown" }, pids.joinToString(","))
+            .apply()
+    }
+
+    /**
+     * A stored profile as text, so it can leave the phone.
+     *
+     * The point is not backup. Scanning one module is a few thousand requests
+     * and several minutes sitting in a cold car; being able to carry the answer
+     * to another phone, or into a repository beside the catalogue it belongs
+     * to, is the difference between designing a recording at the kerb and
+     * designing it at a desk.
+     *
+     * **The VIN is not written unless it is asked for.** It identifies the
+     * vehicle and, through it, its owner, and the whole reason to export this
+     * is to give it to somebody. [asVin] is what the file is keyed by instead.
+     */
+    fun export(vin: String, module: Int, asVin: String = "vehicle"): String {
+        val answeredWidths = widths(vin, module)
+        val answeredIds = answered(vin, module).orEmpty()
+        val out = StringBuilder()
+        out.append("# opendash car profile\n")
+        out.append("vin\t").append(asVin).append('\n')
+        out.append("module\t").append(module).append('\n')
+        out.append("taken\t").append(taken(vin, module) ?: 0L).append('\n')
+        out.append("supported\t").append(supported(vin).orEmpty().joinToString(",")).append('\n')
+        out.append("asked\t").append(asked(vin, module).orEmpty().joinToString(",")).append('\n')
+        out.append("answered\t")
+        out.append(answeredIds.joinToString(",") { it.toString() + ":" + (answeredWidths[it] ?: 0) })
+        out.append('\n')
+        return out.toString()
+    }
+
+    /** Reads back what [export] wrote. Returns the VIN and module it was for. */
+    fun import(text: String): Pair<String, Int>? {
+        var vin = ""
+        var module = -1
+        var taken = 0L
+        var supported = emptySet<Int>()
+        var asked = emptySet<Int>()
+        val answered = LinkedHashMap<Int, Int>()
+        for (line in text.lineSequence()) {
+            if (line.isBlank() || line.startsWith("#")) continue
+            val tab = line.indexOf('\t')
+            if (tab <= 0) continue
+            val value = line.substring(tab + 1)
+            when (line.substring(0, tab)) {
+                "vin" -> vin = value.trim()
+                "module" -> module = value.trim().toIntOrNull() ?: -1
+                "taken" -> taken = value.trim().toLongOrNull() ?: 0L
+                "supported" ->
+                    supported = value.split(',').mapNotNullTo(LinkedHashSet()) { it.toIntOrNull() }
+                "asked" ->
+                    asked = value.split(',').mapNotNullTo(LinkedHashSet()) { it.toIntOrNull() }
+                "answered" -> for (pair in value.split(',')) {
+                    val colon = pair.indexOf(':')
+                    if (colon <= 0) continue
+                    val id = pair.substring(0, colon).toIntOrNull() ?: continue
+                    answered[id] = pair.substring(colon + 1).toIntOrNull() ?: 0
+                }
+            }
+        }
+        if (vin.isBlank() || module < 0 || answered.isEmpty()) return null
+        save(vin, module, asked, answered)
+        if (supported.isNotEmpty()) saveSupported(vin, supported)
+        // The day it was taken travels with it. A profile that came from
+        // somewhere else is exactly the case where "how old is this" matters,
+        // and stamping it with today would be a lie that reads as reassurance.
+        if (taken > 0L) prefs.edit().putLong(key(vin, module) + ".when", taken).apply()
+        lastVin = vin
+        return vin to module
+    }
 }

@@ -223,9 +223,24 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
     )
 
     // The stored profile for this module, if this car has one.
+    //
+    // With the car in front of you, ask it who it is and remember that. Without
+    // it, the last car this app met.
+    //
+    // The VIN is the key to everything a scan found, and the VIN only ever
+    // comes from the car — so until it was remembered, a phone on a table knew
+    // nothing about a vehicle it had spent ten minutes scanning in the cold.
+    // That was the whole of what stood between this screen and being useful at
+    // a desk: not the values, which obviously need the car, but the list of
+    // what is worth recording, which does not.
     LaunchedEffect(settings.catalogueModule, Session.state) {
-        if (Session.state != Session.State.CHANNEL_OPEN) return@LaunchedEffect
-        val vin = withContext(Dispatchers.IO) { Session.guarded { Session.diagnostics.vin() } }.orEmpty()
+        val vin = if (Session.state == Session.State.CHANNEL_OPEN) {
+            withContext(Dispatchers.IO) { Session.guarded { Session.diagnostics.vin() } }
+                .orEmpty()
+                .also { if (it.isNotBlank()) profiles.lastVin = it }
+        } else {
+            profiles.lastVin
+        }
         profileVin = vin
         answered = profiles.answered(vin, moduleAddress)
         widths = profiles.widths(vin, moduleAddress)
@@ -263,13 +278,25 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
     fun rebuild() {
         busy = true
         presetNote = null
+        val linked = Session.state == Session.State.CHANNEL_OPEN
         thread {
             // Guarded: asking the car what it supports is a socket
             // conversation, and a link that goes mid-question must end the
-            // rebuild, not the app.
+            // rebuild, not the app. With no link nothing in here touches the
+            // socket, and the wrapper costs nothing.
             try {
                 Session.guarded {
-                    val supported = Session.diagnostics.supportedPids()
+                    // Which standard PIDs this car advertises is four short
+                    // requests, and it does not change between one day and the
+                    // next, so it is worth keeping. With no link that memory is
+                    // the only answer there is — and it is a good one, because
+                    // it is what this very car said when it was asked.
+                    val supported = if (linked) {
+                        Session.diagnostics.supportedPids()
+                            .also { if (it.isNotEmpty()) profiles.saveSupported(profileVin, it) }
+                    } else {
+                        profiles.supported(profileVin).orEmpty()
+                    }
                     val standard = com.varuna.opendash.obd.Pids.standard.filter { it.id in supported }
                     val c = catalogue
                     rows = if (c == null) {
@@ -385,8 +412,12 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
             monitor = monitor,
             busy = busy,
             canStart = selected.isNotEmpty() && Session.state == Session.State.CHANNEL_OPEN,
+            // Building the list is not a conversation with the car when there
+            // is a scan on file for it. Reading values needs the link; deciding
+            // what to read does not, and deciding what to read is the part
+            // worth doing indoors.
             canScan = !busy && !monitor.isRunning &&
-                Session.state == Session.State.CHANNEL_OPEN,
+                (Session.state == Session.State.CHANNEL_OPEN || answered != null),
             hasRows = rows.isNotEmpty(),
             onScan = { rebuild() },
             onStart = { start() },
