@@ -31,10 +31,21 @@ what is still open.
   factory packages carry no model-to-variant table — so the module is asked,
   once, and the answer is kept against the VIN. On the test vehicle that is
   2 638 identifiers asked and 204 rows kept of the engine's 5 249.
-- **Lets the module do the sending.** Declares a data packet with `2C` and starts
-  it with `AA 04`, which is how the factory tool reads live data: about a hundred
-  frames a second with every selected parameter in each one, against the four or
-  five a second that polling shares between all of them.
+- **Lets the module do the sending.** Declares data packets with `2C` and starts
+  them with `AA 04`, which is how the factory tool reads live data. Seven packets
+  emit at 98.7 Hz each, so a round of 31 parameters arrives at **3 060 samples a
+  second** -- against the four or five a second that polling shares between all
+  of them. What a round can hold was measured rather than assumed: forty
+  identifiers, refused at forty-one, with bytes reaching 49 without complaint.
+- **Rotates when a selection does not fit, and pins what must not rotate.** More
+  than forty identifiers become rounds, declared one after another. That buys
+  rate at the cost of each parameter being dark between its turns -- so rows that
+  cannot afford a gap, road speed above all, ride in every round instead. The
+  packet layout is on screen, with the bytes each packet uses and how long each
+  round is dark, because the order decides which parameters share a frame and
+  two in one frame are the same instant.
+- **Reads standard OBD in batches.** Mode 01 takes six PIDs to a request, so
+  twenty-five parameters are five requests and not twenty-five.
 - Reads readiness monitors and fault codes, stored and pending.
 - Reads the whole identification block out of every module that answers: part
   numbers, alpha codes, programming date, traceability number, broadcast code.
@@ -52,8 +63,13 @@ It never writes to a module. See [Only reading](#only-reading).
 
 ## What it does not do yet
 
-- **Command anything.** The gate and the device-lock prompt exist; there is
-  nothing behind them.
+- **Command anything.** The gate and the device-lock prompt exist; behind them
+  is one known output. The service is GMLAN `$AE` DeviceControl and it takes a
+  CPID, which is a different namespace from the parameter identifiers -- the
+  table for this ECU appears in no catalogue and had to be captured off the
+  factory tool actuating a valve. One is known that way; the rest are not, and a
+  sweep does not find them, because on this ECU all 255 answer alike including
+  the one that exists.
 - **Tell one row of a name from another on its own.** A catalogue key names a
   quantity, not a row: 2 859 of this marque's 11 480 keys carry more than one
   parameter, and fifteen rows are called "Exhaust Gas Temperature Sensor 1",
@@ -381,12 +397,24 @@ Gradle sync does not fail for reasons that have nothing to do with the app.
 
 ## What is not proven
 
-Most of what used to be here has since been settled at the car, over three
+Most of what used to be here has since been settled at the car, over five
 sessions with a vehicle in front of it: the session and the channel, the
-identification block, mode 01, service `0x22` against 2 638 catalogue
-identifiers, streaming end to end at about a hundred frames a second, a channel
-with real filters built and signed here rather than replayed, and the ELM327
-bridge answering a client through all of it. What is left:
+identification block, mode 01 and its six-PID batching, service `0x22` against
+2 638 catalogue identifiers, streaming end to end with seven packets at 98.7 Hz
+each, the limit of a declaration found by moving one variable at a time, a
+channel with real filters built and signed here rather than replayed, and the
+ELM327 bridge answering a client through all of it. Two and a half hours of
+driving were recorded through it in one file.
+
+Two ceilings were believed and then measured away, both found the same wrong
+way -- by hitting the first refusal in a short list instead of looking for the
+boundary. First that the module charged a price per packet, which put five
+packets in a round and left seven-second gaps that swallowed a braking event
+whole. Then that the limit was 35 declared bytes. It is 40 identifiers, and
+bytes are nearly free. **A measurement that stopped at the first failure is not
+a limit**, and this repository has now paid for that lesson twice.
+
+What is left:
 
 **The bridge, from the phone.** Its protocol half is proven against the car —
 every command a scan tool sends first, answered correctly. That the foreground
@@ -404,7 +432,16 @@ the database ties the two together, and it is one request at a car to find out.
 
 **Anything that writes.** Not a limitation being worked around — see
 [Only reading](#only-reading). Every service this sends is a read, and the
-client refuses the rest.
+client refuses the rest. The one exception is behind the padlock and is
+described under [What it does not do yet](#what-it-does-not-do-yet).
+
+**Whether a round survives being left alone for hours.** A 65-minute recording
+stopped at a round change with the rate perfectly healthy up to the last
+sample, and pressing Start again picked straight up with nothing reconnected —
+so the link was never the problem. The stream session is now torn down and
+rebuilt when the rounds give up, which is what pressing Start does by hand.
+Why the module stopped accepting declarations is still not known, and a fix
+that works is not the same as a cause that is understood.
 
 ---
 
