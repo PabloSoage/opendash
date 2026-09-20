@@ -73,6 +73,17 @@ android {
             excludes += "META-INF/versions/**"
             excludes += "META-INF/INDEX.LIST"
             excludes += "META-INF/DEPENDENCIES"
+            // Bouncy Castle 1.86 started shipping these, one copy per artefact,
+            // and three identical files at one path is a failed build rather
+            // than a warning. Excluding them from the APK is not dropping the
+            // licences: the sources keep them, and an Android package has
+            // nowhere to show a META-INF file anyway.
+            excludes += "META-INF/LICENSE"
+            excludes += "META-INF/LICENSE.md"
+            excludes += "META-INF/LICENSE.txt"
+            excludes += "META-INF/NOTICE"
+            excludes += "META-INF/NOTICE.md"
+            excludes += "META-INF/NOTICE.txt"
         }
     }
 

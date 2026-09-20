@@ -2,11 +2,11 @@
 # Kept in step with the Rustify project, which builds on the same machine with
 # the same toolchain. Bumping one and not the other is how a Gradle sync starts
 # failing for reasons that have nothing to do with the app.
-agp = "9.4.0"
-kotlin = "2.2.10"
-composeBom = "2026.06.01"
+agp = "9.4.1"
+kotlin = "2.4.20"
+composeBom = "2026.09.00"
 coreKtx = "1.19.0"
-appcompat = "1.7.1"
+appcompat = "1.8.0"
 activityCompose = "1.13.0"
 lifecycle = "2.11.0"
 biometric = "1.1.0"
@@ -14,9 +14,9 @@ documentfile = "1.1.0"
 # SSH: key generation, key import, and file transfer to a host reached with a
 # key rather than a token. sshj needs Bouncy Castle for ed25519 and an SLF4J
 # binding at runtime; the no-op binding keeps it quiet.
-sshj = "0.38.0"
-bouncycastle = "1.78.1"
-slf4j = "2.0.13"
+sshj = "0.40.0"
+bouncycastle = "1.86"
+slf4j = "2.0.19"
 
 [libraries]
 junit = { module = "junit:junit", version = "4.13.2" }
@@ -41,5 +41,4 @@ slf4j-nop = { group = "org.slf4j", name = "slf4j-nop", version.ref = "slf4j" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
