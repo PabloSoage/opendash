@@ -84,6 +84,11 @@ object SessionFile {
         val channels: List<Channel>,
         /** For a .sm2, how many parameters its window was showing when saved. */
         val visibleWhenSaved: Int?,
+        /**
+         * When the file holds a screen rather than a series: its cells, in
+         * order. See [Sm2Reader.Recording.cells].
+         */
+        val cells: List<String> = emptyList(),
     ) {
         val durationMs: Int = channels.maxOfOrNull { it.times.lastOrNull() ?: 0 } ?: 0
         val samples: Int = channels.sumOf { it.size }
@@ -111,6 +116,12 @@ object SessionFile {
 
     private fun sm2(bytes: ByteArray): Session {
         val recording = Sm2Reader.read(bytes)
+        // A saved screen has no series to chart. Handing it to the code below
+        // would build zero channels and the viewer would show an empty chart
+        // where a readable table belongs.
+        if (recording.isScreen) {
+            return Session(recording.startedAt, emptyList(), null, recording.cells)
+        }
 
         // Every channel that was recorded, named where a name was found. A
         // recording saved with the window filtered down still holds all of

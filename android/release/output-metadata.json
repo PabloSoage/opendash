@@ -16,8 +16,8 @@
         }
       ],
       "attributes": [],
-      "versionCode": 2,
-      "versionName": "0.2.0",
+      "versionCode": 3,
+      "versionName": "0.3.0",
       "outputFile": "android-x86_64-release.apk"
     },
     {
@@ -29,8 +29,8 @@
         }
       ],
       "attributes": [],
-      "versionCode": 2,
-      "versionName": "0.2.0",
+      "versionCode": 3,
+      "versionName": "0.3.0",
       "outputFile": "android-arm64-v8a-release.apk"
     }
   ],

@@ -294,4 +294,5 @@
     <string name="live_layout_hint">Die Reihenfolge ist nicht kosmetisch. Zwei benachbarte Kennungen teilen sich ein Paket, ein Paket kommt in EINEM CAN-Rahmen an, und ein Rahmen ist ein Augenblick. Zwei Werte, die verglichen werden sollen, müssen zusammenstehen; auf verschiedene Runden verteilt wurden sie nie gleichzeitig gemessen.</string>
     <string name="live_layout_open">Paketaufteilung</string>
     <string name="live_layout_pin">In jeder Runde</string>
+    <string name="viewer_screen">%1$d Zellen in %2$d Zeilen. Diese Datei enthält einen gespeicherten Bildschirm, keine Aufzeichnung: es gibt keine Reihe zum Zeichnen.</string>
 </resources>

@@ -9,6 +9,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -78,6 +79,14 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun RecordingScreen(session: SessionFile.Session) {
+    // A `.sm2` is not always a recording. The Windows software saves screens
+    // that have no series in them at all -- Monitor Status is the one that
+    // turned up -- under the same signature and the same sectors. There is
+    // nothing here to chart, and everything below this line assumes there is.
+    if (session.channels.isEmpty() && session.cells.isNotEmpty()) {
+        SavedScreen(session)
+        return
+    }
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
 
@@ -606,4 +615,56 @@ private fun format(v: Double): String = when {
     kotlin.math.abs(v) >= 1000 -> String.format(Locale.ROOT, "%.0f", v)
     kotlin.math.abs(v) >= 10 -> String.format(Locale.ROOT, "%.1f", v)
     else -> String.format(Locale.ROOT, "%.2f", v)
+}
+
+/**
+ * A `.sm2` that holds a screen rather than a series.
+ *
+ * Three cells to a row -- the name, the state since codes were cleared, and the
+ * state this drive cycle -- which is exactly what the Windows software shows.
+ * The section headings carry two cells of their own that it does not paint;
+ * they are shown in brackets rather than dropped, because deciding a value is
+ * meaningless and hiding it is how things get lost.
+ *
+ * Before this, such a file was read as a recording: no channels, a nonsense
+ * sample count, hours of duration, and a screenful of numbers that meant
+ * nothing. It did not fail, which is what made it worth fixing.
+ */
+@Composable
+private fun SavedScreen(session: SessionFile.Session) {
+    val headings = remember(session) {
+        session.cells.filter { it.endsWith("monitors") || it.contains("[since") }.toSet()
+    }
+    val rows = remember(session) { session.cells.chunked(3) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Hint(stringResource(R.string.viewer_screen, session.cells.size, rows.size))
+        for (row in rows) {
+            val name = row.getOrElse(0) { "" }
+            val since = row.getOrElse(1) { "" }
+            val cycle = row.getOrElse(2) { "" }
+            if (name in headings) {
+                Section(name)
+                if (since.isNotEmpty() || cycle.isNotEmpty()) {
+                    Hint("($since / $cycle)")
+                }
+                continue
+            }
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    name,
+                    modifier = Modifier.weight(2f),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(since, modifier = Modifier.weight(1f), style = ValueStyle)
+                Text(cycle, modifier = Modifier.weight(1f), style = ValueStyle)
+            }
+        }
+    }
 }

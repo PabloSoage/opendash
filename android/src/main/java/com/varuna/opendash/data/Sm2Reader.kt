@@ -65,7 +65,23 @@ object Sm2Reader {
         val parameters: List<String>,
         /** milliseconds, channel index, value */
         val samples: List<Triple<Int, Int, Double>>,
+        /**
+         * When this file is not a recording at all: the cells of the screen it
+         * saved, in order, left to right and top to bottom.
+         *
+         * The Windows software writes `.sm2` from screens that have no series
+         * in them -- Monitor Status is one -- and they carry the same SMFS
+         * signature and the same sectors. Read as a recording they produce
+         * nothing but noise: no channels, a nonsense sample count and hours of
+         * duration, because every byte of the table gets taken for a value
+         * pair. That is the failure worth avoiding: it does not throw, it
+         * shows a screenful of numbers that mean nothing.
+         */
+        val cells: List<String> = emptyList(),
     ) {
+        /** True when this file holds a screen rather than a series. */
+        val isScreen: Boolean get() = samples.isEmpty() && cells.isNotEmpty()
+
         val durationMs: Int
             get() = if (samples.isEmpty()) 0 else samples.last().first - samples.first().first
     }
@@ -84,7 +100,23 @@ object Sm2Reader {
         var end = stream.size
         while (end > 0 && stream[end - 1] == 0xff.toByte()) end--
 
-        val texts = texts(stream, buffer)
+        val texts = texts(stream, buffer, marker = 1)
+        // No marked text at all means this is not a recording. The screens the
+        // Windows software saves write their cells with a zero marker instead,
+        // and there is no series behind them.
+        if (texts.isEmpty()) {
+            val cells = texts(stream, buffer, marker = 0).map { it.text }
+            if (cells.size >= 3) {
+                return Recording(
+                    startedAt = startedAt,
+                    channels = 0,
+                    visible = 0,
+                    parameters = emptyList(),
+                    samples = emptyList(),
+                    cells = cells,
+                )
+            }
+        }
         val summary = summary(stream, buffer)
         val names = texts.map { it.text }
             .filter { it.length >= 5 && !SUMMARY.containsMatchIn(it) }
@@ -130,15 +162,19 @@ object Sm2Reader {
     private fun printable(c: Int) = (c in 32..0x2122) || c == 10 || c == 13
 
     /**
-     * The marked text records, in order. Each is a 1, a character count and
-     * that many UTF-16 code units.
+     * The marked text records, in order. Each is [marker], a character count
+     * and that many UTF-16 code units.
+     *
+     * A recording marks its parameter names with 1. A saved screen marks its
+     * cells with 0, which is the only thing that tells the two apart before
+     * anything has been decoded.
      */
-    private fun texts(b: ByteArray, buffer: ByteBuffer): List<Text> {
+    private fun texts(b: ByteArray, buffer: ByteBuffer, marker: Int): List<Text> {
         val out = ArrayList<Text>()
         var o = FIRST_MARKER
         val limit = minOf(b.size, 0x8000)
         while (o + 8 < limit) {
-            if (buffer.getInt(o) != 1) {
+            if (buffer.getInt(o) != marker) {
                 o++
                 continue
             }

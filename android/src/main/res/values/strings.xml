@@ -304,4 +304,5 @@
     <string name="live_layout_hint">The order is not cosmetic. Two identifiers next to each other share a packet, a packet arrives in one CAN frame, and one frame is one instant. Two values you mean to compare must sit together; split across rounds they were never measured at the same time.</string>
     <string name="live_layout_open">Packet layout</string>
     <string name="live_layout_pin">In every round</string>
+    <string name="viewer_screen">%1$d cells in %2$d rows. This file holds a saved screen, not a recording: there is no series in it to chart.</string>
 </resources>
