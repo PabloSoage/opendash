@@ -293,4 +293,5 @@
     <string name="live_layout_left_out_hint">Breiter als ein Paket, daher werden diese einzeln abgefragt: viel langsamer und nie im selben Augenblick wie etwas anderes.</string>
     <string name="live_layout_hint">Die Reihenfolge ist nicht kosmetisch. Zwei benachbarte Kennungen teilen sich ein Paket, ein Paket kommt in EINEM CAN-Rahmen an, und ein Rahmen ist ein Augenblick. Zwei Werte, die verglichen werden sollen, müssen zusammenstehen; auf verschiedene Runden verteilt wurden sie nie gleichzeitig gemessen.</string>
     <string name="live_layout_open">Paketaufteilung</string>
+    <string name="live_layout_pin">In jeder Runde</string>
 </resources>

@@ -293,4 +293,5 @@
     <string name="live_layout_left_out_hint">Más anchos que un paquete, así que se piden de uno en uno: mucho más despacio, y nunca en el mismo instante que ninguna otra cosa.</string>
     <string name="live_layout_hint">El orden no es cosmético. Dos identificadores seguidos caen en el mismo paquete, un paquete llega en UNA trama, y una trama es un instante. Dos valores que quieras comparar tienen que ir juntos; separados en rondas distintas no se midieron nunca a la vez.</string>
     <string name="live_layout_open">Reparto en paquetes</string>
+    <string name="live_layout_pin">En todas las rondas</string>
 </resources>

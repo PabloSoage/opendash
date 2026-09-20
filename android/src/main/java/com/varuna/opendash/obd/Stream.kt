@@ -188,8 +188,31 @@ object Stream {
     fun rotate(
         module: Int,
         parameters: List<Catalogue.Parameter>,
-        packetsPerRound: Int = PACKETS_PER_START,
+        packetsPerRound: Int = LAST_PACKET - FIRST_PACKET + 1,
         maxIdentifiers: Int = MAX_IDENTIFIERS,
+        /**
+         * Identifiers that ride in **every** round instead of taking their turn.
+         *
+         * Rotation buys its sample rate by leaving each parameter dark between
+         * its turns -- about seven seconds in twelve on a two-round profile.
+         * For almost everything that is a good trade. For the handful of things
+         * that give every other reading its meaning it is not: road speed dark
+         * for seven seconds is a hard braking event that did not happen as far
+         * as the recording is concerned, and that is not a gap in one trace, it
+         * is a hole in the drive.
+         *
+         * It was measured on the 119 km run. Seven separate speed drops fell
+         * entirely inside a rotation gap, one of them 89 km/h down to 28 with
+         * nothing at all in between -- so all that can be said about it is that
+         * the deceleration was at least 1.84 m/s2, when the one event that did
+         * land inside an emission turned out to be 0.93 g.
+         *
+         * The cost is real and worth stating: these take room out of every
+         * round, so the rotating pool gets fewer packets. On this car it
+         * happened to be free, because a round had a packet with three bytes
+         * spare.
+         */
+        alwaysOn: Set<Int> = emptySet(),
     ): Rotation {
         val width = LinkedHashMap<Int, Int>()
         for (p in parameters) {
@@ -197,47 +220,84 @@ object Stream {
             width[p.pid] = maxOf(width[p.pid] ?: 0, p.bytes)
         }
 
-        // Pack the identifiers into packets, without numbering them yet: a
-        // round's packets are always numbered from FIRST_PACKET, because only
-        // one round is declared at a time.
-        val bundles = ArrayList<List<Int>>()
-        var current = ArrayList<Int>()
-        var used = 0
-        for ((id, w) in width) {
-            if (used + w > PACKET_BYTES || current.size >= maxIdentifiers) {
-                if (current.isNotEmpty()) bundles.add(current.toList())
-                current = ArrayList()
-                used = 0
+        /** Pack identifiers into packets, without numbering them yet. */
+        fun pack(ids: List<Int>): List<List<Int>> {
+            val out = ArrayList<List<Int>>()
+            var current = ArrayList<Int>()
+            var used = 0
+            for (id in ids) {
+                val w = width[id] ?: continue
+                if (used + w > PACKET_BYTES || current.size >= maxIdentifiers) {
+                    if (current.isNotEmpty()) out.add(current.toList())
+                    current = ArrayList()
+                    used = 0
+                }
+                current.add(id)
+                used += w
             }
-            current.add(id)
-            used += w
+            if (current.isNotEmpty()) out.add(current.toList())
+            return out
         }
-        if (current.isNotEmpty()) bundles.add(current.toList())
 
-        val perRound = packetsPerRound.coerceIn(1, LAST_PACKET - FIRST_PACKET + 1)
-        // Evenly, not greedily. Twelve packets in fives is 5, 5, 2 — a last
+        // The pinned ones first, because they are in every round and therefore
+        // decide how much room is left for everything else.
+        val pinnedIds = width.keys.filter { it in alwaysOn }
+        val pinned = pack(pinnedIds)
+        val bundles = pack(width.keys.filter { it !in alwaysOn })
+
+        val packetCap = packetsPerRound.coerceIn(1, LAST_PACKET - FIRST_PACKET + 1)
+
+        // Nothing to lay out is not an edge case to be clever about: an
+        // empty selection reaches here, and a loop that divides by the number
+        // of rounds takes the whole app down rather than returning nothing.
+        if (bundles.isEmpty() && pinned.isEmpty()) return Rotation(emptyList(), parameters)
+
+        val bytesOf = { ids: List<Int> -> ids.sumOf { width[it] ?: 0 } }
+        val pinnedBytes = pinned.sumOf(bytesOf)
+        // What one round has left once the pinned packets have taken theirs.
+        val byteBudget = (STREAM_BYTES - pinnedBytes).coerceAtLeast(1)
+        val packetBudget = (packetCap - pinned.size).coerceAtLeast(1)
+
+        // Evenly, not greedily. Twelve packets in fives is 5, 5, 2 -- a last
         // round a fifth the size of the others, holding four parameters that
         // then get the same dwell as the ten in the first. Three rounds of four
         // is the same total and the same number of switches, and every
         // parameter is live for the same share of the time.
-        val count = (bundles.size + perRound - 1) / perRound
-        // Nothing to lay out is not an edge case to be clever about: an
-        // empty selection reaches here, and a loop that divides by the number
-        // of rounds takes the whole app down rather than returning nothing.
-        if (bundles.isEmpty()) return Rotation(emptyList(), parameters)
-        val slices = ArrayList<List<List<Int>>>()
-        var from = 0
-        for (i in 0 until count) {
-            val take = (bundles.size - from + (count - i - 1)) / (count - i)
-            slices.add(bundles.subList(from, from + take).toList())
-            from += take
+        fun evenly(into: Int): List<List<List<Int>>> {
+            val out = ArrayList<List<List<Int>>>()
+            var from = 0
+            for (i in 0 until into) {
+                val take = (bundles.size - from + (into - i - 1)) / (into - i)
+                out.add(bundles.subList(from, from + take).toList())
+                from += take
+            }
+            return out
         }
+
+        // Then grow the number of rounds until every one of them fits. Both
+        // limits are real and neither is the one this used to assume: a round
+        // holds at most seven packets, and at most STREAM_BYTES of declared
+        // payload across them.
+        var count = 1
+        var slices = evenly(1)
+        while (count < maxOf(1, bundles.size)) {
+            val fits = slices.all { it.size <= packetBudget && it.sumOf(bytesOf) <= byteBudget }
+            if (fits) break
+            count++
+            slices = evenly(count)
+        }
+
         val rounds = ArrayList<Plan>()
         val placed = HashSet<Int>()
         for (group in slices) {
+            // Pinned packets go first so they keep the same numbers in every
+            // round. That is not tidiness: the module is told to stop and the
+            // packets are redeclared at each switch, and a reader that has just
+            // seen packet 0xF8 mean one thing should not find it meaning
+            // another a frame later.
             val packets = ArrayList<Packet>()
             val where = HashMap<Int, Pair<Int, Int>>()
-            group.forEachIndexed { i, ids ->
+            (pinned + group).forEachIndexed { i, ids ->
                 val number = FIRST_PACKET + i
                 var offset = 0
                 for (id in ids) {
@@ -287,6 +347,37 @@ object Stream {
      * number.
      */
     const val PACKET_BYTES = 7
+
+    /**
+     * How much declared payload one round can hold, across all its packets.
+     *
+     * **This, and not the packet count, is what the module limits.** Measured
+     * on 20/09/2026 with our own client, declaring and reading for real:
+     *
+     * ```
+     *  packets  ids each  total  Hz each  frames/s  samples/s
+     *        1         6      6     99.6       100        598
+     *        3         6     18    100.0       300      1 801
+     *        5         6     30     99.9       500      2 998
+     *        7         5     35     99.6       697      3 485
+     *        6         6     36        rejected, 7F 2C 31
+     * ```
+     *
+     * Seven packets emit as fast as one; 7x5 = 35 bytes is accepted and
+     * 6x6 = 36 is refused at the declaration of the packet that overruns. A
+     * capture of GDS2 the same day agrees from the outside: seven packets at
+     * 97.6 Hz each, 683 frames a second.
+     *
+     * The earlier measurement said seven packets fell to 51 Hz and that the
+     * module charged a price per packet. That was this side not reading fast
+     * enough, not the module -- and the whole of the rotation was built on it:
+     * five packets a round, the dwell, and the seven-second gaps that swallowed
+     * a braking event whole.
+     *
+     * With one-byte identifiers this is **35 live at once** instead of the 30
+     * that five packets of six allowed.
+     */
+    const val STREAM_BYTES = 35
 
     /**
      * The packet numbers the factory tool used, 0xF8 through 0xFE. Seven of

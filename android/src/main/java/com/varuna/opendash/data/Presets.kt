@@ -51,16 +51,36 @@ class Presets(context: Context) {
     fun has(module: String, name: String): Boolean =
         prefs.contains(orderKey(module, name)) || prefs.contains(entryKey(module, name))
 
+    /**
+     * The rows of this preset that ride in **every** round.
+     *
+     * Empty for a preset that does not ask for any, which is every preset
+     * written before this existed and most of the ones written after.
+     */
+    fun always(module: String, name: String): Set<String> =
+        prefs.getString(alwaysKey(module, name), null)
+            ?.lineSequence()?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet()
+            .orEmpty()
+
     /** Store [keys] under [name], in order. An existing preset is replaced. */
-    fun save(module: String, name: String, keys: List<String>) {
+    fun save(
+        module: String,
+        name: String,
+        keys: List<String>,
+        always: Set<String> = emptySet(),
+    ) {
         if (module.isEmpty() || name.isBlank() || keys.isEmpty()) return
         val all = names(module).toMutableSet()
         all.add(name)
-        prefs.edit()
+        val edit = prefs.edit()
             .putStringSet(namesKey(module), all)
             .putString(orderKey(module, name), keys.joinToString("\n"))
             .remove(entryKey(module, name))
-            .apply()
+        // Removed rather than written empty, so a preset saved without any
+        // does not keep the ones the last save had.
+        if (always.isEmpty()) edit.remove(alwaysKey(module, name))
+        else edit.putString(alwaysKey(module, name), always.joinToString("\n"))
+        edit.apply()
     }
 
     fun forget(module: String, name: String) {
@@ -70,6 +90,7 @@ class Presets(context: Context) {
             .putStringSet(namesKey(module), all)
             .remove(entryKey(module, name))
             .remove(orderKey(module, name))
+            .remove(alwaysKey(module, name))
             .apply()
     }
 
@@ -85,16 +106,32 @@ class Presets(context: Context) {
      */
     fun export(module: String, name: String): String {
         val keys = load(module, name)
+        val always = always(module, name)
         return buildString {
             appendLine(MAGIC + " 1")
             appendLine("module\t" + module)
             appendLine("name\t" + name)
+            // Before the rows, because it changes what the order below means.
+            for (k in always) appendLine("every\t" + k)
             for (k in keys) appendLine(k)
         }
     }
 
     /** One preset as it appears in a file, before anything is stored. */
-    class Entry(val module: String, val name: String, val keys: List<String>)
+    class Entry(
+        val module: String,
+        val name: String,
+        val keys: List<String>,
+        /**
+         * Rows that go in every round rather than taking their turn.
+         *
+         * A subset of [keys]: a row named here is still one of the rows, it
+         * just does not rotate. Written as `every<TAB><row key>`, which an
+         * older build reads as an unknown metadata line and ignores -- so a
+         * profile using this still imports, it simply rotates everything.
+         */
+        val always: Set<String> = emptySet(),
+    )
 
     /**
      * Every preset in [text], parsed and nothing more.
@@ -132,7 +169,7 @@ class Presets(context: Context) {
      */
     fun import(text: String): String? {
         val entry = read(text).firstOrNull() ?: return null
-        save(entry.module, entry.name, entry.keys)
+        save(entry.module, entry.name, entry.keys, entry.always)
         return entry.name
     }
 
@@ -144,7 +181,7 @@ class Presets(context: Context) {
      * rather than only that something did.
      */
     fun importAll(text: String): List<String> =
-        read(text).map { save(it.module, it.name, it.keys); it.name }
+        read(text).map { save(it.module, it.name, it.keys, it.always); it.name }
 
     private fun parse(block: String): Entry? {
         val lines = block.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
@@ -152,6 +189,7 @@ class Presets(context: Context) {
         var module = ""
         var name = ""
         val keys = LinkedHashSet<String>()
+        val always = LinkedHashSet<String>()
         for (line in lines.drop(1)) {
             val tab = line.indexOf('\t')
             val head = if (tab > 0) line.substring(0, tab) else ""
@@ -159,11 +197,15 @@ class Presets(context: Context) {
             when (head) {
                 "module" -> module = rest
                 "name" -> name = rest
+                // Named here AND added to the rows: one of these is still a row
+                // of the preset, it just does not take its turn. Listing it
+                // only here would make an older build drop it entirely.
+                "every" -> if (rest.isNotEmpty()) { always.add(rest); keys.add(rest) }
                 else -> keys.add(line)
             }
         }
         if (module.isEmpty() || name.isEmpty() || keys.isEmpty()) return null
-        return Entry(module, name, keys.toList())
+        return Entry(module, name, keys.toList(), always)
     }
 
     private fun namesKey(module: String) = "names|$module"
@@ -171,6 +213,8 @@ class Presets(context: Context) {
     private fun entryKey(module: String, name: String) = "set|$module|$name"
 
     private fun orderKey(module: String, name: String) = "order|$module|$name"
+
+    private fun alwaysKey(module: String, name: String) = "every|$module|$name"
 
     private companion object {
         const val MAGIC = "opendash-preset"

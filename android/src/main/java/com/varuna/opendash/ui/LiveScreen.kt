@@ -19,8 +19,10 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
@@ -176,6 +178,17 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
     // the same instant. A profile that pairs the air mass with its target only
     // means something if the pairing survives to the declaration.
     var appliedOrder by remember { mutableStateOf<List<String>>(emptyList()) }
+    /**
+     * Rows that ride in every round instead of taking their turn.
+     *
+     * Rotation buys its rate by leaving each parameter dark between its turns.
+     * For almost everything that is a good trade; for road speed it is not. On
+     * the 119 km run seven separate speed drops fell entirely inside a gap, one
+     * of them 89 km/h down to 28 with nothing in between -- so all that can be
+     * said of that braking is that it was at least 1.84 m/s2, when the one
+     * event that did land inside an emission turned out to be 0.93 g.
+     */
+    var alwaysOn by remember { mutableStateOf<Set<String>>(emptySet()) }
     var naming by remember { mutableStateOf(false) }
     var presetName by remember { mutableStateOf("") }
 
@@ -240,9 +253,12 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
     val streamPlan = if (!canStream) null else Stream.rotate(
         moduleAddress,
         chosenParameters,
-        if (settings.streamRotate) Stream.PACKETS_PER_START
-        else Stream.LAST_PACKET - Stream.FIRST_PACKET + 1,
+        // Seven either way now. The packet count was never what the module
+        // limited -- see Stream.STREAM_BYTES -- so rotation and no rotation
+        // differ in how many rounds come out, not in how wide one round is.
+        Stream.LAST_PACKET - Stream.FIRST_PACKET + 1,
         if (settings.streamMultiFrame) Stream.MAX_IDENTIFIERS else Stream.SAFE_IDENTIFIERS,
+        alwaysOn = chosenItems.filter { it.key in alwaysOn }.map { it.parameter.pid }.toSet(),
     )
 
     // The stored profile for this module, if this car has one.
@@ -401,6 +417,7 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
         rows = emptyList()
         appliedPreset = null
         appliedOrder = emptyList()
+        alwaysOn = emptySet()
         presetNote = null
     }
 
@@ -723,7 +740,15 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
             rotation = streamPlan,
             chosen = chosenParameters,
             dwellMs = settings.streamDwellMs,
+            pinned = chosenItems.filter { it.key in alwaysOn }.map { it.parameter.pid }.toSet(),
             onMove = { from, to -> moveChosen(from, to) },
+            onPin = { parameter ->
+                val key = chosenItems.firstOrNull { it.parameter.pid == parameter.pid }?.key
+                if (key != null) {
+                    alwaysOn = if (key in alwaysOn) alwaysOn - key else alwaysOn + key
+                    appliedPreset = null
+                }
+            },
             onDismiss = { showLayout = false },
         )
     }
@@ -877,6 +902,7 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                             // hash map happens to hold them: a saved group has
                             // to come back the same next time.
                             rows.filter { it.key in selected.keys }.map { it.key },
+                            alwaysOn.filter { it in selected.keys }.toSet(),
                         )
                         presetRevision++
                         presetName = ""
@@ -933,6 +959,7 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
                                     )
                                     appliedPreset = name
                                     appliedOrder = keys
+                                    alwaysOn = presets.always(settings.catalogueModule, name)
                                     showPresets = false
                                 },
                                 modifier = Modifier.weight(1f),
@@ -1481,7 +1508,9 @@ private fun LayoutSheet(
     rotation: Stream.Rotation?,
     chosen: List<Catalogue.Parameter>,
     dwellMs: Int,
+    pinned: Set<Int>,
     onMove: (from: Int, to: Int) -> Unit,
+    onPin: (Catalogue.Parameter) -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(
@@ -1565,6 +1594,22 @@ private fun LayoutSheet(
                                 // scrolling sheet fights the scroll, and the
                                 // move that matters here is one place at a
                                 // time: putting a value next to its target.
+                                // In every round, or taking its turn. The
+                                // padlock-free version of the same idea as the
+                                // order: what is on screen has to be what will
+                                // be declared.
+                                IconButton(onClick = { onPin(parameter) }) {
+                                    Icon(
+                                        if (pinned.contains(parameter.pid)) Icons.Filled.PushPin
+                                        else Icons.Outlined.PushPin,
+                                        contentDescription = stringResource(R.string.live_layout_pin),
+                                        tint = if (pinned.contains(parameter.pid)) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                    )
+                                }
                                 IconButton(
                                     enabled = at > 0,
                                     onClick = { onMove(at, at - 1) },
