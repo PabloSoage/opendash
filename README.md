@@ -392,9 +392,16 @@ CI runs both. `cargo test` is the gate that matters: it replays 200 recorded
 writes and checks the computed fingerprint against what the device put on the
 wire.
 
-Minimum Android 8.0, compiled against API 37 with AGP 9.3.2, Kotlin 2.2.10 and
+Minimum Android 8.0, compiled against API 37 with AGP 9.4.1, Kotlin 2.4.20 and
 JDK 21 — the same toolchain as the other Android project on this machine, so a
 Gradle sync does not fail for reasons that have nothing to do with the app.
+
+One thing in `packaging` is not tidiness and will bite anyone who removes it.
+Bouncy Castle ships `META-INF/LICENSE.md` and `NOTICE.md` in each of its three
+artefacts, and three identical files at one path is a **failed**
+`mergeReleaseJavaResource`, not a warning — so those paths are excluded. That is
+not dropping the licences: they stay in the sources, and an APK has nowhere to
+show a `META-INF` file anyway.
 
 ---
 
