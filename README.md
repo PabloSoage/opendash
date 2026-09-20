@@ -63,8 +63,11 @@ It never writes to a module. See [Only reading](#only-reading).
 
 ## What it does not do yet
 
-- **Command anything.** The gate and the device-lock prompt exist; behind them
-  is one known output. The service is GMLAN `$AE` DeviceControl and it takes a
+- **Command anything to speak of.** The gate and the device-lock prompt exist;
+  behind them is one known output, and it works: the EGR valve, CPID `0x1C`,
+  commanded at the car with the air flow falling from 9.33 to 4.45 g/s at a
+  constant 750 rpm — and rising when the valve is closed below what the ECU
+  was doing by itself. The service is GMLAN `$AE` DeviceControl and it takes a
   CPID, which is a different namespace from the parameter identifiers -- the
   table for this ECU appears in no catalogue and had to be captured off the
   factory tool actuating a valve. One is known that way; the rest are not, and a
@@ -435,13 +438,22 @@ the database ties the two together, and it is one request at a car to find out.
 client refuses the rest. The one exception is behind the padlock and is
 described under [What it does not do yet](#what-it-does-not-do-yet).
 
-**Whether a round survives being left alone for hours.** A 65-minute recording
-stopped at a round change with the rate perfectly healthy up to the last
-sample, and pressing Start again picked straight up with nothing reconnected —
-so the link was never the problem. The stream session is now torn down and
-rebuilt when the rounds give up, which is what pressing Start does by hand.
-Why the module stopped accepting declarations is still not known, and a fix
-that works is not the same as a cause that is understood.
+**Whether a recording survives being left alone for hours.** Two have not. The
+first stopped at 65 minutes, the second at 32, both with the rate perfectly
+healthy up to the last sample — 2 443 samples a second in the first minute of
+that one and 2 542 in the thirty-first, which is what rules out running out of
+memory: that decays, these fell off a cliff.
+
+What the second one showed is that a read finding nothing **is not a failure**.
+It returns a batch of zero frames, which is exactly what an idle moment looks
+like, and with a single round there is no dwell to expire — so the loop span,
+for ever, while the app went on reporting that it was recording at zero samples
+a second. Three seconds of silence now ends the round and declares the packets
+again, and the heartbeat moved onto the thread that owns the socket, because
+the thread whose job it was could be starved of the lock by the draining.
+
+Both fixes are certain to help and neither is a cause that is understood. The
+next long drive is the test.
 
 ---
 
