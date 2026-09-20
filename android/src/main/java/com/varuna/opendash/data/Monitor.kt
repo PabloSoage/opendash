@@ -259,6 +259,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                 var turn = 0
                 var lastExtra = 0L
                 var refused = 0
+                var lastBeat = System.currentTimeMillis()
                 // How many times the whole streaming session has been torn down
                 // and built again after it stopped working. See below.
                 var revivals = 0
@@ -333,6 +334,10 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                             val until =
                                 if (rotation.rounds.size > 1) System.currentTimeMillis() + dwellMs
                                 else Long.MAX_VALUE
+                            // When the last frame arrived. A module that has
+                            // stopped emitting does not report it, and the read
+                            // does not fail: it simply returns nothing, for ever.
+                            var heard = System.currentTimeMillis()
                             while (isRunning && System.currentTimeMillis() < until) {
                                 val batch = Session.guarded {
                                     Session.diagnostics.readStream(plan, STREAM_SLICE_MS)
@@ -344,6 +349,36 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                                     // silent it looks identical to a module that simply
                                     // stopped having anything to say.
                                     lastError = "the link went away while the module was emitting"
+                                    break
+                                }
+                                // ── the silence that ended a 32-minute recording ──
+                                //
+                                // A read that finds nothing is not a failure. It
+                                // returns a batch of zero frames, which is exactly
+                                // what an idle moment looks like, so nothing here
+                                // could tell it from a module that had stopped for
+                                // good. And with a single round there is no dwell
+                                // to expire -- `until` is Long.MAX_VALUE -- so this
+                                // loop simply span, for ever, reading nothing.
+                                //
+                                // That is not a theory. A recording on 20/09 ran
+                                // 32 minutes at a flat 2 500 samples a second, lost
+                                // the module at 1 948 s, came back for two seconds
+                                // and then stopped -- and the app went on saying it
+                                // was recording, at zero samples a second, for the
+                                // remaining hour and a half of the drive. The rate
+                                // never sagged beforehand, which is what rules out
+                                // running out of memory: that decays, this fell off
+                                // a cliff.
+                                //
+                                // So silence is now a fact this loop knows. Long
+                                // enough of it and the round is declared again,
+                                // which is all it takes.
+                                if (batch.frames > 0) {
+                                    heard = System.currentTimeMillis()
+                                } else if (System.currentTimeMillis() - heard > SILENCE_MS) {
+                                    lastError = "the module went quiet; declaring the packets again"
+                                    runCatching { Session.diagnostics.endStream(module) }
                                     break
                                 }
                                 for ((parameter, value) in batch.values) {
@@ -374,6 +409,29 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                                         recorder?.add(t.name, t.identifier, t.unit, v)
                                         readings++
                                     }
+                                }
+                                // The heartbeat, from the thread that owns the
+                                // socket.
+                                //
+                                // A module drops the session about five seconds
+                                // after the last TesterPresent, and there is a
+                                // thread whose whole job is to send one every two.
+                                // But it has to take the client lock to do it, and
+                                // this loop holds that lock while it drains -- at
+                                // seven hundred frames a second there is always
+                                // something to drain. Starving that thread for five
+                                // seconds is enough, and it is the best explanation
+                                // there is for a module that went quiet on its own
+                                // with the link still up.
+                                //
+                                // Sending it from here cannot be starved by
+                                // anything, because this is what would starve it.
+                                // The other thread stays: two TesterPresents cost
+                                // nothing, and one of them arriving is the point.
+                                val beatAt = System.currentTimeMillis()
+                                if (beatAt - lastBeat >= BEAT_MS) {
+                                    lastBeat = beatAt
+                                    Session.guarded { Session.diagnostics.keepAlive(module) }
                                 }
                                 recordedRows = recorder?.rows ?: 0
                                 recordingName = recorder?.name
@@ -593,6 +651,26 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
 
         /** How long one read of the emitted stream blocks before looping. */
         const val STREAM_SLICE_MS = 50L
+
+        /**
+         * How long a module may say nothing before the packets are declared
+         * again.
+         *
+         * Three seconds. Well past any gap a busy module leaves -- the measured
+         * emission is 700 frames a second, so three seconds is two thousand
+         * frames that did not arrive -- and well inside the patience of somebody
+         * driving, who would otherwise be recording nothing without knowing.
+         */
+        const val SILENCE_MS = 3000L
+
+        /**
+         * How often this loop sends its own TesterPresent.
+         *
+         * Two seconds, against the roughly five a module waits before dropping
+         * the session. See where it is sent: the point is not the interval, it
+         * is which thread it goes out on.
+         */
+        const val BEAT_MS = 2000L
 
         /**
          * How long a round emits before the next one takes the packets.

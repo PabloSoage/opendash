@@ -525,6 +525,24 @@ class Diagnostics(private val sm3: Sm3Client) {
     }
 
     /**
+     * Tell a module the tester is still here.
+     *
+     * A bare `3E`, sent and not waited for. GMLAN drops the session about five
+     * seconds after the last one, and a dropped session stops the emission
+     * without announcing it: what arrives afterwards is nothing at all, which
+     * reads exactly like a quiet moment.
+     *
+     * There is already a thread doing this every two seconds. This exists so
+     * the reader can do it too, on its own thread, because that thread is the
+     * one holding the client lock while it drains seven hundred frames a
+     * second -- and a heartbeat that cannot get the lock is a heartbeat that
+     * did not happen.
+     */
+    fun keepAlive(module: Int = ENGINE) {
+        fire(module, TESTER_PRESENT)
+    }
+
+    /**
      * Stop a module emitting.
      *
      * Sent on the way out of live data and again in the session teardown. A
