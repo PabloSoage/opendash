@@ -405,6 +405,32 @@ show a `META-INF` file anyway.
 
 ---
 
+## What it has actually done
+
+Not a demo. One Opel Astra J 1.7 CDTI (A17DTJ, Denso ECU), five sessions with the car
+present between 17 and 21 September 2026, and **two hours and twenty-one minutes of
+driving recorded through the app in four files**:
+
+| Recording | Duration | Readings | Parameters | Rate |
+|---|---|---|---|---|
+| A Coruña → motorway | 64.8 min | 5 667 101 | 40 | 1 459/s |
+| Pontevedra → Bueu | 21.7 min | 1 926 110 | 40 | 1 479/s |
+| Bueu → Hío | 22.0 min | 1 937 918 | 40 | 1 467/s |
+| Bueu → motorway | 32.5 min | 4 930 369 | 32 | **2 527/s** |
+
+**14.5 million readings**, 55 MB gzipped. The last one uses the single-round profile,
+which is why it is nearly twice the rate on fewer parameters: nothing rotating, so every
+magnitude is live at once and any two of them can honestly be compared.
+
+The files themselves are not in this repository. They are somebody's driving — road speed,
+braking, pedal, a route anyone could reconstruct by integrating one of those columns — and
+that belongs to whoever drove.
+
+Nor is what they say about that particular engine, which is a diagnosis and not a tool.
+What matters on this page is only that four recordings of that length came home whole.
+
+---
+
 ## What is not proven
 
 Most of what used to be here has since been settled at the car, over five
