@@ -253,9 +253,9 @@ object Stream {
         if (bundles.isEmpty() && pinned.isEmpty()) return Rotation(emptyList(), parameters)
 
         val bytesOf = { ids: List<Int> -> ids.sumOf { width[it] ?: 0 } }
-        val pinnedBytes = pinned.sumOf(bytesOf)
         // What one round has left once the pinned packets have taken theirs.
-        val byteBudget = (STREAM_BYTES - pinnedBytes).coerceAtLeast(1)
+        val idBudget = (STREAM_IDENTIFIERS - pinned.sumOf { it.size }).coerceAtLeast(1)
+        val byteBudget = (STREAM_BYTES - pinned.sumOf(bytesOf)).coerceAtLeast(1)
         val packetBudget = (packetCap - pinned.size).coerceAtLeast(1)
 
         // Evenly, not greedily. Twelve packets in fives is 5, 5, 2 -- a last
@@ -274,14 +274,18 @@ object Stream {
             return out
         }
 
-        // Then grow the number of rounds until every one of them fits. Both
-        // limits are real and neither is the one this used to assume: a round
-        // holds at most seven packets, and at most STREAM_BYTES of declared
-        // payload across them.
+        // Then grow the number of rounds until every one of them fits. Three
+        // limits, and the one that binds in practice is the middle one: a round
+        // holds at most seven packets, at most STREAM_IDENTIFIERS magnitudes
+        // across them, and at most STREAM_BYTES of declared payload.
         var count = 1
         var slices = evenly(1)
         while (count < maxOf(1, bundles.size)) {
-            val fits = slices.all { it.size <= packetBudget && it.sumOf(bytesOf) <= byteBudget }
+            val fits = slices.all {
+                it.size <= packetBudget &&
+                    it.sumOf { ids -> ids.size } <= idBudget &&
+                    it.sumOf(bytesOf) <= byteBudget
+            }
             if (fits) break
             count++
             slices = evenly(count)
@@ -349,35 +353,40 @@ object Stream {
     const val PACKET_BYTES = 7
 
     /**
-     * How much declared payload one round can hold, across all its packets.
+     * How many identifiers one round can hold, across all its packets.
      *
-     * **This, and not the packet count, is what the module limits.** Measured
-     * on 20/09/2026 with our own client, declaring and reading for real:
+     * **This, and not the packet count or the byte count, is what the module
+     * limits.** Measured at the car on 20/09/2026, changing one variable at a
+     * time:
      *
      * ```
-     *  packets  ids each  total  Hz each  frames/s  samples/s
-     *        1         6      6     99.6       100        598
-     *        3         6     18    100.0       300      1 801
-     *        5         6     30     99.9       500      2 998
-     *        7         5     35     99.6       697      3 485
-     *        6         6     36        rejected, 7F 2C 31
+     *  seven packets of 3 ids of 2 bytes   42 bytes, 21 ids   accepted
+     *  seven packets of 4 ids of 7 bytes   49 bytes, 28 ids   accepted
+     *  seven identifiers in ONE packet                        refused
+     *  forty identifiers                                      accepted
+     *  forty-one identifiers                    refused, 7F 2C 31
      * ```
      *
-     * Seven packets emit as fast as one; 7x5 = 35 bytes is accepted and
-     * 6x6 = 36 is refused at the declaration of the packet that overruns. A
-     * capture of GDS2 the same day agrees from the outside: seven packets at
-     * 97.6 Hz each, 683 frames a second.
+     * So a two-byte magnitude costs exactly the same as a one-byte one, and
+     * spending a profile on narrow parameters buys nothing.
      *
-     * The earlier measurement said seven packets fell to 51 Hz and that the
-     * module charged a price per packet. That was this side not reading fast
-     * enough, not the module -- and the whole of the rotation was built on it:
-     * five packets a round, the dwell, and the seven-second gaps that swallowed
-     * a braking event whole.
+     * Two earlier beliefs died here. The first was that the module charged a
+     * price per packet -- seven packets were said to fall to 51 Hz where five
+     * ran at 96 -- and the whole of the rotation was built on it: five packets
+     * a round, the dwell, and the seven-second gaps that swallowed a braking
+     * event whole. Seven packets emit at 98.7 Hz each; the 51 was this side not
+     * reading fast enough. The second was that the ceiling was 35 declared
+     * bytes, which came from finding the first refusal in a short list rather
+     * than from looking for the boundary.
      *
-     * With one-byte identifiers this is **35 live at once** instead of the 30
-     * that five packets of six allowed.
+     * [STREAM_BYTES] is kept as a separate guard because 49 bytes is what has
+     * actually been declared and accepted, and nothing above that has been
+     * tried. It is a known-good bound, not a measured limit.
      */
-    const val STREAM_BYTES = 35
+    const val STREAM_IDENTIFIERS = 40
+
+    /** Declared payload that is known to be accepted. See [STREAM_IDENTIFIERS]. */
+    const val STREAM_BYTES = 49
 
     /**
      * The packet numbers the factory tool used, 0xF8 through 0xFE. Seven of
