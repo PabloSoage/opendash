@@ -13,7 +13,7 @@ import androidx.compose.runtime.setValue
  * re-entered. The preference is the durable copy; the state is what the UI
  * observes.
  */
-class Settings(context: Context) {
+class Settings(val context: Context) {
 
     private val prefs = context.getSharedPreferences("opendash", Context.MODE_PRIVATE)
 
@@ -86,6 +86,11 @@ class Settings(context: Context) {
     var recordingTree: String by pref(KEY_TREE, prefs.getString(KEY_TREE, null) ?: "") { it }
 
     var compressRecordings: Boolean by pref(KEY_GZIP, prefs.getBoolean(KEY_GZIP, true)) { it }
+
+    // ── updates ───────────────────────────────────────────────────────────
+
+    /** Ask GitHub for a newer release when the app opens. */
+    var checkUpdates: Boolean by pref(KEY_UPDATES, prefs.getBoolean(KEY_UPDATES, true)) { it }
 
     // ── live data ─────────────────────────────────────────────────────────
 
@@ -193,6 +198,7 @@ class Settings(context: Context) {
         const val KEY_MODULE = "catalogue_module"
         const val KEY_TREE = "recording_tree"
         const val KEY_GZIP = "compress_recordings"
+        const val KEY_UPDATES = "check_updates_on_start"
         const val KEY_CHARTS = "chart_count"
         const val KEY_POLL = "poll_interval"
         const val KEY_CATALOGUE_LANG = "catalogue_language"

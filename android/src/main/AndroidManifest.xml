@@ -42,6 +42,20 @@
          does, which is when a drive actually starts. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- In-app updates: hands the release APK downloaded from GitHub to an
+         installer. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- So the updater can list every app able to install a package - the
+         system installer and any Shizuku-based one - from Android 11 on,
+         where that list is otherwise filtered down to nothing. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="content" android:mimeType="application/vnd.android.package-archive" />
+        </intent>
+    </queries>
+
     <application
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
@@ -69,6 +83,17 @@
 
         <!-- The same, for the app's own live session. The bridge had this from
              the start; the part that records a drive did not. -->
+        <!-- Exposes the downloaded update (cacheDir/updates/) to the installer. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <service
             android:name=".data.LiveService"
             android:exported="false"

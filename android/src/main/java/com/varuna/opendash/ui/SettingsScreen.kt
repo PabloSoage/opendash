@@ -36,6 +36,8 @@ import com.varuna.opendash.R
 import com.varuna.opendash.data.PluginRepository
 import com.varuna.opendash.data.RecordingStore
 import com.varuna.opendash.data.Settings
+import com.varuna.opendash.update.AppUpdate
+import com.varuna.opendash.update.UpdateDialog
 
 /**
  * Where the app is configured, including the one switch that deserves a lock.
@@ -242,15 +244,52 @@ fun SettingsScreen(
             Text(
                 stringResource(
                     R.string.settings_version,
-                    runCatching {
-                        context.packageManager
-                            .getPackageInfo(context.packageName, 0).versionName ?: "?"
-                    }.getOrDefault("?"),
+                    AppUpdate.installedVersion(context).ifEmpty { "?" },
                 ),
                 style = MaterialTheme.typography.bodyMedium,
             )
+            Updates(settings)
         }
     }
+}
+
+/** Where a new release is offered, checked for by hand, and the check at start switched off. */
+@Composable
+private fun Updates(settings: Settings) {
+    val context = LocalContext.current
+    var showing by remember { mutableStateOf(false) }
+    when (val s = AppUpdate.status) {
+        is AppUpdate.Status.Available -> {
+            Text(
+                stringResource(R.string.update_new, s.update.title),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            OutlinedButton(onClick = { showing = true }) { Text(stringResource(R.string.update_see)) }
+            if (showing) UpdateDialog(s.update, onDismiss = { showing = false })
+        }
+        AppUpdate.Status.UpToDate -> Hint(stringResource(R.string.update_up_to_date))
+        AppUpdate.Status.Failed -> ErrorLine(stringResource(R.string.update_check_failed))
+        else -> Unit
+    }
+    if (AppUpdate.status !is AppUpdate.Status.Available) {
+        OutlinedButton(
+            onClick = { AppUpdate.check(context.applicationContext) },
+            enabled = AppUpdate.status != AppUpdate.Status.Checking,
+        ) {
+            Text(
+                stringResource(
+                    if (AppUpdate.status == AppUpdate.Status.Checking) R.string.update_checking
+                    else R.string.update_check,
+                ),
+            )
+        }
+    }
+    Toggle(
+        label = stringResource(R.string.update_check_on_start),
+        checked = settings.checkUpdates,
+        onChange = { settings.checkUpdates = it },
+    )
 }
 
 @Composable

@@ -305,4 +305,20 @@
     <string name="live_layout_open">Packet layout</string>
     <string name="live_layout_pin">In every round</string>
     <string name="viewer_screen">%1$d cells in %2$d rows. This file holds a saved screen, not a recording: there is no series in it to chart.</string>
+    <string name="update_available_title">Update: %1$s</string>
+    <string name="update_new">%1$s is available</string>
+    <string name="update_see">See what is new</string>
+    <string name="update_check">Check for updates</string>
+    <string name="update_checking">Checking…</string>
+    <string name="update_up_to_date">This is the newest release.</string>
+    <string name="update_check_failed">GitHub could not be reached. On the adapter\'s Wi-Fi there is no internet, so this is expected there.</string>
+    <string name="update_check_on_start">Check when the app opens</string>
+    <string name="update_download">Download</string>
+    <string name="update_install">Install</string>
+    <string name="update_retry">Try again</string>
+    <string name="update_later">Later</string>
+    <string name="update_open_github">Open on GitHub</string>
+    <string name="update_download_failed">The download failed.</string>
+    <string name="update_choose_installer">Install with</string>
+    <string name="update_other_installer">Another installer…</string>
 </resources>

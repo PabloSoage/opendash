@@ -184,6 +184,35 @@ class Diagnostics(private val sm3: Sm3Client) {
         return true
     }
 
+    /**
+     * Emitted packet frames that a request read past while looking for its own
+     * answer, kept for the stream reader instead of being thrown away.
+     *
+     * A request drains the adapter's queue and keeps only its answer. That was
+     * harmless while nothing else was arriving, and it is not while a module is
+     * emitting seven hundred frames a second: every polled request in the
+     * middle of a stream, every heartbeat and every declaration used to discard
+     * the twenty to forty milliseconds of packets that arrived while it waited,
+     * and a parameter polled every 300 ms beside the stream cost the stream a
+     * tenth of its readings without anything on screen saying so.
+     *
+     * Only kept while a stream is running, and bounded, so a module left
+     * emitting with nobody reading cannot grow this without limit.
+     */
+    private val emitted = java.util.concurrent.ConcurrentLinkedQueue<Sm3Client.CanFrame>()
+
+    @Volatile private var keepEmitted = false
+
+    private fun spill(frame: Sm3Client.CanFrame) {
+        if (!keepEmitted || !isEmitted(frame.id)) return
+        if (emitted.size >= EMITTED_KEPT) emitted.poll()
+        emitted.add(frame)
+    }
+
+    private fun spill(frames: List<Sm3Client.CanFrame>, from: Int = 0) {
+        for (i in from until frames.size) spill(frames[i])
+    }
+
     fun request(
         txId: Int,
         payload: ByteArray,
@@ -192,7 +221,7 @@ class Diagnostics(private val sm3: Sm3Client) {
     ): ByteArray? {
         refuseIfNotRead(payload)
         isotp.reset()
-        sm3.drain()
+        spill(sm3.drain())
         if (payload.size <= SINGLE_FRAME_BYTES) {
             sm3.send(txId, payload)
         } else if (!sendSegmented(txId, payload, rxId)) {
@@ -225,15 +254,24 @@ class Diagnostics(private val sm3: Sm3Client) {
                 sm3.poll()
                 nextPoll = System.currentTimeMillis() + POLL_EVERY_MS
             }
-            for (frame in sm3.drain()) {
-                if (!accepts(frame.id)) continue
+            val frames = sm3.drain()
+            for ((index, frame) in frames.withIndex()) {
+                if (!accepts(frame.id)) {
+                    spill(frame)
+                    continue
+                }
                 // Once somebody has answered, only that somebody is listened to.
                 // Without this a functional request can interleave two modules'
                 // frames into one reassembly and hand back a spliced answer.
                 if (answering == NONE) answering = frame.id else if (frame.id != answering) continue
                 val pci = (frame.data.getOrNull(0)?.toInt() ?: 0) and 0xf0
                 val done = isotp.push(frame.id, frame.data)
-                if (done != null) return done
+                if (done != null) {
+                    // What arrived after the answer in the same drain is not
+                    // this request's, and it may well be the stream's.
+                    spill(frames, index + 1)
+                    return done
+                }
                 // A multi-frame answer stalls until the tester says go ahead.
                 // And "go ahead" is addressed to the module that is answering,
                 // not to whoever was asked. A functional request goes out as a
@@ -514,6 +552,7 @@ class Diagnostics(private val sm3: Sm3Client) {
      */
     fun beginStream(plan: Stream.Plan): Boolean {
         if (plan.isEmpty) return false
+        keepEmitted = true
         for (declaration in plan.declarations()) {
             val r = request(plan.module, declaration, timeoutMs = STREAM_SETUP_MS)
             if (r == null || (r[0].toInt() and 0xff) != 0x6C) return false
@@ -582,12 +621,27 @@ class Diagnostics(private val sm3: Sm3Client) {
         val rxId = streamIdFor(plan.module)
         val out = ArrayList<Pair<Catalogue.Parameter, Double>>()
         var frames = 0
-        for (frame in sm3.drain()) {
-            if (rxId != ANY && frame.id != rxId) continue
+        fun take(frame: Sm3Client.CanFrame) {
+            if (rxId != ANY && frame.id != rxId) return
             frames++
             out.addAll(Stream.decode(plan, frame.data))
         }
+        // What a request read past goes first: it arrived first.
+        while (true) take(emitted.poll() ?: break)
+        for (frame in sm3.drain()) take(frame)
         return Batch(out, frames)
+    }
+
+    /**
+     * Stop keeping emitted frames for a reader, and drop what was kept.
+     *
+     * Separate from [endStream] because that one is also sent between rounds
+     * and while reviving a stream, and the frames kept up to that moment are
+     * still readings the recording wants.
+     */
+    fun streamFinished() {
+        keepEmitted = false
+        emitted.clear()
     }
 
     /** Send without waiting for an answer, still refusing anything that writes. */
@@ -709,6 +763,17 @@ class Diagnostics(private val sm3: Sm3Client) {
 
         /** A packet declaration is a short exchange; it either lands or it does not. */
         private const val STREAM_SETUP_MS = 1000L
+
+        /**
+         * How many read-past packet frames are held for the stream reader. At
+         * seven hundred frames a second this is about thirty seconds, far more
+         * than any request waits, and it is the ceiling on what a module left
+         * emitting with nobody reading can take.
+         */
+        private const val EMITTED_KEPT = 20_000
+
+        /** Where any module's emitted packets arrive. See [streamIdFor]. */
+        fun isEmitted(id: Int): Boolean = id == 0x5E8 || id in 0x540..0x55F
 
         /** OBD functional request: every module that listens answers. */
         const val FUNCTIONAL = 0x7DF

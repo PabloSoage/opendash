@@ -38,6 +38,7 @@ import com.varuna.opendash.Session
 class LiveService : LifecycleService() {
 
     private var wifi: WifiManager.WifiLock? = null
+    private var wifiFallback: WifiManager.WifiLock? = null
     private var cpu: PowerManager.WakeLock? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -70,6 +71,20 @@ class LiveService : LifecycleService() {
                 it.setReferenceCounted(false)
                 runCatching { it.acquire() }
             }
+            // And high performance beside it, from Android 10 on as well.
+            // Low latency only takes effect while the screen is on and the app
+            // is in front; with the phone locked in a pocket the system treats
+            // it as no lock at all, and the radio goes back to power saving in
+            // the middle of a drive. A second lock of the older kind costs
+            // nothing where it still does something and nothing where it does
+            // not.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                @Suppress("DEPRECATION")
+                wifiFallback = manager.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "$TAG:fallback").also {
+                    it.setReferenceCounted(false)
+                    runCatching { it.acquire() }
+                }
+            }
         }
         if (cpu == null) {
             val power = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -83,8 +98,10 @@ class LiveService : LifecycleService() {
 
     override fun onDestroy() {
         runCatching { wifi?.release() }
+        runCatching { wifiFallback?.release() }
         runCatching { cpu?.release() }
         wifi = null
+        wifiFallback = null
         cpu = null
         super.onDestroy()
     }

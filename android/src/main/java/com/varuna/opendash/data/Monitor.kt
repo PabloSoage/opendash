@@ -52,6 +52,9 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
     var recordingName by mutableStateOf<String?>(null)
         private set
 
+    /** Whether the current run is writing a file, as opposed to only showing. */
+    val isRecording: Boolean get() = recorder != null
+
     var recordedRows by mutableIntStateOf(0)
         private set
 
@@ -261,8 +264,21 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                 var refused = 0
                 var lastBeat = System.currentTimeMillis()
                 // How many times the whole streaming session has been torn down
-                // and built again after it stopped working. See below.
+                // and built again after it stopped working. See below. Counted
+                // for the screen, not as a budget: what ends a run now is time
+                // without a single frame, never a number of attempts.
                 var revivals = 0
+                // The last time anything at all arrived from the module, across
+                // declarations and revivals alike.
+                var lastFrameAt = System.currentTimeMillis()
+                // Revivals since the module last emitted anything, which is what
+                // the wait between them grows with.
+                var inARow = 0
+                // So a failed write is said once, not re-said every slice.
+                var toldFailure: String? = null
+
+                fun givenUp() =
+                    System.currentTimeMillis() - lastFrameAt > GIVE_UP_SILENT_MS
 
                 // The session has to be held open for as long as the module is
                 // emitting — see Diagnostics.whileStreaming. Without it the
@@ -316,7 +332,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                                 // below can work over a socket that is not there.
                                 if (Session.state != Session.State.CHANNEL_OPEN) {
                                     lastError = "the link went away; getting it back"
-                                    if (reopenLink()) {
+                                    if (reopenLink(::givenUp)) {
                                         refused = 0
                                         continue
                                     }
@@ -338,19 +354,21 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                             // stopped emitting does not report it, and the read
                             // does not fail: it simply returns nothing, for ever.
                             var heard = System.currentTimeMillis()
-                            while (isRunning && System.currentTimeMillis() < until) {
+
+                            /** One slice of the emission. False ends this declaration. */
+                            fun slice(): Boolean {
                                 val batch = Session.guarded {
                                     Session.diagnostics.readStream(plan, STREAM_SLICE_MS)
                                 }
-                                frames += batch?.frames ?: 0
                                 if (batch == null) {
                                     // Said rather than swallowed. This is the link going
                                     // out from under a screenful of numbers, and left
                                     // silent it looks identical to a module that simply
                                     // stopped having anything to say.
                                     lastError = "the link went away while the module was emitting"
-                                    break
+                                    return false
                                 }
+                                frames += batch.frames
                                 // ── the silence that ended a 32-minute recording ──
                                 //
                                 // A read that finds nothing is not a failure. It
@@ -374,12 +392,15 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                                 // So silence is now a fact this loop knows. Long
                                 // enough of it and the round is declared again,
                                 // which is all it takes.
+                                val now = System.currentTimeMillis()
                                 if (batch.frames > 0) {
-                                    heard = System.currentTimeMillis()
-                                } else if (System.currentTimeMillis() - heard > SILENCE_MS) {
+                                    heard = now
+                                    lastFrameAt = now
+                                    inARow = 0
+                                } else if (now - heard > SILENCE_MS) {
                                     lastError = "the module went quiet; declaring the packets again"
                                     runCatching { Session.diagnostics.endStream(module) }
-                                    break
+                                    return false
                                 }
                                 for ((parameter, value) in batch.values) {
                                     val key = parameter.rowKey
@@ -388,30 +409,9 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                                     recorder?.add(parameter.name, parameter.identifierText, parameter.unit, value)
                                     readings++
                                 }
-                                // One polled reading every EXTRA_EVERY_MS, not one per
-                                // turn round the loop. A request costs twenty to forty
-                                // milliseconds against a fifty-millisecond slice, so one
-                                // per turn is a third of the stream's time spent on the
-                                // overflow — and with two parameters in the overflow
-                                // that is a bad trade at any price.
-                                val now = System.currentTimeMillis()
-                                if (extra.isNotEmpty() && now - lastExtra >= EXTRA_EVERY_MS) {
-                                    lastExtra = now
-                                    val t = extra[turn % extra.size]
-                                    turn++
-                                    val v = try { t.request() } catch (_: Exception) { null }
-                                    if (v == null) {
-                                        silent[t.key] = true
-                                    } else {
-                                        silent.remove(t.key)
-                                        values[t.key] = v
-                                        series.getOrPut(t.key) { Series() }.add(v)
-                                        recorder?.add(t.name, t.identifier, t.unit, v)
-                                        readings++
-                                    }
-                                }
                                 // The heartbeat, from the thread that owns the
-                                // socket.
+                                // socket, and before anything below that can
+                                // take a while.
                                 //
                                 // A module drops the session about five seconds
                                 // after the last TesterPresent, and there is a
@@ -428,13 +428,41 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                                 // anything, because this is what would starve it.
                                 // The other thread stays: two TesterPresents cost
                                 // nothing, and one of them arriving is the point.
-                                val beatAt = System.currentTimeMillis()
-                                if (beatAt - lastBeat >= BEAT_MS) {
-                                    lastBeat = beatAt
+                                if (now - lastBeat >= BEAT_MS) {
+                                    lastBeat = now
                                     Session.guarded { Session.diagnostics.keepAlive(module) }
+                                }
+                                // One polled reading every EXTRA_EVERY_MS, not one per
+                                // turn round the loop. A request costs twenty to forty
+                                // milliseconds against a fifty-millisecond slice, so one
+                                // per turn is a third of the stream's time spent on the
+                                // overflow — and with two parameters in the overflow
+                                // that is a bad trade at any price. What the stream
+                                // emits while the request waits is kept for the next
+                                // slice rather than lost; see Diagnostics.request.
+                                if (extra.isNotEmpty() && now - lastExtra >= EXTRA_EVERY_MS) {
+                                    lastExtra = now
+                                    val t = extra[turn % extra.size]
+                                    turn++
+                                    val v = try { t.request() } catch (_: Exception) { null }
+                                    if (v == null) {
+                                        silent[t.key] = true
+                                    } else {
+                                        silent.remove(t.key)
+                                        values[t.key] = v
+                                        series.getOrPut(t.key) { Series() }.add(v)
+                                        recorder?.add(t.name, t.identifier, t.unit, v)
+                                        readings++
+                                    }
                                 }
                                 recordedRows = recorder?.rows ?: 0
                                 recordingName = recorder?.name
+                                recorder?.lastFailure?.let {
+                                    if (it != toldFailure) {
+                                        toldFailure = it
+                                        lastError = it
+                                    }
+                                }
                                 tick++
                                 val elapsed = System.currentTimeMillis() - since
                                 if (elapsed >= 1000) {
@@ -444,6 +472,26 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                                     frames = 0
                                     since = System.currentTimeMillis()
                                 }
+                                return true
+                            }
+
+                            while (isRunning && System.currentTimeMillis() < until) {
+                                // Nothing inside one slice can end the run. What
+                                // can fail on the link is already guarded; this
+                                // catches the rest -- a value that will not
+                                // decode, a row the screen state will not take --
+                                // which used to fall through to the handler at the
+                                // bottom and end a recording that had nothing wrong
+                                // with it but one bad reading.
+                                val carryOn = try {
+                                    slice()
+                                } catch (e: InterruptedException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    lastError = "skipped a slice: " + (e.message ?: e.javaClass.simpleName)
+                                    true
+                                }
+                                if (!carryOn) break
                             }
                             // Between rounds: stop, so the packet numbers are free
                             // for the next declaration. Costs one round trip, which
@@ -452,6 +500,9 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                                 runCatching { Session.diagnostics.endStream(module) }
                                 round = (round + 1) % rotation.rounds.size
                             }
+                            // A module that has been silent for longer than a
+                            // refuel is a car that has been switched off and left.
+                            if (givenUp()) break
                         }
                     }
 
@@ -460,18 +511,40 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                     // state the app is in between pressing Stop and pressing
                     // Start, which is the state a fresh start is known to work
                     // from.
+                    //
+                    // ## Why there is no longer a limit on how many times
+                    //
+                    // There used to be three revivals, for the whole run. Three
+                    // is plenty for one bad moment and nothing like enough for
+                    // a drive: a two-hour recording with a hiccup every forty
+                    // minutes was over by the fourth, however healthy everything
+                    // was in between. And the one stop every long drive has --
+                    // the engine switched off to fill the tank -- is exactly a
+                    // module that goes quiet for five minutes and then comes
+                    // back, which is the case this loop exists for.
+                    //
+                    // So the run ends on time without a single frame, not on a
+                    // count of attempts. Twenty minutes: longer than any stop for
+                    // fuel, and short enough that a car switched off and left
+                    // does not hold a wake lock and an open file all night.
                     if (!isRunning) break
-                    if (revivals >= REVIVALS_GIVE_UP_AFTER) {
-                        lastError = "the stream stopped and would not start again"
+                    if (givenUp()) {
+                        lastError = "nothing from the module for " +
+                            (GIVE_UP_SILENT_MS / 60_000) + " minutes; the recording is closed"
                         break
                     }
                     revivals++
+                    inARow++
                     lastError = "the stream stopped; starting it again (" + revivals + ")"
                     // Tell the module to stop emitting whatever it still thinks
                     // it is emitting, so the packet numbers are free.
                     runCatching { Session.diagnostics.endStream(module) }
-                    if (Session.state != Session.State.CHANNEL_OPEN && !reopenLink()) break
-                    Thread.sleep(REVIVE_WAIT_MS)
+                    if (Session.state != Session.State.CHANNEL_OPEN && !reopenLink(::givenUp)) break
+                    // Backed off: a module that did not come back after two
+                    // seconds is likely an engine that is off, and asking it
+                    // every two seconds for twenty minutes is noise on a bus
+                    // somebody may be about to start a car on.
+                    Thread.sleep(minOf(REVIVE_WAIT_MS * inARow, REVIVE_WAIT_MAX_MS))
                     refused = 0
                     round = 0
                 }
@@ -482,6 +555,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                 // hundred frames a second coming at an adapter nobody is
                 // reading, and the next tool to connect finds the bus busy.
                 runCatching { Session.diagnostics.endStream(module) }
+                Session.diagnostics.streamFinished()
                 Session.stoppedStreaming(module)
                 // A run that ends by itself has to close its file too. Only
                 // stop() used to, so a stream that died on its own left the
@@ -502,18 +576,24 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
      * is never coming back, and a worker thread retrying for ever holds the
      * wake lock and the file open behind it.
      *
+     * Bounded by [givenUp], the same clock as everything else in a run, and
+     * not by a number of tries. It used to be six tries, about twenty seconds,
+     * which ended the whole recording over a Wi-Fi drop that lasted
+     * twenty-five.
+     *
      * The file is not touched either way. A reconnected session keeps writing
      * to the same recording, which is the point: what was wanted was the rest
      * of the drive, not a second file starting at zero.
      */
-    private fun reopenLink(): Boolean {
-        for (attempt in 0 until RECONNECT_TRIES) {
+    private fun reopenLink(givenUp: () -> Boolean): Boolean {
+        var attempt = 0
+        while (isRunning && !givenUp()) {
+            Thread.sleep(minOf(RECONNECT_WAIT_MS * (attempt + 1), RECONNECT_WAIT_MAX_MS))
             if (!isRunning) return false
-            Thread.sleep(RECONNECT_WAIT_MS * (attempt + 1))
-            if (!isRunning) return false
+            attempt++
             if (Session.openChannel()) {
-                lastError = "the link came back after " + (attempt + 1) +
-                    (if (attempt == 0) " try" else " tries")
+                lastError = "the link came back after " + attempt +
+                    (if (attempt == 1) " try" else " tries")
                 return true
             }
         }
@@ -656,21 +736,26 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
          * How long a module may say nothing before the packets are declared
          * again.
          *
-         * Three seconds. Well past any gap a busy module leaves -- the measured
-         * emission is 700 frames a second, so three seconds is two thousand
-         * frames that did not arrive -- and well inside the patience of somebody
-         * driving, who would otherwise be recording nothing without knowing.
+         * Two seconds. Well past any gap a busy module leaves -- the measured
+         * emission is 700 frames a second, and the worst gap in 32 minutes of
+         * the 20/09 recording before it stopped was under half a second -- and
+         * well inside the patience of somebody driving, who would otherwise be
+         * recording nothing without knowing.
          */
-        const val SILENCE_MS = 3000L
+        const val SILENCE_MS = 2000L
 
         /**
          * How often this loop sends its own TesterPresent.
          *
-         * Two seconds, against the roughly five a module waits before dropping
-         * the session. See where it is sent: the point is not the interval, it
-         * is which thread it goes out on.
+         * One second, against the roughly five a module waits before dropping
+         * the session. See where it is sent: the point is mostly which thread
+         * it goes out on. The interval matters too, because the link to the
+         * adapter is Wi-Fi and Wi-Fi stalls: at two seconds a stall of three
+         * was enough to let the session lapse, at one it takes four. A beat is
+         * one CAN frame, which on a bus carrying seven hundred of them a second
+         * from this module alone is nothing.
          */
-        const val BEAT_MS = 2000L
+        const val BEAT_MS = 1000L
 
         /**
          * How long a round emits before the next one takes the packets.
@@ -701,28 +786,34 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
         const val ROUNDS_GIVE_UP_AFTER = 4
 
         /**
-         * How hard to try to get a dropped link back mid-recording.
-         *
-         * Six tries, waiting a second longer each time, is about twenty
-         * seconds. Long enough to ride out a Wi-Fi hiccup or an adapter
-         * brown-out; short enough that a car switched off does not leave a
-         * worker thread holding a wake lock and an open file for ever.
+         * How long to wait between attempts to get a dropped link back: a
+         * second longer each time, up to ten.
          */
-        const val RECONNECT_TRIES = 6
         const val RECONNECT_WAIT_MS = 1000L
+        const val RECONNECT_WAIT_MAX_MS = 10_000L
 
         /**
-         * How many times to tear the streaming session down and build it again
-         * before accepting that the recording is over.
+         * How long a run goes on without a single frame from the module before
+         * it is closed.
          *
-         * Three, two seconds apart. The evidence that this is the right shape
-         * of fix is narrow but solid: the session that stopped after 65 minutes
-         * needed nothing but Start pressed again -- no reconnecting anything --
-         * so a fresh session is known to work where a retried round did not.
-         * What is not known is why, and a bound is what stops a guess about the
-         * cause from turning into a thread that never lets go.
+         * This is the only thing that ends a run on its own, and it is a time
+         * rather than a count on purpose. Twenty minutes is longer than the
+         * engine is off for a stop to fill the tank -- after which the module
+         * boots, the packets are declared again and the same file carries on --
+         * and short enough that a car switched off and left does not keep a
+         * wake lock and an open file until the battery of the phone gives out.
          */
-        const val REVIVALS_GIVE_UP_AFTER = 3
+        const val GIVE_UP_SILENT_MS = 20 * 60_000L
+
+        /**
+         * Wait before building a stopped stream again: two seconds more on each
+         * revival in a row, up to fifteen. The evidence that a rebuild is the
+         * right shape of fix is narrow but solid: the session that stopped after
+         * 65 minutes needed nothing but Start pressed again -- no reconnecting
+         * anything -- so a fresh session is known to work where a retried round
+         * did not.
+         */
         const val REVIVE_WAIT_MS = 2000L
+        const val REVIVE_WAIT_MAX_MS = 15_000L
     }
 }

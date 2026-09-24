@@ -295,4 +295,20 @@
     <string name="live_layout_open">Reparto en paquetes</string>
     <string name="live_layout_pin">En todas las rondas</string>
     <string name="viewer_screen">%1$d celdas en %2$d filas. Este fichero guarda una pantalla, no una grabación: no hay ninguna serie que dibujar.</string>
+    <string name="update_available_title">Actualización: %1$s</string>
+    <string name="update_new">Disponible: %1$s</string>
+    <string name="update_see">Ver las novedades</string>
+    <string name="update_check">Buscar actualizaciones</string>
+    <string name="update_checking">Buscando…</string>
+    <string name="update_up_to_date">Es la versión más reciente.</string>
+    <string name="update_check_failed">No se pudo llegar a GitHub. En la wifi del adaptador no hay internet, así que ahí es lo esperable.</string>
+    <string name="update_check_on_start">Buscar al abrir la app</string>
+    <string name="update_download">Descargar</string>
+    <string name="update_install">Instalar</string>
+    <string name="update_retry">Reintentar</string>
+    <string name="update_later">Más tarde</string>
+    <string name="update_open_github">Abrir en GitHub</string>
+    <string name="update_download_failed">La descarga falló.</string>
+    <string name="update_choose_installer">Instalar con</string>
+    <string name="update_other_installer">Otro instalador…</string>
 </resources>

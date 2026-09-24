@@ -295,4 +295,20 @@
     <string name="live_layout_open">Paketaufteilung</string>
     <string name="live_layout_pin">In jeder Runde</string>
     <string name="viewer_screen">%1$d Zellen in %2$d Zeilen. Diese Datei enthält einen gespeicherten Bildschirm, keine Aufzeichnung: es gibt keine Reihe zum Zeichnen.</string>
+    <string name="update_available_title">Update: %1$s</string>
+    <string name="update_new">%1$s ist verfügbar</string>
+    <string name="update_see">Neuerungen ansehen</string>
+    <string name="update_check">Nach Updates suchen</string>
+    <string name="update_checking">Suche…</string>
+    <string name="update_up_to_date">Das ist die neueste Version.</string>
+    <string name="update_check_failed">GitHub war nicht erreichbar. Im WLAN des Adapters gibt es kein Internet, dort ist das zu erwarten.</string>
+    <string name="update_check_on_start">Beim Öffnen der App suchen</string>
+    <string name="update_download">Herunterladen</string>
+    <string name="update_install">Installieren</string>
+    <string name="update_retry">Erneut versuchen</string>
+    <string name="update_later">Später</string>
+    <string name="update_open_github">Auf GitHub öffnen</string>
+    <string name="update_download_failed">Der Download ist fehlgeschlagen.</string>
+    <string name="update_choose_installer">Installieren mit</string>
+    <string name="update_other_installer">Anderes Installationsprogramm…</string>
 </resources>

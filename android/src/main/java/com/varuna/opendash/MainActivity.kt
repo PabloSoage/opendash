@@ -35,12 +35,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,6 +62,8 @@ import com.varuna.opendash.ui.LiveScreen
 import com.varuna.opendash.ui.RecordingScreen
 import com.varuna.opendash.ui.SettingsScreen
 import com.varuna.opendash.ui.theme.OpenDashTheme
+import com.varuna.opendash.update.AppUpdate
+import com.varuna.opendash.update.UpdateDialog
 
 class MainActivity : AppCompatActivity() {
 
@@ -70,7 +74,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         LocaleManager.restore(this)
-        settings = Settings(this)
+        // One of each per process, not per window. See [kept].
+        val held = kept ?: Kept(Settings(applicationContext)).also { kept = it }
+        settings = held.settings
         // Set before super so AppCompat picks the right resource qualifiers
         // while inflating, which is what keeps the window background from
         // flashing the wrong colour on launch. The live theme below is what
@@ -86,9 +92,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        store = RecordingStore(this, settings)
+        store = held.store
         plugins = PluginRepository(this)
-        monitor = Monitor(settings, store)
+        monitor = held.monitor
         askForNotifications()
 
         setContent {
@@ -108,9 +114,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * A window going away is not a run ending.
+     *
+     * This used to stop the monitor every time, and onDestroy is not only
+     * called when somebody closes the app: the system also destroys and
+     * rebuilds the activity for configuration changes it is not told to leave
+     * alone, and destroys it outright to reclaim memory while the process lives
+     * on in its foreground service. Either way the recording ended mid-drive,
+     * with the phone in a pocket and nobody having pressed anything.
+     *
+     * So a recording is only ever stopped by Stop, or by the module going
+     * silent for good. A live view with no file behind it is still let go when
+     * the app is really being closed, because then it is only holding the bus
+     * and a wake lock for a screen nobody can see.
+     */
     override fun onDestroy() {
-        monitor.stop()
-        handBackTheAdapter()
+        if (isFinishing && monitor.isRunning && !monitor.isRecording) monitor.stop()
+        if (!monitor.isRunning) handBackTheAdapter()
         super.onDestroy()
     }
 
@@ -135,7 +156,22 @@ class MainActivity : AppCompatActivity() {
         worker.join(GOODBYE_MS)
     }
 
+    /**
+     * What has to outlive the window: the monitor, and what it was built with.
+     *
+     * The monitor owns the worker thread that reads the module and the file it
+     * writes to. Built per activity, a rebuilt activity got a fresh monitor
+     * that knew nothing of the run still going in the old one: the screen said
+     * nothing was recording while something was, and Stop could not reach it.
+     */
+    private class Kept(val settings: Settings) {
+        val store = RecordingStore(settings.context, settings)
+        val monitor = Monitor(settings, store)
+    }
+
     private companion object {
+        private var kept: Kept? = null
+
         /**
          * Four short messages at 400 ms each, with room for the client to open
          * one fresh link if the old one had already gone. Not long enough for
@@ -259,6 +295,20 @@ private fun App(
     // rotation the viewer closes back to the file list rather than failing.
     var recording by remember { mutableStateOf<SessionFile.Session?>(null) }
     var recordingName by rememberSaveable { mutableStateOf("") }
+
+    // Once per process, and only offered, never forced. Not while a run is
+    // going: a dialog over the live screen in the middle of a drive is the
+    // worst moment there is for one, and Settings has it whenever it is wanted.
+    val context = LocalContext.current
+    var updateDismissed by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (settings.checkUpdates) AppUpdate.checkOnStart(context.applicationContext)
+    }
+    (AppUpdate.status as? AppUpdate.Status.Available)?.let { available ->
+        if (!updateDismissed && !monitor.isRunning && tabName != Tab.SETTINGS.name) {
+            UpdateDialog(available.update, onDismiss = { updateDismissed = true })
+        }
+    }
 
     val tab = Tab.valueOf(tabName)
     // A saved route pointing at a recording that is no longer loaded resolves
