@@ -183,6 +183,27 @@ class Presets(context: Context) {
     fun importAll(text: String): List<String> =
         read(text).map { save(it.module, it.name, it.keys, it.always); it.name }
 
+    /**
+     * Take a catalogue's profiles again when they have changed since last time.
+     *
+     * A preset is a copy, which is right for one somebody saved and wrong for
+     * one a catalogue publishes: updating the catalogue brought a new version
+     * of a profile down to the phone and left the old copy in the list under
+     * the same name, so the update looked like it had done nothing. Now a
+     * changed `profiles.txt` replaces the presets it names, and only those --
+     * ones saved by hand under other names are not touched.
+     *
+     * Returns the names replaced, empty when nothing had changed.
+     */
+    fun refreshFromCatalogue(brand: String, text: String): List<String> {
+        val seen = "catalogue|" + brand
+        val hash = text.hashCode().toString()
+        if (prefs.getString(seen, null) == hash) return emptyList()
+        val taken = importAll(text)
+        prefs.edit().putString(seen, hash).apply()
+        return taken
+    }
+
     private fun parse(block: String): Entry? {
         val lines = block.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
         if (lines.firstOrNull()?.startsWith(MAGIC) != true) return null

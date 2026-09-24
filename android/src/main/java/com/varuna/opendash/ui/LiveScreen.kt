@@ -67,6 +67,9 @@ import com.varuna.opendash.data.Presets
 import com.varuna.opendash.data.PluginRepository
 import com.varuna.opendash.data.Settings
 import com.varuna.opendash.obd.Actuation
+import com.varuna.opendash.obd.Actuators
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.SettingsRemote
 import com.varuna.opendash.obd.Diagnostics
 import com.varuna.opendash.obd.Stream
 import com.varuna.opendash.ui.theme.ValueStyle
@@ -110,7 +113,12 @@ import kotlinx.coroutines.withContext
  */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) {
+fun LiveScreen(
+    monitor: Monitor,
+    plugins: PluginRepository,
+    settings: Settings,
+    authenticate: Authenticate,
+) {
     // A map rather than a list. Membership is tested once per visible row
     // and again for every row when the selection is collected, and a list makes
     // each of those a scan: with a few thousand parameters on screen that is
@@ -193,6 +201,27 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
     var presetName by remember { mutableStateOf("") }
 
     val installed = remember(plugins.revision) { plugins.installed() }
+
+    // The actuators the catalogue lists for this car. See Actuators.
+    var showActuators by remember { mutableStateOf(false) }
+    val actuators = remember(plugins.revision, catalogue?.brand) {
+        catalogue?.brand?.let { plugins.actuatorsOf(it) }?.let { Actuators.parse(it) }.orEmpty()
+    }
+    if (showActuators) {
+        ActuatorsScreen(actuators, monitor, authenticate, onClose = { showActuators = false })
+    }
+
+    // A catalogue that arrives with changed profiles replaces the copies of
+    // them in the list. See Presets.refreshFromCatalogue.
+    LaunchedEffect(plugins.revision, catalogue?.brand) {
+        val brand = catalogue?.brand ?: return@LaunchedEffect
+        val text = plugins.profilesOf(brand) ?: return@LaunchedEffect
+        val taken = presets.refreshFromCatalogue(brand, text)
+        if (taken.isNotEmpty()) {
+            presetRevision++
+            presetNote = context.getString(R.string.live_presets_imported, taken.size)
+        }
+    }
 
     // Where the chosen module answers. A module name can sit at more than one
     // address across the marque, so prefer one this car actually answered on.
@@ -464,6 +493,7 @@ fun LiveScreen(monitor: Monitor, plugins: PluginRepository, settings: Settings) 
             onStop = { monitor.stop() },
             onSetup = { showSetup = true },
             onOptions = { showOptions = true },
+            onActuators = { showActuators = true },
         )
 
         Box(modifier = Modifier.weight(1f)) {
@@ -1054,6 +1084,7 @@ private fun LiveHeader(
     onStop: () -> Unit,
     onSetup: () -> Unit,
     onOptions: () -> Unit,
+    onActuators: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -1082,6 +1113,10 @@ private fun LiveHeader(
                             append(" · ")
                             append(stringResource(R.string.live_recording, monitor.recordedRows, it))
                         }
+                        if (monitor.marks > 0) {
+                            append(" · ")
+                            append(stringResource(R.string.live_marks, monitor.marks))
+                        }
                     }
                 } else if (hasRows) {
                     (appliedPreset?.let { "$it · " } ?: "") +
@@ -1109,6 +1144,25 @@ private fun LiveHeader(
                     Icons.Filled.Tune,
                     contentDescription = stringResource(R.string.live_options),
                 )
+            }
+            // Actuators live behind their own button, not among the options:
+            // they are a different kind of thing, and each has its own gate.
+            if (!monitor.isRunning) {
+                IconButton(onClick = onActuators) {
+                    Icon(
+                        Icons.Filled.SettingsRemote,
+                        contentDescription = stringResource(R.string.act_title),
+                    )
+                }
+            }
+            // One tap to find this moment again in the file afterwards.
+            if (monitor.isRunning && monitor.isRecording) {
+                IconButton(onClick = { monitor.mark() }) {
+                    Icon(
+                        Icons.Filled.Flag,
+                        contentDescription = stringResource(R.string.live_mark),
+                    )
+                }
             }
             // One button, and what it does follows the state. Scan when there
             // is nothing to watch, Start when there is, Stop while it runs.

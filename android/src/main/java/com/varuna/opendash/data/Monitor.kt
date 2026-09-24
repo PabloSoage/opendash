@@ -55,6 +55,52 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
     /** Whether the current run is writing a file, as opposed to only showing. */
     val isRecording: Boolean get() = recorder != null
 
+    /** Marks put in the current recording, from the screen or the notification. */
+    var marks by mutableIntStateOf(0)
+        private set
+
+    /**
+     * Put a mark in the recording: a row named "Marker" whose value counts up.
+     *
+     * For finding a moment again afterwards -- a noise, a hard stop, where the
+     * tank was filled. Pressed with the phone in a mount, so it has to be one
+     * tap on the notification, and it must not write from this thread: the
+     * row is queued for the reader, which is the only thread that writes.
+     */
+    fun mark() {
+        if (recorder == null) return
+        pendingMarks.incrementAndGet()
+    }
+
+    private val pendingMarks = java.util.concurrent.atomic.AtomicInteger()
+
+    /** Called on the reading thread, which owns the recorder. */
+    private fun writeMarks() {
+        while (pendingMarks.get() > 0) {
+            pendingMarks.decrementAndGet()
+            marks++
+            recorder?.add(MARKER, MARKER_ID, "_", marks.toDouble())
+        }
+    }
+
+    private var lastStatus = 0L
+
+    /** Keep the notification saying what the run is doing, every [STATUS_MS]. */
+    private fun postStatus(now: Long) {
+        if (now - lastStatus < STATUS_MS) return
+        lastStatus = now
+        val rows = recordedRows
+        val text = buildString {
+            if (recorder != null) {
+                append(String.format(java.util.Locale.ROOT, "%,d", rows)).append(" rows · ")
+            }
+            append(rate).append("/s")
+            if (marks > 0) append(" · ").append(marks).append(" marks")
+            lastError?.let { append("\n").append(it) }
+        }
+        LiveService.status(store.context, text, recorder != null)
+    }
+
     var recordedRows by mutableIntStateOf(0)
         private set
 
@@ -455,8 +501,10 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                                         readings++
                                     }
                                 }
+                                writeMarks()
                                 recordedRows = recorder?.rows ?: 0
                                 recordingName = recorder?.name
+                                postStatus(now)
                                 recorder?.lastFailure?.let {
                                     if (it != toldFailure) {
                                         toldFailure = it
@@ -601,7 +649,10 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
     }
 
     private fun openRecorder(record: Boolean, label: String) {
+        marks = 0
+        pendingMarks.set(0)
         if (!record) return
+        LiveService.onMark = ::mark
         val compress = settings.compressRecordings
         recorder = try {
             Recorder({ store.create(label, compress) }, compress)
@@ -682,7 +733,9 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
 
                 val elapsed = (System.currentTimeMillis() - lapStart).coerceAtLeast(1)
                 rate = (readings * 1000L / elapsed).toInt()
+                writeMarks()
                 recordedRows = recorder?.rows ?: 0
+                postStatus(System.currentTimeMillis())
                 tick++
                 // Everything in the rotation went quiet: stop hammering the bus.
                 if (readings == 0 && targets.none(::alive)) break
@@ -701,6 +754,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
     }
 
     private fun closeRecorder() {
+        LiveService.onMark = null
         recorder?.close()
         recorder = null
     }
@@ -716,6 +770,13 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
 
     companion object {
         const val GIVE_UP_AFTER = 3
+
+        /** How a mark is written: a parameter of its own, so it charts as one. */
+        const val MARKER = "Marker"
+        const val MARKER_ID = "mark"
+
+        /** How often the notification is brought up to date. */
+        const val STATUS_MS = 2000L
 
         /**
          * How many PIDs travel in one mode 01 request.

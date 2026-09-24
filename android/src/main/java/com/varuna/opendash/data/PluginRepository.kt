@@ -109,7 +109,7 @@ class PluginRepository(context: Context) {
             // engine has without the engine being present.
             val optional = listOf(
                 "variants$suffix.tsv", "modules.tsv", "dtc.tsv",
-                "profiles.txt", "vehicles.txt",
+                "profiles.txt", "vehicles.txt", "actuators.tsv",
             )
 
             val fetched = fetchAll(source, brand, required + optional, onProgress)
@@ -134,6 +134,10 @@ class PluginRepository(context: Context) {
     /** The profiles an installed catalogue publishes, as raw text. */
     fun profilesOf(brand: String): String? =
         File(File(root, brand), "profiles.txt").takeIf { it.isFile }?.readText()
+
+    /** What a catalogue says its modules can be commanded to do. See Actuators. */
+    fun actuatorsOf(brand: String): String? =
+        File(File(root, brand), "actuators.tsv").takeIf { it.isFile }?.readText()
 
     /** The known vehicles an installed catalogue publishes, as raw text. */
     fun vehiclesOf(brand: String): String? =

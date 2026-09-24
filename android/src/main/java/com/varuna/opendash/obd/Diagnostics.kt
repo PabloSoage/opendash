@@ -83,6 +83,10 @@ class Diagnostics(private val sm3: Sm3Client) {
         // A flow-control frame is transport, not a service.
         if (service and 0xf0 == 0x30) return
         if (service == Actuation.SERVICE) {
+            // `AE 00` hands everything back and cannot drive anything, so it
+            // is never locked out: the way out of a held output must not
+            // depend on the lock that let it be held.
+            if (payload.contentEquals(Actuation.RETURN_ALL)) return
             require(Actuation.unlocked) {
                 "refusing to command: actuation is locked"
             }

@@ -108,7 +108,7 @@ class MainActivity : AppCompatActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    App(settings, store, plugins, monitor, ::unlock)
+                    App(settings, store, plugins, monitor, ::unlock, ::authenticate)
                 }
             }
         }
@@ -215,6 +215,59 @@ class MainActivity : AppCompatActivity() {
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
+    /**
+     * Ask for the owner, at one of two strengths.
+     *
+     * [credential] false is a fingerprint, for what can do no harm: quick, and
+     * the finger is already on the phone. True is the screen lock itself --
+     * pattern, PIN or password -- for anything that changes how the engine
+     * runs or what it remembers. A fingerprint can be given half-asleep or by a
+     * hand on the phone that is not paying attention; drawing a pattern cannot.
+     *
+     * The screen lock on its own is only offered by BiometricPrompt from
+     * Android 11. Below that the strongest thing it will ask for is the same
+     * mix as [unlock], which is what is used.
+     */
+    private fun authenticate(credential: Boolean, onResult: (Boolean) -> Unit) {
+        val allowed = when {
+            credential && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ->
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            credential -> BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            else -> BiometricManager.Authenticators.BIOMETRIC_WEAK
+        }
+        // No fingerprint enrolled: fall back to the screen lock, never to nothing.
+        if (!credential &&
+            BiometricManager.from(this).canAuthenticate(allowed) != BiometricManager.BIOMETRIC_SUCCESS
+        ) {
+            authenticate(true, onResult)
+            return
+        }
+        if (BiometricManager.from(this).canAuthenticate(allowed) != BiometricManager.BIOMETRIC_SUCCESS) {
+            onResult(false)
+            return
+        }
+        val prompt = BiometricPrompt(
+            this,
+            ContextCompat.getMainExecutor(this),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) =
+                    onResult(true)
+
+                override fun onAuthenticationError(code: Int, message: CharSequence) = onResult(false)
+            },
+        )
+        val info = BiometricPrompt.PromptInfo.Builder()
+            .setTitle(getString(R.string.act_title))
+            .setSubtitle(getString(if (credential) R.string.act_auth_credential else R.string.act_auth_finger))
+            .setAllowedAuthenticators(allowed)
+        // A prompt that allows only biometrics must offer a way out.
+        if (allowed == BiometricManager.Authenticators.BIOMETRIC_WEAK) {
+            info.setNegativeButtonText(getString(R.string.act_cancel))
+        }
+        prompt.authenticate(info.build())
+    }
+
     private fun unlock(onResult: (Boolean) -> Unit) {
         val allowed = BiometricManager.Authenticators.BIOMETRIC_WEAK or
             BiometricManager.Authenticators.DEVICE_CREDENTIAL
@@ -276,6 +329,7 @@ private fun App(
     plugins: PluginRepository,
     monitor: Monitor,
     unlock: ((Boolean) -> Unit) -> Unit,
+    authenticate: com.varuna.opendash.ui.Authenticate,
 ) {
     // Saved rather than merely remembered: changing the language recreates the
     // activity, and coming back on the tab you left is the difference between
@@ -388,7 +442,7 @@ private fun App(
                 detail == Detail.RECORDING -> recording?.let { RecordingScreen(it) }
                 detail == Detail.IDENTIFICATION -> IdentificationScreen()
                 tab == Tab.LINK -> LinkScreen(settings) { detailName = Detail.IDENTIFICATION.name }
-                tab == Tab.LIVE -> LiveScreen(monitor, plugins, settings)
+                tab == Tab.LIVE -> LiveScreen(monitor, plugins, settings, authenticate)
                 tab == Tab.HEALTH -> HealthScreen()
                 tab == Tab.FILES -> FilesScreen(store) { session, name ->
                     recording = session
