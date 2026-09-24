@@ -1,5 +1,6 @@
 package com.varuna.opendash.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -1065,8 +1066,8 @@ fun LiveScreen(
 /**
  * Two lines that are always there: where you are, and the one button.
  *
- * Never more than two lines, whatever the state. The screen underneath is the
- * work, and a header that grows is a header that eats it.
+ * Kept short whatever the state. The screen underneath is the work, and a
+ * header that grows is a header that eats it.
  */
 @Composable
 private fun LiveHeader(
@@ -1091,48 +1092,62 @@ private fun LiveHeader(
             .fillMaxWidth()
             .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 6.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    module.ifEmpty { stringResource(R.string.live_no_module) },
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                // The second line is whatever matters most right now: while a
-                // run is going that is the rate and which round is live, and
-                // before it starts it is what has been picked.
-                val detail = if (monitor.isRunning) {
-                    buildString {
-                        append(stringResource(R.string.live_rate, monitor.rate, monitor.frameRate))
-                        if (monitor.rounds > 1) {
-                            append(" · ")
-                            append(stringResource(R.string.live_round, monitor.round + 1, monitor.rounds))
-                        }
-                        monitor.recordingName?.let {
-                            append(" · ")
-                            append(stringResource(R.string.live_recording, monitor.recordedRows, it))
-                        }
-                        if (monitor.marks > 0) {
-                            append(" · ")
-                            append(stringResource(R.string.live_marks, monitor.marks))
-                        }
+        // Two rows, not one. On a phone held upright one row was the module's
+        // name squeezed between four icons and a button, and what got squeezed
+        // to nothing was the name -- the one thing that says which module the
+        // whole screen is about. Now it has the width to itself, and tapping
+        // it opens the setup where it is chosen.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = !monitor.isRunning, onClick = onSetup)
+                .padding(end = 8.dp),
+        ) {
+            Text(
+                module.ifEmpty { stringResource(R.string.live_no_module) },
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            // The second line is whatever matters most right now: while a
+            // run is going that is the rate and which round is live, and
+            // before it starts it is what has been picked.
+            val detail = if (monitor.isRunning) {
+                buildString {
+                    append(stringResource(R.string.live_rate, monitor.rate, monitor.frameRate))
+                    if (monitor.rounds > 1) {
+                        append(" · ")
+                        append(stringResource(R.string.live_round, monitor.round + 1, monitor.rounds))
                     }
-                } else if (hasRows) {
-                    (appliedPreset?.let { "$it · " } ?: "") +
-                        stringResource(R.string.live_selected, selectedCount, totalCount)
-                } else {
-                    stringResource(R.string.live_not_scanned)
+                    monitor.recordingName?.let {
+                        append(" · ")
+                        append(stringResource(R.string.live_recording, monitor.recordedRows, it))
+                    }
+                    if (monitor.marks > 0) {
+                        append(" · ")
+                        append(stringResource(R.string.live_marks, monitor.marks))
+                    }
                 }
-                Text(
-                    detail,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (monitor.isRunning) MaterialTheme.colorScheme.tertiary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            } else if (hasRows) {
+                (appliedPreset?.let { "$it · " } ?: "") +
+                    stringResource(R.string.live_selected, selectedCount, totalCount)
+            } else {
+                stringResource(R.string.live_not_scanned)
             }
+            Text(
+                detail,
+                style = MaterialTheme.typography.labelMedium,
+                color = if (monitor.isRunning) MaterialTheme.colorScheme.tertiary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End,
+        ) {
             IconButton(enabled = !monitor.isRunning, onClick = onSetup) {
                 Icon(
                     Icons.Filled.Settings,
@@ -1147,13 +1162,13 @@ private fun LiveHeader(
             }
             // Actuators live behind their own button, not among the options:
             // they are a different kind of thing, and each has its own gate.
-            if (!monitor.isRunning) {
-                IconButton(onClick = onActuators) {
-                    Icon(
-                        Icons.Filled.SettingsRemote,
-                        contentDescription = stringResource(R.string.act_title),
-                    )
-                }
+            // Offered while running too: that is how a command is watched
+            // landing.
+            IconButton(onClick = onActuators) {
+                Icon(
+                    Icons.Filled.SettingsRemote,
+                    contentDescription = stringResource(R.string.act_title),
+                )
             }
             // One tap to find this moment again in the file afterwards.
             if (monitor.isRunning && monitor.isRecording) {

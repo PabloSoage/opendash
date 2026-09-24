@@ -315,7 +315,6 @@
     <string name="live_marks">%1$d Markierungen</string>
     <string name="act_title">Aktoren</string>
     <string name="act_intro">Befehle an die Steuergeräte des Autos. Das Steuergerät gibt jeden davon nach etwa einer Minute von selbst frei, oder sofort mit Alles freigeben. Nichts davon ist für ein fahrendes Auto.</string>
-    <string name="act_live_running">Zuerst die Live-Ansicht stoppen. Beide teilen sich die Verbindung, und ein Befehl, dessen Antwort die Live-Ansicht liest, sieht wie ein fehlgeschlagener aus.</string>
     <string name="act_no_link">Zuerst mit dem Auto verbinden.</string>
     <string name="act_no_catalogue">Dieser Katalog enthält keine Aktoren. In Einstellungen, Kataloge aktualisieren.</string>
     <string name="act_release_all">Alles freigeben</string>
@@ -356,4 +355,6 @@
     <string name="act_auth_failed">Nicht bestätigt.</string>
     <string name="act_auth_finger">Dein Fingerabdruck, für einen harmlosen Ausgang</string>
     <string name="act_auth_credential">Deine Displaysperre, für etwas, das den Motor betrifft</string>
+    <string name="act_live_hint">Um einen Ausgang arbeiten zu sehen, in Live auswählen, was ihn zeigt (für die AGR: Luftmasse, Drehzahl, Kraftstoff), die Live-Ansicht starten und dann diesen Bildschirm öffnen. Das Bedienfeld zeichnet diese Werte.</string>
+    <string name="act_live_none">Die Live-Ansicht ist gestoppt, hier wird nichts gezeichnet. In Live starten, um den Befehl wirken zu sehen.</string>
 </resources>

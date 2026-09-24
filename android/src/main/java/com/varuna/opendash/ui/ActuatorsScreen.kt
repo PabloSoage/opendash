@@ -106,8 +106,11 @@ private fun Risk.waitSeconds(): Int = when (this) {
  *  - do not touch: a sentence typed, thirty seconds, and the screen lock again
  *    before every single command.
  *
- * Only with the live view stopped: the two share one link, and a command
- * whose answer the live view reads looks like a command that failed.
+ * With the live view running or not. Running is the better way: pick what
+ * shows the output working -- air flow, engine speed and fuel for the EGR --
+ * start the live view, and the panel shows those values moving as the command
+ * lands. The two share one socket, and Diagnostics hands each thread the
+ * frames that are its own.
  */
 @Composable
 fun ActuatorsScreen(
@@ -120,7 +123,7 @@ fun ActuatorsScreen(
     var controlling by remember { mutableStateOf<Actuators.Actuator?>(null) }
     var releaseNote by remember { mutableStateOf<Int?>(null) }
     val linked = Session.state == Session.State.CHANNEL_OPEN
-    val usable = linked && !monitor.isRunning
+    val usable = linked
 
     Dialog(
         onDismissRequest = onClose,
@@ -147,10 +150,8 @@ fun ActuatorsScreen(
                 ) {
                     item {
                         Hint(stringResource(R.string.act_intro))
-                        when {
-                            !linked -> ErrorLine(stringResource(R.string.act_no_link))
-                            monitor.isRunning -> ErrorLine(stringResource(R.string.act_live_running))
-                        }
+                        if (!linked) ErrorLine(stringResource(R.string.act_no_link))
+                        Hint(stringResource(R.string.act_live_hint))
                         // Always offered, never locked: AE 00 drives nothing.
                         OutlinedButton(
                             enabled = linked,
@@ -192,7 +193,7 @@ fun ActuatorsScreen(
         )
     }
     controlling?.let { a ->
-        ControlPanel(a, authenticate, onClose = { controlling = null })
+        ControlPanel(a, monitor, authenticate, onClose = { controlling = null })
     }
 }
 
@@ -426,7 +427,12 @@ private fun Tick(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
  * permission never outlives the panel it was given for.
  */
 @Composable
-private fun ControlPanel(a: Actuators.Actuator, authenticate: Authenticate, onClose: () -> Unit) {
+private fun ControlPanel(
+    a: Actuators.Actuator,
+    monitor: Monitor,
+    authenticate: Authenticate,
+    onClose: () -> Unit,
+) {
     val range = a.range
     var value by remember { mutableFloatStateOf((range?.min ?: 0.0).toFloat()) }
     var note by remember { mutableStateOf<String?>(null) }
@@ -498,7 +504,7 @@ private fun ControlPanel(a: Actuators.Actuator, authenticate: Authenticate, onCl
         onDismissRequest = {},
         title = { Text(a.name) },
         text = {
-            Column {
+            Column(Modifier.heightIn(max = 600.dp).verticalScroll(rememberScrollState())) {
                 Text(stringResource(a.risk.title()), color = a.risk.colour(), style = MaterialTheme.typography.labelLarge)
                 if (range != null) {
                     Text(
@@ -541,8 +547,35 @@ private fun ControlPanel(a: Actuators.Actuator, authenticate: Authenticate, onCl
                         },
                     ) { Text(stringResource(R.string.act_release)) }
                 }
+                LiveValues(monitor)
             }
         },
         confirmButton = { TextButton(onClick = onClose) { Text(stringResource(R.string.action_close)) } },
     )
 }
+
+/**
+ * What the live view is reading, beside the command that should move it.
+ *
+ * Charted, not only listed: a valve opening is a step in a line, and a step is
+ * something a person across the bonnet can see without being told where to
+ * look. Whatever was selected in Live, in its name order, up to eight.
+ */
+@Composable
+private fun LiveValues(monitor: Monitor) {
+    if (!monitor.isRunning) {
+        Hint(stringResource(R.string.act_live_none))
+        return
+    }
+    val tick = monitor.tick
+    val keys = monitor.series.keys.sortedBy { nameOf(it) }.take(8)
+    for (key in keys) {
+        val series = monitor.series[key] ?: continue
+        ParameterChart(nameOf(key), unitOf(key), series, tick)
+    }
+}
+
+/** A row key is `cat:name|pid|bytes|formula|unit`; the name is the first field. */
+private fun nameOf(key: String): String = key.removePrefix("cat:").substringBefore('|')
+
+private fun unitOf(key: String): String = key.substringAfterLast('|', "")

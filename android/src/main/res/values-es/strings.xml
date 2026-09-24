@@ -315,7 +315,6 @@
     <string name="live_marks">%1$d marcas</string>
     <string name="act_title">Actuadores</string>
     <string name="act_intro">Órdenes a los módulos del coche. El módulo las suelta solo al cabo de un minuto, o al momento con Soltar todo. Nada de esto es para un coche en marcha.</string>
-    <string name="act_live_running">Para primero la vista en directo. Las dos comparten el enlace, y una orden cuya respuesta se lleva la vista en directo parece una orden que falló.</string>
     <string name="act_no_link">Conecta primero con el coche.</string>
     <string name="act_no_catalogue">Este catálogo no trae actuadores. Actualízalo en Ajustes, Catálogos.</string>
     <string name="act_release_all">Soltar todo</string>
@@ -356,4 +355,6 @@
     <string name="act_auth_failed">No confirmado.</string>
     <string name="act_auth_finger">Tu huella, para accionar algo inocuo</string>
     <string name="act_auth_credential">Tu bloqueo de pantalla, para accionar algo que afecta al motor</string>
+    <string name="act_live_hint">Para ver una salida funcionando, selecciona en Live lo que la muestra (para la EGR: caudal de aire, régimen, gasoil), arranca la vista en directo y abre esta pantalla. El panel de mando grafica esos valores.</string>
+    <string name="act_live_none">La vista en directo está parada, así que aquí no se grafica nada. Arráncala en Live para ver la orden hacer efecto.</string>
 </resources>

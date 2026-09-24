@@ -325,7 +325,6 @@
     <string name="live_marks">%1$d marks</string>
     <string name="act_title">Actuators</string>
     <string name="act_intro">Commands sent to the car\'s modules. The module lets go of every one of them by itself after about a minute, or at once with Release everything. Nothing here is for a moving car.</string>
-    <string name="act_live_running">Stop the live view first. The two share one link, and a command whose answer the live view reads looks like a command that failed.</string>
     <string name="act_no_link">Connect to the car first.</string>
     <string name="act_no_catalogue">This catalogue lists no actuators. Update it from Settings, Catalogues.</string>
     <string name="act_release_all">Release everything</string>
@@ -366,4 +365,6 @@
     <string name="act_auth_failed">Not confirmed.</string>
     <string name="act_auth_finger">Your fingerprint, to command a harmless output</string>
     <string name="act_auth_credential">Your screen lock, to command something that affects the engine</string>
+    <string name="act_live_hint">To see an output working, select what shows it in Live (for the EGR: air flow, engine speed, fuel), start the live view, then open this screen. The command panel charts those values.</string>
+    <string name="act_live_none">The live view is stopped, so nothing is charted here. Start it in Live to watch the command land.</string>
 </resources>

@@ -217,6 +217,23 @@ class Diagnostics(private val sm3: Sm3Client) {
         for (i in from until frames.size) spill(frames[i])
     }
 
+    /**
+     * The other direction: answers the stream reader read past while a request
+     * on another thread was waiting for them.
+     *
+     * Commanding an actuator while the live view streams is two threads on
+     * one socket, and each drains what arrives. Without this the reader
+     * would swallow the module's `EE` and the command would be reported as
+     * unanswered although the valve had moved -- which is the one mistake an
+     * actuator screen must not make.
+     */
+    private val replies = java.util.concurrent.ConcurrentLinkedQueue<Sm3Client.CanFrame>()
+
+    @Volatile private var waiting = false
+
+    /** One request at a time, whichever thread it comes from. */
+    private val asking = java.util.concurrent.locks.ReentrantLock()
+
     fun request(
         txId: Int,
         payload: ByteArray,
@@ -224,6 +241,18 @@ class Diagnostics(private val sm3: Sm3Client) {
         rxId: Int = responseIdFor(txId),
     ): ByteArray? {
         refuseIfNotRead(payload)
+        asking.lock()
+        try {
+            replies.clear()
+            waiting = true
+            return exchange(txId, payload, timeoutMs, rxId)
+        } finally {
+            waiting = false
+            asking.unlock()
+        }
+    }
+
+    private fun exchange(txId: Int, payload: ByteArray, timeoutMs: Long, rxId: Int): ByteArray? {
         isotp.reset()
         spill(sm3.drain())
         if (payload.size <= SINGLE_FRAME_BYTES) {
@@ -258,7 +287,9 @@ class Diagnostics(private val sm3: Sm3Client) {
                 sm3.poll()
                 nextPoll = System.currentTimeMillis() + POLL_EVERY_MS
             }
-            val frames = sm3.drain()
+            val frames = ArrayList<Sm3Client.CanFrame>()
+            while (true) frames.add(replies.poll() ?: break)
+            frames.addAll(sm3.drain())
             for ((index, frame) in frames.withIndex()) {
                 if (!accepts(frame.id)) {
                     spill(frame)
@@ -626,6 +657,10 @@ class Diagnostics(private val sm3: Sm3Client) {
         val out = ArrayList<Pair<Catalogue.Parameter, Double>>()
         var frames = 0
         fun take(frame: Sm3Client.CanFrame) {
+            if (waiting && isDiagnosticReply(frame.id)) {
+                if (replies.size < REPLIES_KEPT) replies.add(frame)
+                return
+            }
             if (rxId != ANY && frame.id != rxId) return
             frames++
             out.addAll(Stream.decode(plan, frame.data))
@@ -775,6 +810,9 @@ class Diagnostics(private val sm3: Sm3Client) {
          * emitting with nobody reading can take.
          */
         private const val EMITTED_KEPT = 20_000
+
+        /** Answers held for a waiting request; an answer is a handful of frames. */
+        private const val REPLIES_KEPT = 256
 
         /** Where any module's emitted packets arrive. See [streamIdFor]. */
         fun isEmitted(id: Int): Boolean = id == 0x5E8 || id in 0x540..0x55F
