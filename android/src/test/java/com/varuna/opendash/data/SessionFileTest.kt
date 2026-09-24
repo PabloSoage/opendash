@@ -222,4 +222,25 @@ class SessionFileTest {
         }
         assertEquals(channels * each, session.samples)
     }
+
+    @Test
+    fun `a recording too long to hold whole is thinned and keeps its spike`() {
+        // Four times the cap on one channel, flat except for one reading. A
+        // stride would step over it three times in four; keeping the extreme
+        // must not.
+        val n = SessionFile.MAX_PER_CHANNEL * 4
+        val spikeAt = n / 2 + 3
+        val rows = StringBuilder("ms,parameter,identifier,unit,value\n")
+        for (t in 0 until n) {
+            rows.append(t).append(",\"Boost\",0x2002,kPa,").append(if (t == spikeAt) 263 else 100).append('\n')
+        }
+        val session = SessionFile.read(java.io.ByteArrayInputStream(gzipped(rows.toString())))
+        val boost = session.channels.single()
+        assertTrue("thinned to the cap", boost.size <= SessionFile.MAX_PER_CHANNEL)
+        assertTrue("still most of the cap", boost.size >= SessionFile.MAX_PER_CHANNEL / 2)
+        assertEquals("the spike survives", 263.0, boost.values.max(), 0.0)
+        assertEquals("the count is the file's, not what was kept", n.toLong(), session.readings)
+        assertTrue("times stay in order", boost.times.toList() == boost.times.sorted())
+        assertTrue("the end of the file is still there", boost.times.last() >= n - 8)
+    }
 }

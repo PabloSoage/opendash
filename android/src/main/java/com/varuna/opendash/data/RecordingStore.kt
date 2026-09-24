@@ -79,6 +79,10 @@ class RecordingStore(val context: Context, private val settings: Settings) {
             .sortedByDescending { it.modified }
     }
 
+    /** A stream, for anything that can be read without holding it whole. */
+    fun open(uri: Uri): java.io.InputStream =
+        requireNotNull(context.contentResolver.openInputStream(uri)) { "the file could not be opened" }
+
     fun read(uri: Uri): ByteArray =
         context.contentResolver.openInputStream(uri).use { stream ->
             requireNotNull(stream) { "the file could not be opened" }.readBytes()

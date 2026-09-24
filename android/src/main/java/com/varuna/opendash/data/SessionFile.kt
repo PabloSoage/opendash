@@ -89,9 +89,32 @@ object SessionFile {
          * order. See [Sm2Reader.Recording.cells].
          */
         val cells: List<String> = emptyList(),
+        /** Readings in the file, which is more than [samples] when it was thinned. */
+        readings: Long = -1,
     ) {
         val durationMs: Int = channels.maxOfOrNull { it.times.lastOrNull() ?: 0 } ?: 0
         val samples: Int = channels.sumOf { it.size }
+        val readings: Long = if (readings >= 0) readings else samples.toLong()
+    }
+
+    /**
+     * The same, from a stream, which is how a file on the phone should be
+     * read: a two-hour recording is 78 MB compressed, and reading it whole into
+     * a byte array first was 78 MB spent before the first row.
+     */
+    fun read(input: java.io.InputStream, modified: Long = System.currentTimeMillis()): Session {
+        val buffered = java.io.BufferedInputStream(input, 1 shl 16)
+        buffered.mark(8)
+        val head = ByteArray(4)
+        val got = buffered.read(head)
+        buffered.reset()
+        if (got == 4 && String(head, Charsets.US_ASCII) == "SMFS") return sm2(buffered.readBytes())
+        val stream = if (got >= 2 && head[0] == 0x1f.toByte() && head[1] == 0x8b.toByte()) {
+            GZIPInputStream(buffered, 1 shl 16)
+        } else {
+            buffered
+        }
+        return stream.use { csv(it, modified) }
     }
 
     /** The signature decides, not the extension: a renamed file still opens. */
@@ -196,9 +219,9 @@ object SessionFile {
 
         val names = ArrayList<String>()
         val units = ArrayList<String>()
-        val times = ArrayList<Ints>()
-        val values = ArrayList<Doubles>()
+        val kept = ArrayList<Thinned>()
         val channels = Channels()
+        var readings = 0L
 
         while (lines.next()) {
             if (lines.to <= lines.from) continue
@@ -225,19 +248,19 @@ object SessionFile {
                 val name = String(buf, fields.from(nameAt), fields.length(nameAt), Charsets.UTF_8)
                 names.add(if (hasId) name + "  " + String(buf, fields.from(idAt), fields.length(idAt), Charsets.UTF_8) else name)
                 units.add(String(buf, fields.from(unitAt), fields.length(unitAt), Charsets.UTF_8))
-                times.add(Ints())
-                values.add(Doubles())
+                kept.add(Thinned(MAX_PER_CHANNEL))
                 channels.keep()
             }
-            times[i].add(ms)
-            values[i].add(value)
+            kept[i].add(ms, value)
+            readings++
         }
         require(names.isNotEmpty()) { "no readings in this file" }
 
         return Session(
             modified,
-            names.mapIndexed { i, name -> Channel(name, units[i], times[i].trimmed(), values[i].trimmed()) },
+            names.mapIndexed { i, name -> Channel(name, units[i], kept[i].times(), kept[i].values()) },
             null,
+            readings = readings,
         )
     }
 
@@ -469,23 +492,84 @@ object SessionFile {
      * readings, so the doubling that growth costs is half a megabyte at a time
      * and not half the file.
      */
-    private class Ints {
-        private var a = IntArray(256)
+    /**
+     * A channel's readings, thinned as they arrive so a channel never holds
+     * more than [cap] of them.
+     *
+     * A recording used to be kept whole, and that stopped working at two
+     * hours: 20 million readings across 33 channels, 12 bytes each and twice
+     * that while an array doubles, which is past what Android gives an app and
+     * from the outside is the app closing when a file is pressed. A chart on a
+     * phone is a few hundred pixels wide; 50 000 points per channel is more
+     * than a hundred per pixel at any zoom that fits the screen.
+     *
+     * Thinned by keeping the extreme, not by striding. Every [stride] readings
+     * collapse into one: the reading furthest from the last one kept. Striding
+     * would keep whichever reading fell on the stride and throw away a spike
+     * between two of them, and a spike -- a boost peak, a rail dip, the limiter
+     * -- is usually why the file is being opened. When the cap is reached, the
+     * kept readings are paired and each pair collapses the same way, and the
+     * stride doubles. Nothing here reads the file twice.
+     */
+    private class Thinned(private val cap: Int) {
+        private var t = IntArray(256)
+        private var v = DoubleArray(256)
         private var n = 0
-        fun add(v: Int) {
-            if (n == a.size) a = a.copyOf(a.size * 2)
-            a[n++] = v
+        private var stride = 1
+        private var inWindow = 0
+        private var candT = 0
+        private var candV = 0.0
+        private var candDev = -1.0
+
+        fun add(ms: Int, value: Double) {
+            val ref = if (n > 0) v[n - 1] else value
+            val dev = Math.abs(value - ref)
+            if (dev > candDev) { candT = ms; candV = value; candDev = dev }
+            if (++inWindow < stride) return
+            push(candT, candV)
+            inWindow = 0
+            candDev = -1.0
         }
-        fun trimmed(): IntArray = a.copyOf(n)
+
+        private fun push(ms: Int, value: Double) {
+            if (n == cap) compact()
+            if (n == t.size) {
+                val size = minOf(t.size * 2, cap)
+                t = t.copyOf(size)
+                v = v.copyOf(size)
+            }
+            t[n] = ms
+            v[n] = value
+            n++
+        }
+
+        private fun compact() {
+            var w = 0
+            var i = 0
+            while (i < n) {
+                val ref = if (w > 0) v[w - 1] else v[i]
+                val j = if (i + 1 < n && Math.abs(v[i + 1] - ref) > Math.abs(v[i] - ref)) i + 1 else i
+                t[w] = t[j]
+                v[w] = v[j]
+                w++
+                i += 2
+            }
+            n = w
+            stride *= 2
+        }
+
+        private fun flush() {
+            if (inWindow > 0 && candDev >= 0) {
+                push(candT, candV)
+                inWindow = 0
+                candDev = -1.0
+            }
+        }
+
+        fun times(): IntArray { flush(); return t.copyOf(n) }
+        fun values(): DoubleArray { flush(); return v.copyOf(n) }
     }
 
-    private class Doubles {
-        private var a = DoubleArray(256)
-        private var n = 0
-        fun add(v: Double) {
-            if (n == a.size) a = a.copyOf(a.size * 2)
-            a[n++] = v
-        }
-        fun trimmed(): DoubleArray = a.copyOf(n)
-    }
+    /** See [Thinned]. */
+    const val MAX_PER_CHANNEL = 50_000
 }

@@ -189,7 +189,7 @@ fun RecordingScreen(session: SessionFile.Session) {
             stringResource(
                 R.string.viewer_summary,
                 session.channels.size,
-                session.samples,
+                session.readings,
                 clock(duration),
             ),
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),

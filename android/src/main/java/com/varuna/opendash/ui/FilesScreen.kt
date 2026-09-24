@@ -61,10 +61,14 @@ fun FilesScreen(store: RecordingStore, onOpen: (SessionFile.Session, String) -> 
         error = null
         thread {
             try {
-                val session = SessionFile.read(store.read(uri))
+                val session = store.open(uri).use { SessionFile.read(it) }
                 onOpen(session, name)
             } catch (e: Exception) {
                 error = e.message ?: e.javaClass.simpleName
+            } catch (e: OutOfMemoryError) {
+                // Said, not crashed on. Thinning should make this unreachable;
+                // if it is reached anyway, the screen is the place to say so.
+                error = "not enough memory to open this file"
             }
             busy = false
         }
