@@ -463,8 +463,10 @@ What is left:
 every command a scan tool sends first, answered correctly. ScanMyOpel CAN has
 been run against a desk copy of this session over an emulated engine module:
 before the raw mode it hung up on `ATBI` every time; after it, it identified the
-module, read its identification and listed its stored codes. The same against
-the app on a phone and the car is still to do.
+module, read its identification and listed its stored codes. With 0.4.2 on a
+phone, the same app through the app's own bridge and an emulated SM3 over Wi-Fi
+recognised the car (model, engine, VIN) and listed six stored codes, the
+historical one included. Against the car itself it is still to do.
 
 **One implementation, two languages.** Everything in `core` is exercised against
 real captures; `bridge/ElmSession.kt` is exercised against a recorded ScanMyOpel
