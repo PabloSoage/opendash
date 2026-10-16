@@ -10,6 +10,11 @@ import com.varuna.opendash.obd.Diagnostics
  * onto the session, which handles the segmentation. Requests are serialised
  * because there is one socket and one bus, and two overlapping requests would
  * interleave their replies.
+ *
+ * Both paths go through [Diagnostics], and so through its list of services it
+ * will send: a phone app on the bridge can read what this app can read and
+ * nothing more. A device command (`AE`) passes only while actuation is unlocked
+ * here, exactly as it does for this app's own screens.
  */
 class Sm3Bridge : Bridge {
 
@@ -28,6 +33,21 @@ class Sm3Bridge : Bridge {
             // match would throw away an answer labelled with the wrong id.
             val id = Diagnostics.responseIdFor(header)
             return (if (id == Diagnostics.ANY) 0x7E8 else id) to answer
+        }
+    }
+
+    override fun raw(
+        header: Int,
+        frame: ByteArray,
+        accepts: (Int) -> Boolean,
+        flowControl: (Int) -> Pair<Int, ByteArray>?,
+        silenceMs: Long,
+        timeoutMs: Long,
+    ): List<Pair<Int, ByteArray>> {
+        if (Session.state != Session.State.CHANNEL_OPEN) return emptyList()
+        synchronized(lock) {
+            return Session.diagnostics.raw(header, frame, accepts, flowControl, silenceMs, timeoutMs)
+                .map { it.id to it.data }
         }
     }
 }

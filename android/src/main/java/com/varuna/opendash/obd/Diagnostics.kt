@@ -63,9 +63,16 @@ class Diagnostics(private val sm3: Sm3Client) {
      * opens a live data screen — the captured session has seven of them — and
      * without it there is no way to read more than a handful of parameters a
      * second, which is not enough to watch a rail pressure while driving.
+     *
+     * 0xA9 and 0x20 came with the ELM327 bridge, from what ScanMyOpel CAN sends
+     * to find and read the modules. 0xA9 is GMLAN ReadDiagnosticInformation:
+     * the module's stored codes by status, a read. 0x20 is ReturnToNormalMode:
+     * it ends diagnostic mode, which also drops any emitted packet and any
+     * device held by `AE`. It writes nothing and moves nothing; the most it can
+     * do is stop this app's own live stream if both run at once.
      */
     private val readServices =
-        setOf(0x01, 0x02, 0x03, 0x06, 0x07, 0x09, 0x19, 0x1A, 0x22, 0x2C, 0xAA, 0x3E)
+        setOf(0x01, 0x02, 0x03, 0x06, 0x07, 0x09, 0x19, 0x1A, 0x22, 0x2C, 0xAA, 0x3E, 0xA9, 0x20)
 
     /**
      * The one service that may be added to [readServices], and only while the
@@ -324,6 +331,89 @@ class Diagnostics(private val sm3: Sm3Client) {
             }
         }
         return null
+    }
+
+    /**
+     * One whole frame out, every accepted frame back: the ELM327 bridge's
+     * `AT CAF0`, where the client does its own ISO-TP.
+     *
+     * ScanMyOpel CAN reads stored codes this way: `03 A9 81 12` to 0x7E0, and
+     * the codes arrive one per frame on 0x5E8, not in an answer on 0x7E8 —
+     * which is why a request/answer exchange can never show them. Measured
+     * against the emulated engine on 16 October: eight frames on 0x5E8 and an
+     * end marker.
+     *
+     * The service inside the frame is checked like any other request. Only
+     * single frames and flow control are carried: a client that segments its
+     * own request would get its service past [refuseIfNotRead] one frame at a
+     * time, so that is refused rather than reassembled here.
+     *
+     * Frames that are not accepted go where [exchange] puts them. An emitted
+     * frame a client asked for (0x5E8) is taken here and does not reach a live
+     * stream running at the same moment.
+     */
+    fun raw(
+        txId: Int,
+        frame: ByteArray,
+        accepts: (Int) -> Boolean,
+        flowControl: (Int) -> Pair<Int, ByteArray>?,
+        silenceMs: Long,
+        timeoutMs: Long,
+    ): List<Sm3Client.CanFrame> {
+        refuseRawIfNotRead(frame)
+        asking.lock()
+        try {
+            replies.clear()
+            waiting = true
+            spill(sm3.drain())
+            // Padded: the modules on this car send and expect full frames.
+            sm3.sendFrame(txId, frame.copyOf(8))
+            val out = ArrayList<Sm3Client.CanFrame>()
+            val start = System.currentTimeMillis()
+            val deadline = start + timeoutMs
+            var last = start
+            var nextPoll = start + POLL_EVERY_MS
+            while (true) {
+                val now = System.currentTimeMillis()
+                if (now >= deadline) break
+                if (out.isNotEmpty() && now - last >= silenceMs) break
+                sm3.receive(minOf(SLICE_MS, deadline - now))
+                if (System.currentTimeMillis() >= nextPoll) {
+                    sm3.poll()
+                    nextPoll = System.currentTimeMillis() + POLL_EVERY_MS
+                }
+                val frames = ArrayList<Sm3Client.CanFrame>()
+                while (true) frames.add(replies.poll() ?: break)
+                frames.addAll(sm3.drain())
+                for (f in frames) {
+                    if (!accepts(f.id)) {
+                        spill(f)
+                        continue
+                    }
+                    out.add(f)
+                    last = System.currentTimeMillis()
+                    val pci = (f.data.getOrNull(0)?.toInt() ?: 0) and 0xf0
+                    if (pci == 0x10) {
+                        flowControl(f.id)?.let { (id, data) -> sm3.sendFrame(id, data.copyOf(8)) }
+                    }
+                }
+            }
+            return out
+        } finally {
+            waiting = false
+            asking.unlock()
+        }
+    }
+
+    private fun refuseRawIfNotRead(frame: ByteArray) {
+        val pci = frame.firstOrNull()?.toInt()?.and(0xff) ?: return
+        when (pci shr 4) {
+            0 -> refuseIfNotRead(frame.copyOfRange(1, minOf(frame.size, 1 + (pci and 0x0f))))
+            3 -> return   // flow control is transport
+            else -> throw IllegalArgumentException(
+                "refusing a segmented raw request: its service could not be checked",
+            )
+        }
     }
 
     /** Mode 01. Returns the data after the echoed mode and pid. */

@@ -86,10 +86,11 @@ It never writes to a module. See [Only reading](#only-reading).
   vehicle database. The condition language and the database format are both
   understood; what is not settled is which identifier each attribute check
   requests, so for now the variant is a dropdown.
-- **Share one implementation.** `bridge/ElmSession.kt` mirrors
-  `core/src/elm327.rs` in Kotlin so the socket could be exercised before a JNI
-  bridge exists. Two implementations of one command set will drift. The Rust one
-  has the tests; the Kotlin one is scaffolding with an expiry date.
+- **Share one implementation.** `bridge/ElmSession.kt` began as a Kotlin mirror
+  of `core/src/elm327.rs` so the socket could be exercised before a JNI bridge
+  exists, and is now ahead of it: raw mode (`ATCAF0`), receive filters, flow
+  control and the headers-off format exist only in Kotlin, with their tests. The
+  core has to catch up before it replaces the Kotlin.
 
 ---
 
@@ -179,12 +180,18 @@ The app cannot write to a module, and that is enforced rather than intended:
 
 ```kotlin
 private val readServices = setOf(0x01, 0x02, 0x03, 0x06, 0x07, 0x09,
-                                 0x19, 0x1A, 0x22, 0xAA, 0x3E)
+                                 0x19, 0x1A, 0x22, 0x2C, 0xAA, 0x3E, 0xA9, 0x20)
 ```
 
 `0x2E` WriteDataByIdentifier, `0x2F` InputOutputControl, `0x31` RoutineControl,
 `0x14` ClearDiagnosticInformation and `0x27` SecurityAccess are absent. A request
-carrying one throws before it reaches the socket.
+carrying one throws before it reaches the socket. `0xA9` (stored codes by status)
+and `0x20` (return to normal mode) came with the ELM327 bridge: the first is a
+read, the second ends diagnostic mode and writes nothing.
+
+The ELM327 bridge goes through the same list, in both of its modes, so another
+app on the phone can read what this one reads and no more. A device command from
+it passes only while actuation is unlocked here.
 
 This matters more than it sounds. A catalogue extracted from the factory tool
 lists 2517 parameters with "Command" in the name, 879 with "Test" and 782 with
@@ -453,13 +460,16 @@ a limit**, and this repository has now paid for that lesson twice.
 What is left:
 
 **The bridge, from the phone.** Its protocol half is proven against the car —
-every command a scan tool sends first, answered correctly. That the foreground
-service starts and an outside app reaches the socket is not. The Test button on
-the Link screen exists for exactly this question.
+every command a scan tool sends first, answered correctly. ScanMyOpel CAN has
+been run against a desk copy of this session over an emulated engine module:
+before the raw mode it hung up on `ATBI` every time; after it, it identified the
+module, read its identification and listed its stored codes. The same against
+the app on a phone and the car is still to do.
 
 **One implementation, two languages.** Everything in `core` is exercised against
-real captures; `bridge/ElmSession.kt` mirrors it in Kotlin and is not. Two
-implementations of one command set will drift.
+real captures; `bridge/ElmSession.kt` is exercised against a recorded ScanMyOpel
+CAN session, and has gone further than `core`. Two implementations of one
+command set drift, and these already have.
 
 **Which identifier resolves a module's configuration.** The factory tool's
 attribute checks compare against two-byte values; the catalogue has a parameter
