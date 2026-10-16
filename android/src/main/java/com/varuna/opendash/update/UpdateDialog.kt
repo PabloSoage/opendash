@@ -43,19 +43,28 @@ fun UpdateDialog(update: Releases.Update, onDismiss: () -> Unit) {
     val running = state is Download.Running
 
     fun install(file: File) {
-        // Without "install unknown apps" every installer refuses. The file
-        // stays in the cache, so the next tap after granting it installs.
-        if (!AppUpdate.canInstall(context)) {
-            state = Download.Ready(file)
-            AppUpdate.requestInstallPermission(context)
-            return
-        }
+        // The installers come first, the permission second, as in Rustify.
+        // "Install unknown apps" is what the system installer needs from this
+        // app; a Shizuku-based installer such as Install With Options installs
+        // on its own authority and does not. On a phone where that permission
+        // is locked by a security setting, asking for it first was a dead end:
+        // the settings screen refused, and the installer that would have
+        // worked was never offered.
         val installers = AppUpdate.installers(context, file)
-        if (installers.size >= 2) {
-            state = Download.Choose(file, installers)
-        } else {
-            state = Download.Ready(file)
-            AppUpdate.install(context, file)
+        val allowed = AppUpdate.canInstall(context)
+        when {
+            installers.size >= 2 || (installers.isNotEmpty() && !allowed) ->
+                state = Download.Choose(file, installers)
+            allowed -> {
+                state = Download.Ready(file)
+                AppUpdate.install(context, file)
+            }
+            else -> {
+                // Nothing to choose from and no permission: the file stays in
+                // the cache, so the next tap after granting it installs.
+                state = Download.Ready(file)
+                AppUpdate.requestInstallPermission(context)
+            }
         }
     }
 
