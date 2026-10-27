@@ -26,8 +26,8 @@ android {
         applicationId = "com.varuna.opendash"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.4.2"
+        versionCode = 7
+        versionName = "0.4.3"
         // Three languages from the start. Adding one later means auditing every
         // string, and it never gets done.
         androidResources.localeFilters += setOf("en", "es", "de")
