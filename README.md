@@ -316,9 +316,22 @@ Standard OBD-II PIDs are public — SAE J1979 — and ship with the app, so it w
 on any car with nothing installed.
 
 Richer catalogues are per-brand plugins: parameter names, scaling formulas,
-units, ranges, module layouts and fault-code ownership, generated from a GDS2
-installation. They are **not** distributed here; the data belongs to GM. If you
-have the software you can generate your own.
+units, ranges, module layouts and fault-code ownership, generated locally from
+the manufacturers' own diagnostic software:
+
+| Source | Catalogues |
+|---|---|
+| GM GDS2 | Opel/Vauxhall, GM global, GM China, Saab, VinFast — with output controls and the instruction screens |
+| PSA Diagbox, both engines (LEXIA and AW) | Peugeot, Citroën and the vans PSA diagnoses |
+| Mitsubishi MUT-III SE | Mitsubishi |
+| Scanmatik's Hyundai and Kia plugins | Hyundai, Kia |
+
+They are **not** distributed here; the data belongs to each manufacturer. If you
+have the software you can generate your own. Only the GDS2 catalogues have been
+used against a car — an Astra J, below. The others load and read like any
+catalogue, but no car of those makes has been connected yet. The Hyundai and
+Kia ones hold few parameters in this format, because most of their identifiers
+pack several values into one answer.
 
 Installs are per brand and not per model, because that is the shape of the
 source data. GDS2 organises by module configuration, not by car: the 221
@@ -341,7 +354,7 @@ table either, it asks the car and matches at run time. So the picker shows every
 variant with its parameter count and you choose once.
 
 A source publishes a `brands.txt` index — tab-separated: name, parameter count,
-languages — and the app lists what is in it beside what is already on disk, one
+languages, revision — and the app lists what is in it beside what is already on disk, one
 row each, with an arrow to fetch and a bin to remove. A source that publishes no
 index still works; you just have to know the directory name and type it.
 
