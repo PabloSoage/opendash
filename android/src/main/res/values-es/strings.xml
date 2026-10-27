@@ -30,6 +30,10 @@
     <string name="link_voltage">Batería</string>
     <string name="link_host">Dirección</string>
     <string name="link_port">Puerto</string>
+    <string name="link_host_auto">Dirección por el DHCP de la interfaz</string>
+    <string name="link_host_found">Encontrada</string>
+    <string name="link_host_fallback">Dirección de respaldo</string>
+    <string name="link_host_auto_hint">Activado, la app pregunta a la Wi-Fi de la interfaz por su servidor DHCP y se conecta ahí, así que la sigue encontrando aunque una actualización de firmware la cambie de dirección. La dirección de abajo solo se usa si no hay ninguno. Desactívalo para usar siempre la dirección de abajo, como con un emulador o un puente en otro equipo.</string>
     <string name="link_resync">Resincronizado</string>
     <string name="link_unpaired">Respuestas sueltas</string>
     <string name="link_psk">Contraseña Wi-Fi</string>

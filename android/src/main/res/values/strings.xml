@@ -33,6 +33,10 @@
     <string name="link_voltage">Battery</string>
     <string name="link_host">Address</string>
     <string name="link_port">Port</string>
+    <string name="link_host_auto">Address from the adapter\'s DHCP</string>
+    <string name="link_host_found">Found</string>
+    <string name="link_host_fallback">Fallback address</string>
+    <string name="link_host_auto_hint">On, the app asks the adapter\'s Wi-Fi for its DHCP server and connects there, so it still finds the adapter if a firmware update moves it to another address. The address below is used only when there is none. Turn it off to always use the address below, as for an emulator or a bridge on another machine.</string>
     <string name="link_resync">Resynchronised</string>
     <string name="link_unpaired">Unpaired answers</string>
     <string name="link_psk">Wi-Fi password</string>

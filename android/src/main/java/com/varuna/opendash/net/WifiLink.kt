@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
+import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
@@ -15,6 +16,7 @@ import androidx.annotation.RequiresApi
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import java.net.Inet4Address
 import java.net.Socket
 
 /**
@@ -232,6 +234,59 @@ object WifiLink {
     } catch (_: Exception) {
         false
     }
+
+    /** The address [adapterAddress] last found, empty until it has found one. */
+    var discovered by mutableStateOf("")
+        private set
+
+    /**
+     * The adapter's address as its own network hands it out, or null.
+     *
+     * The adapter runs the DHCP server on its access point, so the address
+     * that server answers from is the adapter. That is how the manufacturer's
+     * own app finds it, and it keeps working if a firmware update moves the
+     * access point to another subnet, which a fixed address would not.
+     *
+     * Only two networks are asked: the one [join] holds, and otherwise a Wi-Fi
+     * network the system has not validated as having internet. The adapter's
+     * access point never has internet; a home router always does, and taking
+     * its address for the adapter's would send the greeting to the router.
+     * Null means "use the address typed in", not "there is no adapter".
+     */
+    fun adapterAddress(context: Context): String? {
+        val cm = manager(context)
+        val held = network
+        @Suppress("DEPRECATION")
+        val candidates = if (held != null) {
+            listOf(held)
+        } else {
+            cm.allNetworks.filter { net ->
+                val caps = cm.getNetworkCapabilities(net) ?: return@filter false
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) &&
+                    !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            }
+        }
+        for (net in candidates) {
+            val links = cm.getLinkProperties(net) ?: continue
+            val found = dhcpServer(links) ?: defaultGateway(links)
+            if (found != null) {
+                discovered = found
+                return found
+            }
+        }
+        return null
+    }
+
+    private fun dhcpServer(links: LinkProperties): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        val server = links.dhcpServerAddress ?: return null
+        return server.hostAddress?.takeUnless { server.isAnyLocalAddress }
+    }
+
+    private fun defaultGateway(links: LinkProperties): String? =
+        links.routes
+            .firstOrNull { it.isDefaultRoute && it.gateway is Inet4Address && !it.gateway!!.isAnyLocalAddress }
+            ?.gateway?.hostAddress
 
     private fun locationOn(context: Context): Boolean {
         val lm = context.applicationContext

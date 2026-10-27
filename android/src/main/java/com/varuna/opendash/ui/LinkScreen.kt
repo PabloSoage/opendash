@@ -20,6 +20,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -30,6 +31,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -200,7 +202,12 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
                         busy = true
                         thread {
                             try {
-                                Session.configure(settings.host, settings.port)
+                                val host = if (settings.hostAuto) {
+                                    WifiLink.adapterAddress(context) ?: settings.host
+                                } else {
+                                    settings.host
+                                }
+                                Session.configure(host, settings.port)
                                 Session.openChannel()
                             } finally {
                                 busy = false
@@ -361,20 +368,46 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
         Fold(
             title = stringResource(R.string.link_adapter),
             // What it is when it has said so, where it lives when it has not.
-            subtitle = if (Session.serial.isNotEmpty()) {
-                Session.serial + " · " + Session.firmware + " · " +
-                    settings.host + ":" + settings.port
-            } else {
-                settings.host + ":" + settings.port
+            subtitle = run {
+                val where = if (settings.hostAuto) {
+                    WifiLink.discovered.ifEmpty { "DHCP" }
+                } else {
+                    settings.host
+                } + ":" + settings.port
+                if (Session.serial.isNotEmpty()) {
+                    Session.serial + " · " + Session.firmware + " · " + where
+                } else {
+                    where
+                }
             },
             open = openAdapter,
             onToggle = { openAdapter = !openAdapter },
         ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(R.string.link_host_auto),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(checked = settings.hostAuto, onCheckedChange = { settings.hostAuto = it })
+            }
+            if (settings.hostAuto && WifiLink.discovered.isNotEmpty()) {
+                Field(stringResource(R.string.link_host_found), WifiLink.discovered)
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = settings.host,
                     onValueChange = { settings.host = it.trim() },
-                    label = { Text(stringResource(R.string.link_host)) },
+                    label = {
+                        Text(
+                            stringResource(
+                                if (settings.hostAuto) R.string.link_host_fallback else R.string.link_host
+                            )
+                        )
+                    },
                     singleLine = true,
                     modifier = Modifier.weight(2f),
                 )
@@ -386,6 +419,7 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
                     modifier = Modifier.weight(1f),
                 )
             }
+            Hint(stringResource(R.string.link_host_auto_hint))
             if (Session.serial.isNotEmpty()) {
                 Field(stringResource(R.string.link_serial), Session.serial)
             }

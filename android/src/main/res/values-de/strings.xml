@@ -30,6 +30,10 @@
     <string name="link_voltage">Batterie</string>
     <string name="link_host">Adresse</string>
     <string name="link_port">Port</string>
+    <string name="link_host_auto">Adresse vom DHCP des Adapters</string>
+    <string name="link_host_found">Gefunden</string>
+    <string name="link_host_fallback">Ersatzadresse</string>
+    <string name="link_host_auto_hint">Eingeschaltet fragt die App das WLAN des Adapters nach seinem DHCP-Server und verbindet sich dorthin, sodass sie den Adapter auch findet, wenn ein Firmware-Update seine Adresse ändert. Die Adresse unten wird nur verwendet, wenn es keinen gibt. Ausschalten, um immer die Adresse unten zu verwenden, etwa für einen Emulator oder eine Brücke auf einem anderen Rechner.</string>
     <string name="link_resync">Neu synchronisiert</string>
     <string name="link_unpaired">Lose Antworten</string>
     <string name="link_psk">WLAN-Passwort</string>

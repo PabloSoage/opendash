@@ -35,6 +35,14 @@ class Settings(val context: Context) {
     var port: Int by pref(KEY_PORT, prefs.getInt(KEY_PORT, 777)) { it }
 
     /**
+     * Take the adapter's address from the DHCP server of its network, and use
+     * [host] only when there is none. On by default: it is what the
+     * manufacturer's app does, and it survives a firmware that moves the access
+     * point. Off for an emulator or a bridge reached over an ordinary network.
+     */
+    var hostAuto: Boolean by pref(KEY_HOST_AUTO, prefs.getBoolean(KEY_HOST_AUTO, true)) { it }
+
+    /**
      * The access point password. Every one of these adapters leaves the factory
      * with the same one, so it is filled in rather than asked for.
      */
@@ -184,6 +192,7 @@ class Settings(val context: Context) {
         const val KEY_THEME = "theme"
         const val KEY_HOST = "sm3_host"
         const val KEY_PORT = "sm3_port"
+        const val KEY_HOST_AUTO = "sm3_host_auto"
         const val KEY_PSK = "sm3_psk"
         const val KEY_SSID = "sm3_ssid"
         const val KEY_PREFIX = "sm3_ssid_prefix"
