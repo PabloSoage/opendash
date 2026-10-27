@@ -324,14 +324,14 @@ the manufacturers' own diagnostic software:
 | GM GDS2 | Opel/Vauxhall, GM global, GM China, Saab, VinFast — with output controls and the instruction screens |
 | PSA Diagbox, both engines (LEXIA and AW) | Peugeot, Citroën and the vans PSA diagnoses |
 | Mitsubishi MUT-III SE | Mitsubishi |
-| Scanmatik's Hyundai and Kia plugins | Hyundai, Kia |
+| Scanmatik's brand plugins | Hyundai, Kia; Daewoo, Chevrolet and Ravon; Chery, BYD, Great Wall, Lifan and Geely; Lada, GAZ, UAZ, ZAZ and Russian trucks |
 
 They are **not** distributed here; the data belongs to each manufacturer. If you
 have the software you can generate your own. Only the GDS2 catalogues have been
 used against a car — an Astra J, below. The others load and read like any
-catalogue, but no car of those makes has been connected yet. The Hyundai and
-Kia ones hold few parameters in this format, because most of their identifiers
-pack several values into one answer.
+catalogue, but no car of those makes has been connected yet. The Scanmatik
+ones hold few parameters in this format, because most of their identifiers
+pack several values into one answer, or are read over K-line or 29-bit CAN.
 
 Installs are per brand and not per model, because that is the shape of the
 source data. GDS2 organises by module configuration, not by car: the 221
