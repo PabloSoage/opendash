@@ -325,6 +325,7 @@ the manufacturers' own diagnostic software:
 | PSA Diagbox, both engines (LEXIA and AW) | Peugeot, Citroën and the vans PSA diagnoses |
 | Mitsubishi MUT-III SE | Mitsubishi |
 | Scanmatik's brand plugins | Hyundai, Kia; Daewoo, Chevrolet and Ravon; Chery, BYD, Great Wall, Lifan and Geely; Lada, GAZ, UAZ, ZAZ and Russian trucks |
+| VW ODIS (its VW-MCD runtime projects) | Volkswagen, Audi, SEAT and Cupra, Škoda, Volkswagen Commercial Vehicles, Bentley, Lamborghini, MAN, Bugatti |
 
 They are **not** distributed here; the data belongs to each manufacturer. If you
 have the software you can generate your own. Only the GDS2 catalogues have been
