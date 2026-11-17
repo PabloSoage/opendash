@@ -371,4 +371,9 @@
     <string name="act_auth_credential">Your screen lock, to command something that affects the engine</string>
     <string name="act_live_hint">To see an output working, select what shows it in Live (for the EGR: air flow, engine speed, fuel), start the live view, then open this screen. The command panel charts those values.</string>
     <string name="act_live_none">The live view is stopped, so nothing is charted here. Start it in Live to watch the command land.</string>
+    <string name="telemetry">Telemetry out</string>
+    <string name="telemetry_listening">Listening on %1$s:%2$d · %3$d connected</string>
+    <string name="telemetry_host_label">Telemetry interface</string>
+    <string name="telemetry_dropped">Lines dropped (slow client)</string>
+    <string name="telemetry_hint">Live values go out as JSON lines to any client on this port, and a client can send a selection back: it replaces the one on the live screen and a running stream is declared again with it, which takes a couple of seconds. The live screen has to be open for that. Read only, like everything else here. Protocol: docs/telemetry.md.</string>
 </resources>

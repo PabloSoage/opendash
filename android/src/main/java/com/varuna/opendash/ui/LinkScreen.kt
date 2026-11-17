@@ -45,6 +45,7 @@ import com.varuna.opendash.net.WifiLink
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.Locale
+import com.varuna.opendash.data.Telemetry
 import kotlin.concurrent.thread
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -93,6 +94,7 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
     var openAdapter by rememberSaveable { mutableStateOf(false) }
     var openVehicle by rememberSaveable { mutableStateOf(false) }
     var openBridge by rememberSaveable { mutableStateOf(false) }
+    var openTelemetry by rememberSaveable { mutableStateOf(false) }
 
     val askToScan = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -509,6 +511,68 @@ fun LinkScreen(settings: Settings, onOpenIdentification: () -> Unit) {
                 )
             }
             Hint(stringResource(R.string.bridge_hint))
+        }
+
+        // Live values out to another machine, and its choice of rows back in.
+        // Not a service of its own: it lives as long as the app does, and the
+        // live screen, which has the selection, is what answers its commands.
+        var telemetryTick by remember { mutableStateOf(0) }
+        var telemetryError by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(openTelemetry) {
+            while (openTelemetry) {
+                delay(1000)
+                telemetryTick++
+            }
+        }
+        Fold(
+            title = stringResource(R.string.telemetry),
+            subtitle = telemetryTick.let {
+                if (Telemetry.isRunning) {
+                    stringResource(R.string.telemetry_listening, settings.telemetryHost, Telemetry.port, Telemetry.clients)
+                } else {
+                    stringResource(R.string.bridge_stopped)
+                }
+            },
+            open = openTelemetry,
+            onToggle = { openTelemetry = !openTelemetry },
+        ) {
+            ErrorLine(telemetryError)
+            val telemetryAll = stringResource(R.string.bridge_host_all)
+            val telemetryLocal = stringResource(R.string.bridge_host_local)
+            Combo(
+                label = stringResource(R.string.telemetry_host_label),
+                value = settings.telemetryHost,
+                options = listOf("0.0.0.0", "127.0.0.1"),
+                render = { if (it == "0.0.0.0") telemetryAll else telemetryLocal },
+                onSelect = { settings.telemetryHost = it },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (!Telemetry.isRunning) {
+                Button(
+                    onClick = {
+                        telemetryError = try {
+                            Telemetry.start(settings.telemetryPort, settings.telemetryHost)
+                            null
+                        } catch (e: Exception) {
+                            e.message ?: e.javaClass.simpleName
+                        }
+                        telemetryTick++
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(stringResource(R.string.action_start)) }
+            } else {
+                OutlinedButton(
+                    onClick = {
+                        Telemetry.stop()
+                        telemetryTick++
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(stringResource(R.string.action_stop)) }
+                if (Telemetry.dropped > 0) {
+                    Field(stringResource(R.string.telemetry_dropped), Telemetry.dropped.toString())
+                }
+            }
+            Hint(stringResource(R.string.telemetry_hint))
         }
     }
 }

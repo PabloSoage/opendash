@@ -81,6 +81,21 @@ class Settings(val context: Context) {
      */
     var elmHost: String by pref(KEY_ELM_HOST, prefs.getString(KEY_ELM_HOST, null) ?: "127.0.0.1") { it }
 
+    // ── telemetry out ─────────────────────────────────────────────────────
+
+    /** Port of the telemetry server, see [Telemetry]. */
+    var telemetryPort: Int by pref(KEY_TELEMETRY_PORT, prefs.getInt(KEY_TELEMETRY_PORT, 35001)) { it }
+
+    /**
+     * Interface the telemetry server binds to. All interfaces by default, since
+     * the point of it is a machine that is not this phone; loopback for a
+     * client on the phone itself.
+     */
+    var telemetryHost: String by pref(
+        KEY_TELEMETRY_HOST,
+        prefs.getString(KEY_TELEMETRY_HOST, null) ?: "0.0.0.0",
+    ) { it }
+
     // ── recording ─────────────────────────────────────────────────────────
 
     /**
@@ -204,6 +219,8 @@ class Settings(val context: Context) {
         private const val OLD_PREFIX = "SM"
         const val KEY_ELM_PORT = "elm_port"
         const val KEY_ELM_HOST = "elm_host"
+        const val KEY_TELEMETRY_PORT = "telemetry_port"
+        const val KEY_TELEMETRY_HOST = "telemetry_host"
         const val KEY_MODULE = "catalogue_module"
         const val KEY_TREE = "recording_tree"
         const val KEY_GZIP = "compress_recordings"

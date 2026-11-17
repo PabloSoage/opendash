@@ -361,4 +361,9 @@
     <string name="act_auth_credential">Deine Displaysperre, für etwas, das den Motor betrifft</string>
     <string name="act_live_hint">Um einen Ausgang arbeiten zu sehen, in Live auswählen, was ihn zeigt (für die AGR: Luftmasse, Drehzahl, Kraftstoff), die Live-Ansicht starten und dann diesen Bildschirm öffnen. Das Bedienfeld zeichnet diese Werte.</string>
     <string name="act_live_none">Die Live-Ansicht ist gestoppt, hier wird nichts gezeichnet. In Live starten, um den Befehl wirken zu sehen.</string>
+    <string name="telemetry">Telemetrie-Ausgang</string>
+    <string name="telemetry_listening">Lauscht auf %1$s:%2$d · %3$d verbunden</string>
+    <string name="telemetry_host_label">Telemetrie-Schnittstelle</string>
+    <string name="telemetry_dropped">Verworfene Zeilen (langsamer Client)</string>
+    <string name="telemetry_hint">Live-Werte gehen als JSON-Zeilen an jeden Client auf diesem Port, und ein Client kann eine Auswahl zurückschicken: Sie ersetzt die Auswahl im Live-Bildschirm, und ein laufender Stream wird damit neu deklariert, was ein paar Sekunden dauert. Dafür muss der Live-Bildschirm offen sein. Nur lesend, wie alles hier. Protokoll: docs/telemetry.md.</string>
 </resources>

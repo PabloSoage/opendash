@@ -67,6 +67,7 @@ import com.varuna.opendash.data.Monitor
 import com.varuna.opendash.data.Presets
 import com.varuna.opendash.data.PluginRepository
 import com.varuna.opendash.data.Settings
+import com.varuna.opendash.data.Telemetry
 import com.varuna.opendash.obd.Actuation
 import com.varuna.opendash.obd.Actuators
 import androidx.compose.material.icons.filled.Flag
@@ -470,6 +471,83 @@ fun LiveScreen(
         } else {
             monitor.start(targetsFor(monitor, chosen, moduleAddress), record, "live")
         }
+    }
+
+    // ── telemetry: the rows out, a selection in ───────────────────────────
+    //
+    // What can be streamed is offered to whoever is connected, by the same row
+    // keys a preset uses, with the identifier the samples carry. A selection
+    // sent back is applied the way a preset is: it replaces what is ticked, its
+    // order becomes the packet layout, and a run in progress is stopped and
+    // declared again with it -- a couple of seconds of nothing, which is what
+    // changing the selection by hand costs too. See data/Telemetry.kt.
+    LaunchedEffect(rows, settings.catalogueModule) {
+        Telemetry.offer(
+            settings.catalogueModule,
+            rows.map { item ->
+                val id = when (item) {
+                    is Item.FromCatalogue -> item.parameter.identifierText
+                    is Item.Standard -> String.format(Locale.ROOT, "PID %02X", item.pid.id)
+                }
+                Telemetry.Row(item.key, item.name, id, item.unit)
+            },
+        )
+    }
+    var remote by remember { mutableStateOf<Pair<Int, Telemetry.Command>?>(null) }
+    var pendingStart by remember { mutableStateOf(false) }
+    DisposableEffect(Unit) {
+        var n = 0
+        Telemetry.onCommand = { c -> remote = (++n) to c }
+        onDispose { Telemetry.onCommand = null }
+    }
+    // A client may name a row by its key or, more conveniently, by the
+    // identifier it sees in the samples ("0x000C", "PID 0D"). An identifier
+    // that several rows share picks the first, in the screen's order.
+    fun resolve(names: List<String>): List<String> {
+        val byKey = rows.associateBy { it.key }
+        return names.mapNotNull { name ->
+            byKey[name]?.key ?: rows.firstOrNull { item ->
+                val id = when (item) {
+                    is Item.FromCatalogue -> item.parameter.identifierText
+                    is Item.Standard -> String.format(Locale.ROOT, "PID %02X", item.pid.id)
+                }
+                id.equals(name, ignoreCase = true)
+            }?.key
+        }.distinct()
+    }
+    LaunchedEffect(remote) {
+        val command = remote?.second ?: return@LaunchedEffect
+        fun apply(keys: List<String>, always: Set<String>, start: Boolean, preset: String?) {
+            val was = monitor.isRunning
+            if (was) monitor.stop()
+            selected.clear()
+            for (k in keys) selected[k] = Unit
+            appliedOrder = keys
+            appliedPreset = preset
+            alwaysOn = always
+            pendingStart = start || was
+        }
+        when (command) {
+            is Telemetry.Command.Select ->
+                apply(resolve(command.keys), resolve(command.always).toSet(), command.start, null)
+            is Telemetry.Command.Preset -> {
+                val present = rows.map { it.key }.toSet()
+                val keys = presets.load(settings.catalogueModule, command.name).filter { it in present }
+                apply(keys, presets.always(settings.catalogueModule, command.name), command.start, command.name)
+            }
+            is Telemetry.Command.Start -> pendingStart = true
+            is Telemetry.Command.Stop -> { pendingStart = false; monitor.stop() }
+        }
+    }
+    LaunchedEffect(pendingStart, monitor.isRunning, streamPlan) {
+        if (!pendingStart || monitor.isRunning) return@LaunchedEffect
+        if (selected.isEmpty() || Session.state != Session.State.CHANNEL_OPEN) {
+            pendingStart = false
+            return@LaunchedEffect
+        }
+        withContext(Dispatchers.IO) { monitor.awaitStopped(STOP_WAIT_MS) }
+        pendingStart = false
+        start()
     }
 
     // ── the screen: a header, and one thing under it ──────────────────────
@@ -1718,3 +1796,6 @@ private fun LayoutSheet(
         }
     }
 }
+
+/** How long a remote restart waits for the previous run to stop its packets. */
+private const val STOP_WAIT_MS = 5_000L

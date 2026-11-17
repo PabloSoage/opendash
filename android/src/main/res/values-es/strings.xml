@@ -361,4 +361,9 @@
     <string name="act_auth_credential">Tu bloqueo de pantalla, para accionar algo que afecta al motor</string>
     <string name="act_live_hint">Para ver una salida funcionando, selecciona en Live lo que la muestra (para la EGR: caudal de aire, régimen, gasoil), arranca la vista en directo y abre esta pantalla. El panel de mando grafica esos valores.</string>
     <string name="act_live_none">La vista en directo está parada, así que aquí no se grafica nada. Arráncala en Live para ver la orden hacer efecto.</string>
+    <string name="telemetry">Telemetría de salida</string>
+    <string name="telemetry_listening">Escuchando en %1$s:%2$d · %3$d conectados</string>
+    <string name="telemetry_host_label">Interfaz de telemetría</string>
+    <string name="telemetry_dropped">Líneas descartadas (cliente lento)</string>
+    <string name="telemetry_hint">Los valores en vivo salen como líneas JSON hacia cualquier cliente en este puerto, y el cliente puede devolver una selección: sustituye a la de la pantalla en vivo y, si hay un flujo en marcha, se vuelve a declarar con ella, lo que tarda un par de segundos. Para eso la pantalla en vivo tiene que estar abierta. Solo lectura, como todo lo demás. Protocolo: docs/telemetry.md.</string>
 </resources>

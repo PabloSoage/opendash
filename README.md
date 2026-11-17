@@ -49,6 +49,10 @@ what is still open.
 - Reads readiness monitors and fault codes, stored and pending.
 - Reads the whole identification block out of every module that answers: part
   numbers, alpha codes, programming date, traceability number, broadcast code.
+- Sends every live value to another machine as JSON lines on port 35001, and
+  takes its selection back: a head unit can choose what to watch and the stream
+  is declared again with it in a couple of seconds. See
+  [`docs/telemetry.md`](docs/telemetry.md).
 - Records sessions to gzipped CSV, flushed row by row, into a folder chosen from
   the system picker.
 - Opens recordings back up: its own `.csv`/`.csv.gz`, and `.sm2` files written by

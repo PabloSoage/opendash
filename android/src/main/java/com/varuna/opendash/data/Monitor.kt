@@ -286,6 +286,12 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
         isRunning = true
         recordedRows = 0
         holdTheLink()
+        Telemetry.state(
+            true,
+            (rotation.rounds.flatMap { r -> r.fields.map { it.parameter.rowKey } } +
+                rotation.leftOut.map { it.rowKey }).distinct(),
+            rotation.rounds.size,
+        )
         worker = thread(name = "monitor-stream", isDaemon = true) {
             var declared = false
             try {
@@ -453,6 +459,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                                     values[key] = value
                                     series.getOrPut(key) { Series() }.add(value)
                                     recorder?.add(parameter.name, parameter.identifierText, parameter.unit, value)
+                                    Telemetry.sample(parameter.name, parameter.identifierText, parameter.unit, value)
                                     readings++
                                 }
                                 // The heartbeat, from the thread that owns the
@@ -498,6 +505,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                                         values[t.key] = v
                                         series.getOrPut(t.key) { Series() }.add(v)
                                         recorder?.add(t.name, t.identifier, t.unit, v)
+                                        Telemetry.sample(t.name, t.identifier, t.unit, v)
                                         readings++
                                     }
                                 }
@@ -611,6 +619,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                 closeRecorder()
                 letGo()
                 isRunning = false
+                Telemetry.state(false, emptyList(), 0)
             }
         }
     }
@@ -670,6 +679,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
         isRunning = true
         recordedRows = 0
         holdTheLink()
+        Telemetry.state(true, targets.map { it.key }, 0)
         worker = thread(name = "monitor", isDaemon = true) {
             val misses = HashMap<String, Int>()
             var readings = 0
@@ -688,6 +698,7 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
                     values[t.key] = v
                     series.getOrPut(t.key) { Series() }.add(v)
                     recorder?.add(t.name, t.identifier, t.unit, v)
+                    Telemetry.sample(t.name, t.identifier, t.unit, v)
                     readings++
                 }
             }
@@ -743,11 +754,31 @@ class Monitor(private val settings: Settings, private val store: RecordingStore)
             closeRecorder()
             letGo()
             isRunning = false
+            Telemetry.state(false, emptyList(), 0)
         }
     }
 
+    /** The worker [stop] let go of, until it has finished closing the stream. */
+    @Volatile
+    private var stopping: Thread? = null
+
+    /**
+     * Wait for the last run to finish tearing down, off the main thread.
+     *
+     * [stop] returns at once and the worker then stops the module's packets on
+     * its own. Declaring a new selection before that is two threads talking to
+     * one module, so a restart that follows a stop -- a selection sent over
+     * [Telemetry] while streaming -- waits here first.
+     */
+    fun awaitStopped(timeoutMs: Long) {
+        stopping?.join(timeoutMs)
+        stopping = null
+    }
+
     fun stop() {
+        stopping = worker
         isRunning = false
+        Telemetry.state(false, emptyList(), 0)
         worker = null
         closeRecorder()
         letGo()
